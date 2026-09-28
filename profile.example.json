@@ -1,0 +1,88 @@
+{
+  "name": "Alex Developer",
+  "email": "alex.dev@example.com",
+  "phone": "+91 9876543210",
+  "linkedin": "https://linkedin.com/in/alex-dev",
+  "github": "https://github.com/alex-dev",
+  "base_role": "Full-Stack Developer • Backend Engineer",
+  "search_terms": [
+    "Full Stack Developer",
+    "Python Developer",
+    "Web Developer",
+    "Backend Developer",
+    "React Developer",
+    "PHP Developer"
+  ],
+  "skills": [
+    "Python",
+    "JavaScript",
+    "React.js",
+    "Node.js",
+    "PHP",
+    "Laravel",
+    "MySQL",
+    "REST APIs",
+    "HTML5",
+    "CSS3",
+    "Tailwind CSS",
+    "Git",
+    "GitHub",
+    "Docker"
+  ],
+  "skills_categorized": {
+    "Backend": "Python, Node.js, Express.js, PHP, Laravel, REST APIs",
+    "Database": "MySQL, PostgreSQL, MongoDB",
+    "Frontend": "HTML5, CSS3, JavaScript, React.js, Tailwind CSS",
+    "Web & Concepts": "AJAX, JSON, CRUD, MVC, OOP, Responsive Design",
+    "Tools": "Git, GitHub, Docker, Postman"
+  },
+  "location": {
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "country": "India",
+    "preferred_regions": "Mumbai, Navi Mumbai, Thane, Remote"
+  },
+  "work_preferences": {
+    "remote": true,
+    "hybrid": true,
+    "onsite": true
+  },
+  "experience_years": 1,
+  "experience": [
+    {
+      "company": "Tech Solutions Pvt Ltd",
+      "role": "Web Developer",
+      "period": "Jan 2025 – Present",
+      "bullets": [
+        "Develop and maintain web applications with backend logic, database integrations, and responsive UIs.",
+        "Implement REST API endpoints and integrate third-party web services.",
+        "Use Git/GitHub for version control and adhere to clean code standards."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Job Radar & Matcher",
+      "stack": "Python, Streamlit, SQLite",
+      "repo_url": "https://github.com/example/job-matcher",
+      "bullets": [
+        "Automated job feed ingestion, intelligent keyword matching, and AI-powered ATS resume generation."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Bachelor of Computer Applications / Computer Science",
+      "institution": "University / College Name",
+      "year": "2024"
+    }
+  ],
+  "additional": {
+    "target_role": "Full-Stack Developer",
+    "location": "Mumbai",
+    "availability": "Immediate",
+    "notice_period": "Immediate",
+    "current_salary": "Negotiable",
+    "expected_salary": "Competitive"
+  }
+}

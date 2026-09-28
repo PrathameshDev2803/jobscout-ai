@@ -1,0 +1,9 @@
+streamlit
+google-generativeai
+pandas
+requests
+python-dotenv
+fpdf2
+PyMuPDF
+scikit-learn
+python-jobspy

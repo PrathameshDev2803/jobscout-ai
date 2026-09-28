@@ -1,0 +1,34 @@
+ALEX DEVELOPER
+FULL-STACK DEVELOPER • BACKEND ENGINEER
+Mumbai, India | +91 9876543210 | alex.dev@example.com | github.com/alex-dev
+
+PROFESSIONAL SUMMARY
+Results-driven Full-Stack Developer with practical experience building responsive web applications, robust backend REST APIs, and database-driven systems. Proficient in Python, JavaScript, React, PHP, and modern web frameworks. Eager to solve real-world problems and deliver high-impact software.
+
+TECHNICAL SKILLS
+Backend: Python, Node.js, Express.js, PHP, Laravel, REST APIs
+Database: MySQL, PostgreSQL, MongoDB, SQLite
+Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS
+Concepts & Tools: MVC, CRUD, OOP, Git, GitHub, Docker, Postman
+
+PROFESSIONAL EXPERIENCE
+Tech Solutions Pvt Ltd — Web Developer | Jan 2025 – Present
+• Build and maintain client-facing web applications with modern responsive user interfaces.
+• Design, implement, and optimize database schemas and queries using SQL.
+• Integrate third-party APIs and services with clean error handling and security practices.
+• Utilize Git and GitHub for collaborative version control and CI/CD workflows.
+
+KEY PROJECTS
+Job Aggregator & AI Matcher — Python & Streamlit
+• Multi-source tech job pipeline aggregating opportunities from multiple portals.
+• Integrated automated scoring algorithms and Gemini LLM analysis for personalized match breakdown.
+
+Web Application & API Engine — React & Node.js
+• Full-featured web app with user authentication, database integration, and intuitive frontend UI.
+
+EDUCATION
+Bachelor of Computer Applications (BCA) / B.Sc. Computer Science
+University / College Name | 2024
+
+ADDITIONAL INFORMATION
+Location: Mumbai / Remote | Target Role: Full-Stack Developer | Notice Period: Immediate
