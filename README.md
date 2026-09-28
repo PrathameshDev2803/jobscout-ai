@@ -3,6 +3,7 @@
 # ⚡ JOBSCOUT AI • TECH JOB COPILOT
 ### *Autonomous Tech Job Aggregator • Multi-Factor Match Engine • Gemini-Powered ATS Tailor*
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-jobscout--dev.streamlit.app-10b981?style=for-the-badge&logo=streamlit&logoColor=white)](https://jobscout-dev.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
 [![Gemini](https://img.shields.io/badge/Google%20Gemini-2.5%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
@@ -12,9 +13,9 @@
 <br/>
 
 **Tired of scrolling 10 job boards and manually tuning your resume for every ATS?**  
-Job Radar aggregates openings from 7+ platforms in real-time, scores them with deterministic heuristic filters, and uses Google Gemini to tailor your resume & generate ATS-proof PDFs in seconds.
+JobScout AI aggregates openings from 7+ platforms in real-time, scores them with deterministic heuristic filters, and uses Google Gemini to tailor your resume & generate ATS-proof PDFs in seconds.
 
-[Features](#-core-capabilities) • [Architecture](#-architecture-flow) • [Quick Start](#-quick-start) • [Configuration](#-configuration) • [Security](#-security--privacy-first)
+[Live Demo](https://jobscout-dev.streamlit.app/) • [Features](#-core-capabilities) • [Architecture](#-architecture-flow) • [Quick Start](#-quick-start) • [Configuration](#-configuration) • [Security](#-security--privacy-first)
 
 ---
 
