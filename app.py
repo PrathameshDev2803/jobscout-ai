@@ -28,6 +28,16 @@ from fetch import fetch_job_from_url, save
 BASE = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(BASE, ".env")
 load_dotenv(ENV_FILE, override=True)
+
+# Sync Streamlit Community Cloud secrets to os.environ
+try:
+    if hasattr(st, "secrets"):
+        for sec_k, sec_v in st.secrets.items():
+            if isinstance(sec_v, str) and sec_k not in os.environ:
+                os.environ[sec_k] = sec_v
+except Exception:
+    pass
+
 DB = os.path.join(BASE, "jobs.db")
 PROFILE = os.path.join(BASE, "profile.json")
 RESUME_TXT = os.path.join(BASE, "resume.txt")
@@ -35,7 +45,17 @@ ACCENT = "#10b981"
 
 
 def get_gemini_api_key():
-    """Bulletproof loader for GEMINI_API_KEY from session, disk .env, or os.environ."""
+    """Bulletproof loader for GEMINI_API_KEY from session, Streamlit Cloud secrets, disk .env, or os.environ."""
+    # 0. Check st.secrets if running on Streamlit Community Cloud
+    try:
+        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+            k = str(st.secrets["GEMINI_API_KEY"]).strip()
+            if k:
+                os.environ["GEMINI_API_KEY"] = k
+                return k
+    except Exception:
+        pass
+
     # 1. Check session state if running inside Streamlit
     try:
         if "gemini_api_key" in st.session_state and st.session_state.gemini_api_key:
