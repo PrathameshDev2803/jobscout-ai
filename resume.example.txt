@@ -19,7 +19,7 @@ Tech Solutions Pvt Ltd — Web Developer | Jan 2025 – Present
 • Utilize Git and GitHub for collaborative version control and CI/CD workflows.
 
 KEY PROJECTS
-Job Aggregator & AI Matcher — Python & Streamlit
+JobScout AI — Tech Job Radar & ATS Tailor | Python, Streamlit, Gemini API
 • Multi-source tech job pipeline aggregating opportunities from multiple portals.
 • Integrated automated scoring algorithms and Gemini LLM analysis for personalized match breakdown.
 

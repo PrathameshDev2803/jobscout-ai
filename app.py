@@ -1032,7 +1032,7 @@ TARGET JOB: {job.get('title')} at {job.get('company')}
 JOB DESCRIPTION:
 {jd}
 
-Tailor Prathamesh's resume content specifically for this job. Ground all bullets in his actual work experience at Traction Shastra (Web Developer, Nov 2025 - Present) and his authentic projects (Expense Tracker, NoteStack, Hospital Management System, AI Resume Matcher & ATS Optimizer). Weave in high-priority keywords from the JD naturally with quantifiable achievements.
+Tailor Prathamesh's resume content specifically for this job. Ground all bullets in his actual work experience at Traction Shastra (Web Developer, Nov 2025 - Present) and his authentic projects (Expense Tracker, NoteStack, Hospital Management System, JobScout AI). Weave in high-priority keywords from the JD naturally with quantifiable achievements.
 
 Return STRICT JSON only:
 {{
@@ -1354,9 +1354,10 @@ def build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean"):
             "bullets": ["Academic web application with PHP backend, MySQL database and CRUD-based management."]
         },
         {
-            "name": "AI Resume Matcher & ATS Optimizer",
-            "stack": "Python, Gemini API, Streamlit",
-            "bullets": ["AI application for resume analysis, ATS optimization and career-gap analysis using Gemini API."]
+            "name": "JobScout AI — Tech Job Radar & ATS Tailor",
+            "stack": "Python, Streamlit, Gemini API, SQLite",
+            "repo_url": "https://github.com/PrathameshDev2803/jobscout-ai",
+            "bullets": ["Autonomous multi-portal job aggregator, heuristic match scoring engine, and Gemini AI ATS resume tailor."]
         }
     ]
     for prj in projects:
@@ -2350,7 +2351,7 @@ if active_nav == "Jobs":
                         st.markdown("• **Expense Tracker** (PHP & MySQL)")
                         st.markdown("• **NoteStack** (React / Tiptap)")
                         st.markdown("• **Hospital Management System** (PHP & MySQL)")
-                        st.markdown("• **AI Resume Matcher & ATS Optimizer** (Python, Gemini API, Streamlit)")
+                        st.markdown("• **JobScout AI — Tech Job Radar & ATS Tailor** (Python, Gemini API, Streamlit)")
                         st.markdown("**Education:**")
                         st.markdown("• **M.Sc. Data Science & AI** | Chandrabhan Sharma College, Mumbai")
                         st.markdown("• **BCA** | Chandrabhan Sharma College, Mumbai (2024)")

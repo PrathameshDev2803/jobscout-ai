@@ -62,11 +62,11 @@
   ],
   "projects": [
     {
-      "name": "Job Radar & Matcher",
-      "stack": "Python, Streamlit, SQLite",
-      "repo_url": "https://github.com/example/job-matcher",
+      "name": "JobScout AI — Tech Job Radar & ATS Tailor",
+      "stack": "Python, Streamlit, Gemini API, SQLite",
+      "repo_url": "https://github.com/PrathameshDev2803/jobscout-ai",
       "bullets": [
-        "Automated job feed ingestion, intelligent keyword matching, and AI-powered ATS resume generation."
+        "Autonomous multi-portal job aggregator, heuristic match scoring engine, and Gemini AI ATS resume tailor."
       ]
     }
   ],
