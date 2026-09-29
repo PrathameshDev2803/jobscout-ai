@@ -1154,7 +1154,7 @@ def get_jobs(q=""):
         return []
     con = ensure_db()
     con.row_factory = sqlite3.Row
-    rows = [dict(r) for r in con.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT 300")]
+    rows = [dict(r) for r in con.execute("SELECT * FROM jobs ORDER BY created_at DESC")]
     con.close()
     if q:
         q = q.lower()
@@ -2225,12 +2225,16 @@ def render_job_card(j, col, is_filtered=False, key_prefix=""):
         rej_text = html.escape(" · ".join(j["_rej"][:2]))
         rej_html = f"<div class='filtered-why'>🚫 {rej_text}</div>"
 
+    t_str = job_time(j)
+    is_fresh = any(kw in t_str.lower() for kw in ["just now", "min ago", "h ago", "1d ago"])
+    fresh_badge = " · <span style='color:#10b981;font-weight:750;font-size:11px;'>● Fresh</span>" if is_fresh and not is_closed and not is_filtered else ""
+
     card_html = (
         f'<div class="{card_cls}">'
         f'{status_badge}{pct_html}'
         f'<div class="job-title">{t}</div>'
         f'<div class="job-company">{co}</div>'
-        f'<div class="job-meta">📍 {loc} {pin} · 🕐 {job_time(j)}</div>'
+        f'<div class="job-meta">📍 {loc} {pin} · 🕐 {t_str}{fresh_badge}</div>'
         f'{rej_html}'
         f'<div>{chips}</div>'
         f'<div class="card-foot"><span>{"Closed" if is_closed else ("Filtered" if is_filtered else j["_cat"])} · {j["_score"]}%</span>'
@@ -2317,11 +2321,12 @@ for j in all_jobs:
 
 sort_mode = st.session_state.get("sort_mode", "Highest Match %")
 if sort_mode == "Newest":
-    scored.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+    scored.sort(key=lambda x: str(x.get("posted_at") or x.get("created_at") or ""), reverse=True)
 elif sort_mode == "Company":
     scored.sort(key=lambda x: str(x.get("company", "")).lower())
 else:  # Highest Match %
-    scored.sort(key=lambda x: (x["_eligible"], x["_score"]), reverse=True)
+    # Sort primarily by match %, secondarily by posting/creation recency so fresh postings rank at the top
+    scored.sort(key=lambda x: (x["_eligible"], x["_score"], str(x.get("posted_at") or x.get("created_at") or "")), reverse=True)
 
 # Track last seen fetch
 st.session_state.setdefault("_last_seen_fetch", get_scheduler_status().get("last_run"))

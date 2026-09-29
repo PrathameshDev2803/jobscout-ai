@@ -23,7 +23,11 @@ def _read_status_from_disk():
     if os.path.exists(STATUS_FILE):
         try:
             with open(STATUS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                d = json.load(f)
+                # Auto-heal: if marked fetching for more than 5 minutes, force reset stale lock
+                if d.get("is_fetching") and (time.time() - d.get("fetch_start_time", 0) > 300):
+                    d["is_fetching"] = False
+                return d
         except Exception:
             pass
     return {
@@ -70,9 +74,13 @@ def _execute_fetch_task(include_jobspy=True, max_spy_wanted=20):
     with _lock:
         st = _read_status_from_disk()
         if st.get("is_fetching"):
-            print("Scheduler: Fetch already in progress, skipping.")
-            return None
+            if time.time() - st.get("fetch_start_time", 0) > 300:
+                st["is_fetching"] = False
+            else:
+                print("Scheduler: Fetch already in progress, skipping.")
+                return None
         st["is_fetching"] = True
+        st["fetch_start_time"] = time.time()
         _write_status_to_disk(st)
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Starting 15-minute job fetch pipeline...")
@@ -138,12 +146,24 @@ def start_background_scheduler(interval_minutes=15):
         st = _read_status_from_disk()
         st["interval_seconds"] = interval_seconds
         st["enabled"] = True
-        if st.get("next_run") is None:
-            # First run in 15 minutes or immediately if never run
-            if not st.get("last_run"):
-                st["next_run"] = time.time() + 10  # Run shortly after boot
-            else:
-                st["next_run"] = time.time() + interval_seconds
+        st["is_fetching"] = False
+
+        # If last run is stale (> 15m ago) or never run, schedule catchup fetch in 5s
+        last_run_str = st.get("last_run")
+        needs_catchup = True
+        if last_run_str:
+            try:
+                last_dt = datetime.fromisoformat(last_run_str.replace("Z", "+00:00"))
+                secs_since = (datetime.now(timezone.utc) - last_dt).total_seconds()
+                if 0 <= secs_since < interval_seconds:
+                    needs_catchup = False
+                    st["next_run"] = time.time() + (interval_seconds - secs_since)
+            except Exception:
+                pass
+
+        if needs_catchup:
+            st["next_run"] = time.time() + 5  # Run 5s after startup
+
         _write_status_to_disk(st)
 
         _stop_event.clear()
