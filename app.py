@@ -872,6 +872,22 @@ div[data-testid="stFileUploader"] button {
     font-weight: 650 !important;
 }
 
+/* Hide confusing '+' button when a resume file is attached (prevents accidental replace) */
+div[data-testid="stFileUploader"] button[aria-label="Add files"],
+div[data-testid="stFileUploader"] button[aria-label*="Add files"],
+div[data-testid="stFileUploader"] button[aria-label*="Add"],
+div[data-testid="stFileUploaderDropzone"] button[aria-label="Add files"],
+div[data-testid="stFileUploaderDropzone"] button[aria-label*="Add"],
+div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([aria-label*="Delete"]):not([aria-label*="delete"]):not([aria-label*="Remove"]):not([aria-label*="remove"]) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
 /* Uploaded file card */
 .file-uploaded-card {
     display: flex;
