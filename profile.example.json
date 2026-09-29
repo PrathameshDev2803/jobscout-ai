@@ -1,46 +1,51 @@
 {
-  "name": "Alex Developer",
-  "email": "alex.dev@example.com",
-  "phone": "+91 12345 67890",
-  "linkedin": "https://linkedin.com/in/alex-dev",
-  "github": "https://github.com/alex-dev",
-  "base_role": "Full-Stack Developer • Backend Engineer",
+  "name": "Prathamesh Jadhav",
+  "email": "prathamesh.dev@example.com",
+  "phone": "+91 93266 71284",
+  "linkedin": "https://linkedin.com/in/prathamesh-jadhav",
+  "github": "https://github.com/PrathameshDev2803",
+  "base_role": "PHP Developer • Full-Stack Developer",
   "search_terms": [
+    "PHP Developer",
     "Full Stack Developer",
-    "Python Developer",
+    "Laravel Developer",
     "Web Developer",
-    "Backend Developer",
     "React Developer",
-    "PHP Developer"
+    "Backend Developer"
   ],
   "skills": [
-    "Python",
-    "JavaScript",
-    "React.js",
-    "Node.js",
     "PHP",
     "Laravel",
     "MySQL",
-    "REST APIs",
+    "JavaScript",
+    "React.js",
     "HTML5",
     "CSS3",
+    "Bootstrap",
     "Tailwind CSS",
+    "REST APIs",
+    "Node.js",
+    "Express.js",
+    "SQL",
+    "MongoDB",
     "Git",
     "GitHub",
-    "Docker"
+    "Composer",
+    "AJAX",
+    "jQuery"
   ],
   "skills_categorized": {
-    "Backend": "Python, Node.js, Express.js, PHP, Laravel, REST APIs",
-    "Database": "MySQL, PostgreSQL, MongoDB",
-    "Frontend": "HTML5, CSS3, JavaScript, React.js, Tailwind CSS",
-    "Web & Concepts": "AJAX, JSON, CRUD, MVC, OOP, Responsive Design",
-    "Tools": "Git, GitHub, Docker, Postman"
+    "Backend": "PHP, Laravel, Node.js, Express.js, REST APIs",
+    "Database": "MySQL, SQL, MongoDB, phpMyAdmin",
+    "Frontend": "HTML5, CSS3, JavaScript, React.js, Bootstrap, Tailwind CSS",
+    "Web & Concepts": "AJAX, jQuery, JSON, CRUD, MVC, OOP, Responsive Design",
+    "Tools": "Git, GitHub, Composer, XAMPP, Shopify"
   },
   "location": {
     "city": "Mumbai",
     "state": "Maharashtra",
     "country": "India",
-    "preferred_regions": "Mumbai, Navi Mumbai, Thane, Remote"
+    "preferred_regions": "Western Line, Central Line, Navi Mumbai, Remote"
   },
   "work_preferences": {
     "remote": true,

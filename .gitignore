@@ -7,10 +7,11 @@ profile.json
 resume.txt
 
 # Databases, Cache & Exports
-*.db
 *.sqlite
 *.sqlite3
 *.csv
+*.db
+!jobs.db
 
 # Runtime status and background worker logs
 scheduler_status.json

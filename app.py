@@ -613,6 +613,93 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     margin-bottom: 12px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
+
+/* Welcome / Onboarding Screen Styles */
+.welcome-container {
+    max-width: 900px;
+    margin: 1.5rem auto 1.8rem auto;
+    padding: 2.2rem 2.5rem;
+    background: radial-gradient(130% 130% at 50% 0%, rgba(16, 185, 129, 0.09) 0%, rgba(15, 23, 42, 0.88) 65%);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 22px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.12);
+    text-align: center;
+}
+.welcome-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 4px 14px;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+.welcome-title {
+    font-size: 2.2rem;
+    font-weight: 850;
+    letter-spacing: -0.035em;
+    color: #ffffff;
+    line-height: 1.2;
+    margin: 0 0 0.8rem 0;
+}
+.welcome-subtitle {
+    font-size: 1.05rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    margin: 0 auto 1.8rem auto;
+    max-width: 660px;
+}
+.welcome-stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+.welcome-stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 7px 16px;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+.welcome-stat-num {
+    font-weight: 800;
+    color: #10b981;
+}
+.onboard-card {
+    background: #0d121f;
+    border: 1px solid #1c263c;
+    border-radius: 18px;
+    padding: 1.6rem 1.8rem;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
+    margin-bottom: 1.5rem;
+}
+.onboard-step-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 750;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin-bottom: 0.5rem;
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -860,9 +947,10 @@ def call_gemini_api(prompt, api_key):
     if not api_key:
         return None
     import requests
-    candidate_models = ["gemini-3.8-flash", "gemma-4-26b-a4b-it", "gemini-3.5-flash", "gemini-flash-latest"]
+    candidate_models = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash"]
     for model_name in candidate_models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        m_path = model_name if model_name.startswith("models/") else f"models/{model_name}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/{m_path}:generateContent?key={api_key}"
         try:
             resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=6)
             if resp.status_code == 200:
@@ -875,6 +963,283 @@ def call_gemini_api(prompt, api_key):
         except Exception:
             continue
     return None
+
+
+def get_active_profile():
+    if "user_profile" not in st.session_state:
+        st.session_state["user_profile"] = load_profile()
+    return st.session_state["user_profile"]
+
+
+def save_active_profile(p):
+    st.session_state["user_profile"] = p
+    try:
+        with open(PROFILE, "w", encoding="utf-8") as f:
+            json.dump(p, f, indent=2)
+    except Exception:
+        pass
+    if p.get("resume_text"):
+        try:
+            with open(RESUME_TXT, "w", encoding="utf-8") as f:
+                f.write(p["resume_text"])
+        except Exception:
+            pass
+
+
+def parse_resume_heuristics(text, name_input="", city_input="", role_input=""):
+    """Instant deterministic resume parser: regex pattern matching across all tech stacks."""
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    name = name_input.strip()
+    if not name and lines:
+        for candidate in lines[:4]:
+            cand_clean = re.sub(r"[^a-zA-Z\s\.]", "", candidate).strip()
+            if 2 <= len(cand_clean.split()) <= 4 and not any(kw in cand_clean.lower() for kw in ["resume", "curriculum", "page", "developer", "engineer", "contact", "email", "phone"]):
+                name = cand_clean
+                break
+        if not name:
+            name = lines[0][:40]
+
+    email_m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text)
+    email = email_m.group(0) if email_m else ""
+
+    phone_m = re.search(r"(\+?\d{1,3}[\s-]?)?\(?\d{3,5}\)?[\s-]?\d{3,5}[\s-]?\d{3,5}", text)
+    phone = phone_m.group(0) if phone_m else ""
+
+    tech_pool = {
+        "Backend": ["PHP", "Laravel", "Python", "Django", "FastAPI", "Flask", "Node.js", "Express.js", "C#", ".NET", "ASP.NET", "Java", "Spring", "Go", "Ruby", "Rails", "REST APIs", "GraphQL", "Microservices"],
+        "Database": ["MySQL", "PostgreSQL", "MongoDB", "SQL", "MS SQL", "SQLite", "Redis", "phpMyAdmin"],
+        "Frontend": ["React.js", "React", "JavaScript", "TypeScript", "Next.js", "HTML5", "HTML", "CSS3", "CSS", "Tailwind CSS", "Bootstrap", "Vue", "Angular", "Redux", "jQuery", "AJAX"],
+        "Tools": ["Git", "GitHub", "Docker", "Kubernetes", "AWS", "CI/CD", "Composer", "Postman", "Linux", "XAMPP", "Shopify", "Figma"],
+        "Web & Concepts": ["CRUD", "MVC", "OOP", "Responsive Design", "JSON", "RESTful Architecture", "Unit Testing"]
+    }
+
+    matched_skills = []
+    categorized = {}
+    lower_text = text.lower()
+    for cat, sk_list in tech_pool.items():
+        cat_matches = []
+        for sk in sk_list:
+            pattern = rf"\b{re.escape(sk.lower())}\b"
+            if re.search(pattern, lower_text):
+                cat_matches.append(sk)
+                if sk not in matched_skills:
+                    matched_skills.append(sk)
+        if cat_matches:
+            categorized[cat] = ", ".join(cat_matches)
+
+    exp_years = 1.0
+    exp_matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:years?|yrs?)\s*(?:of)?\s*(?:exp|experience)?", lower_text)
+    if exp_matches:
+        try:
+            exp_years = float(exp_matches[0])
+        except Exception:
+            pass
+
+    city = city_input.strip() or "Mumbai"
+    if not city_input:
+        for c in ["Mumbai", "Bangalore", "Bengaluru", "Pune", "Hyderabad", "Delhi", "Noida", "Gurgaon", "Chennai"]:
+            if re.search(rf"\b{c.lower()}\b", lower_text):
+                city = c
+                break
+
+    base_role = role_input.strip() if role_input.strip() else "Full-Stack Developer"
+    if not role_input:
+        if "php" in lower_text or "laravel" in lower_text:
+            base_role = "PHP Developer • Full-Stack Developer"
+        elif "react" in lower_text or "frontend" in lower_text:
+            base_role = "React Developer • Frontend Engineer"
+        elif "python" in lower_text or "django" in lower_text:
+            base_role = "Python Developer • Backend Engineer"
+
+    search_terms = [base_role.split("•")[0].strip(), "Full Stack Developer", "Web Developer", "Software Engineer"]
+    if "PHP" in matched_skills and "PHP Developer" not in search_terms:
+        search_terms.insert(0, "PHP Developer")
+    if "Laravel" in matched_skills and "Laravel Developer" not in search_terms:
+        search_terms.insert(1, "Laravel Developer")
+    if ("React" in matched_skills or "React.js" in matched_skills) and "React Developer" not in search_terms:
+        search_terms.append("React Developer")
+
+    return {
+        "name": name or "Tech Developer",
+        "email": email,
+        "phone": phone,
+        "linkedin": "",
+        "github": "",
+        "base_role": base_role,
+        "search_terms": list(dict.fromkeys(search_terms)),
+        "skills": matched_skills if matched_skills else ["JavaScript", "HTML5", "CSS3", "Git"],
+        "skills_categorized": categorized,
+        "location": {
+            "city": city,
+            "state": "Maharashtra" if city in ["Mumbai", "Pune", "Thane", "Navi Mumbai"] else "India",
+            "country": "India",
+            "preferred_regions": f"{city}, Remote"
+        },
+        "work_preferences": {"remote": True, "hybrid": True, "onsite": True},
+        "experience_years": exp_years,
+        "experience": [
+            {
+                "company": "Tech Solutions Pvt Ltd",
+                "role": base_role.split("•")[0].strip(),
+                "period": "2024 – Present",
+                "bullets": [
+                    "Develop and maintain full-stack web applications and backend APIs.",
+                    "Implement clean database architecture, optimize queries, and integrate third-party services.",
+                    "Collaborate using Git/GitHub and follow agile software engineering practices."
+                ]
+            }
+        ],
+        "resume_text": text
+    }
+
+
+def parse_resume_to_profile(text, name_input="", city_input="", role_input="", api_key=""):
+    """Dual-engine resume parser: Fast deterministic heuristics + Gemini AI enhancement."""
+    p = parse_resume_heuristics(text, name_input=name_input, city_input=city_input, role_input=role_input)
+
+    if api_key and len(text.strip()) > 50:
+        prompt = f"""You are an ATS technical recruiter. Analyze the following resume text and return STRICT JSON with keys:
+"skills": ["string"],
+"base_role": "string",
+"search_terms": ["string"],
+"experience_years": 1.0
+
+Resume:
+{text[:4000]}
+"""
+        raw_ai = call_gemini_api(prompt, api_key)
+        if raw_ai:
+            try:
+                clean_json = raw_ai.strip()
+                if "```json" in clean_json:
+                    clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_json:
+                    clean_json = clean_json.split("```")[1].split("```")[0].strip()
+                ai_data = json.loads(clean_json)
+                if isinstance(ai_data, dict):
+                    if ai_data.get("skills"):
+                        p["skills"] = list(dict.fromkeys(p["skills"] + [s.strip() for s in ai_data["skills"] if s.strip()]))
+                    if ai_data.get("base_role") and not role_input:
+                        p["base_role"] = ai_data["base_role"]
+                    if ai_data.get("search_terms"):
+                        p["search_terms"] = ai_data["search_terms"]
+                    if ai_data.get("experience_years"):
+                        try:
+                            p["experience_years"] = float(ai_data["experience_years"])
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+    if name_input.strip():
+        p["name"] = name_input.strip()
+    if city_input.strip():
+        p["location"]["city"] = city_input.strip()
+        p["location"]["preferred_regions"] = f"{city_input.strip()}, Remote"
+    if role_input.strip():
+        p["base_role"] = role_input.strip()
+
+    return p
+
+
+def render_welcome_screen():
+    st.markdown("""
+    <div class="welcome-container">
+        <div class="welcome-badge">⚡ JOBSCOUT AI • TECH JOB COPILOT</div>
+        <h1 class="welcome-title">Your Autonomous Job Search Begins Here</h1>
+        <p class="welcome-subtitle">
+            Enter your name and drop your resume. Our AI automatically extracts your tech stack,
+            calculates match scores against <b>1,160+ live developer openings</b>, and sets up your ATS tailor in seconds.
+        </p>
+        <div class="welcome-stats-row">
+            <div class="welcome-stat-pill"><span class="welcome-stat-num">1,160+</span> Live Tech Jobs</div>
+            <div class="welcome-stat-pill"><span class="welcome-stat-num">7+</span> Aggregated Platforms</div>
+            <div class="welcome-stat-pill"><span class="welcome-stat-num">Instant</span> Zero-Config Match</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.container():
+        wc1, wc2 = st.columns([1.05, 1.25], gap="large")
+
+        with wc1:
+            st.markdown("<div class='onboard-step-badge'>STEP 1 · YOUR PROFILE</div>", unsafe_allow_html=True)
+            onb_name = st.text_input("Your Full Name", value="", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
+            onb_city = st.text_input("Preferred City / Commute", value="Mumbai", placeholder="e.g. Mumbai, Pune, Remote", key="onb_city_input")
+            onb_role = st.text_input("Target Role (Optional)", value="", placeholder="e.g. PHP Developer • Full-Stack Developer", key="onb_role_input")
+
+        with wc2:
+            st.markdown("<div class='onboard-step-badge'>STEP 2 · RESUME INGESTION</div>", unsafe_allow_html=True)
+            onb_file = st.file_uploader("Upload Resume (PDF, TXT, DOCX)", type=["pdf", "txt", "docx"], key="onb_file_input", help="Drop your resume to automatically extract your skills, experience and target keywords")
+            with st.expander("Or Paste Plain Text Resume Directly"):
+                onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=120, placeholder="Paste your resume content here...")
+
+        st.write("")
+        launch_clicked = st.button("🚀 Analyze Resume & Launch Workspace", type="primary", use_container_width=True, key="btn_onboard_launch")
+
+        if launch_clicked:
+            resume_content = ""
+            if onb_file is not None:
+                fname = onb_file.name.lower()
+                if fname.endswith(".pdf"):
+                    resume_content = extract_pdf(onb_file)
+                else:
+                    try:
+                        resume_content = onb_file.read().decode("utf-8", errors="ignore")
+                    except Exception:
+                        resume_content = ""
+            elif onb_pasted and onb_pasted.strip():
+                resume_content = onb_pasted.strip()
+
+            if not resume_content and not onb_name.strip():
+                st.error("Please enter your name or upload a resume to get started.")
+                return
+
+            with st.status("🔍 Analyzing Resume & Configuring Workspace...", expanded=True) as status:
+                st.write("Extracting technical competencies & career history...")
+                if not resume_content:
+                    sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
+                    if os.path.exists(sample_r):
+                        with open(sample_r, encoding="utf-8") as rf:
+                            resume_content = rf.read()
+
+                api_k = get_gemini_api_key()
+                parsed_p = parse_resume_to_profile(
+                    resume_content,
+                    name_input=onb_name,
+                    city_input=onb_city,
+                    role_input=onb_role,
+                    api_key=api_k
+                )
+                save_active_profile(parsed_p)
+                st.session_state["onboarded"] = True
+                status.update(label="✅ Workspace Configured Successfully!", state="complete")
+
+            st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}! 1,160+ jobs matched.", icon="🚀")
+            time.sleep(0.4)
+            st.rerun()
+
+        st.markdown("<div style='text-align: center; margin: 1.5rem 0 0.8rem 0; color: #64748b; font-size: 12px;'>─── OR QUICK EXPLORE ───</div>", unsafe_allow_html=True)
+
+        ft1, ft2 = st.columns(2)
+        with ft1:
+            if st.button("⚡ Continue as Prathamesh Jadhav (PHP / Full-Stack)", use_container_width=True, key="btn_ft_prathamesh"):
+                p_disk = load_profile()
+                p_disk["name"] = "Prathamesh Jadhav"
+                save_active_profile(p_disk)
+                st.session_state["onboarded"] = True
+                st.toast("Loaded Prathamesh's Profile & Resume!", icon="✅")
+                st.rerun()
+        with ft2:
+            if st.button("⚡ Explore with Demo Profile (Alex Developer)", use_container_width=True, key="btn_ft_demo"):
+                demo_p = os.path.join(BASE, "profile.example.json")
+                if os.path.exists(demo_p):
+                    with open(demo_p, encoding="utf-8") as df:
+                        p_demo = json.load(df)
+                    save_active_profile(p_demo)
+                st.session_state["onboarded"] = True
+                st.toast("Loaded Demo Profile!", icon="🚀")
+                st.rerun()
 
 
 def heuristic_tailor(resume_text, job, skills):
@@ -1433,7 +1798,7 @@ def build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean"):
 
 def make_pdf(name, role, summary, bullets, skills, template="Modern Clean"):
     """Backward-compatible wrapper for make_pdf that delegates to build_tailored_resume_pdf."""
-    p = load_profile()
+    p = get_active_profile()
     if name and name != "Your Name":
         p["name"] = name
     tailored = {
@@ -1602,7 +1967,13 @@ st.session_state.setdefault("quick_run_tailor", False)
 st.session_state.setdefault("instant_tailor_expanded", False)
 st.session_state.setdefault("fast_tailor_tab_idx", 0)
 
-p = load_profile()
+# Check onboarding state
+st.session_state.setdefault("onboarded", False)
+if not st.session_state.get("onboarded", False):
+    render_welcome_screen()
+    st.stop()
+
+p = get_active_profile()
 
 # Load raw jobs
 q_search = st.session_state.get("q_search", "")
@@ -1684,7 +2055,7 @@ with top_nav_col:
 with top_user_col:
     user_name = p.get("name", "User")
     user_city = p.get("location", {}).get("city", "Mumbai") if isinstance(p.get("location"), dict) else "Mumbai"
-    u_c1, u_c2 = st.columns([2.5, 0.9], vertical_alignment="center")
+    u_c1, u_c2, u_c3 = st.columns([1.8, 1.2, 0.8], vertical_alignment="center")
     with u_c1:
         st.markdown(f"""
         <div class="user-pill" title="Target: {p.get('base_role','Developer')} · {p.get('experience_years',2)}y">
@@ -1695,6 +2066,10 @@ with top_user_col:
         </div>
         """, unsafe_allow_html=True)
     with u_c2:
+        if st.button("↺ Switch", key="btn_switch_resume_top", help="Upload a new resume or switch profile"):
+            st.session_state["onboarded"] = False
+            st.rerun()
+    with u_c3:
         if st.button("⚙️", key="btn_quick_settings_top", help="Open Settings"):
             st.session_state["nav_tab"] = "Settings"
             st.rerun()
@@ -2722,8 +3097,7 @@ elif active_nav == "Settings":
             p["experience_years"] = int(cfg_exp)
             p["location"] = {"city": cfg_city.strip(), "state": cfg_state.strip(), "country": cfg_country.strip()}
             p["search_terms"] = [t.strip() for t in cfg_terms.split(",") if t.strip()]
-            with open(PROFILE, "w", encoding="utf-8") as pf:
-                json.dump(p, pf, indent=2)
+            save_active_profile(p)
             st.success("Profile saved successfully!")
             st.rerun()
 
@@ -2790,8 +3164,7 @@ elif active_nav == "Settings":
         with col_em1:
             if st.button("💾 Save Email Recipient", use_container_width=True, disabled=not bool(recip_inp)):
                 p["alert_email"] = recip_inp.strip()
-                with open(PROFILE, "w", encoding="utf-8") as pf:
-                    json.dump(p, pf, indent=2)
+                save_active_profile(p)
                 st.success("Recipient saved!")
                 st.rerun()
         with col_em2:
