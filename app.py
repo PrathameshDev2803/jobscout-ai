@@ -11,6 +11,7 @@ from datetime import datetime
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from fpdf import FPDF
 try:
@@ -1109,6 +1110,13 @@ def ensure_db():
       url_hash TEXT PRIMARY KEY, title TEXT, company TEXT, location TEXT,
       description TEXT, url TEXT, source TEXT, posted_at TEXT, created_at TEXT,
       applied INTEGER DEFAULT 0)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS user_sessions(
+      sid TEXT PRIMARY KEY,
+      user_name TEXT,
+      profile_json TEXT,
+      duration_months INTEGER,
+      created_at TEXT,
+      expires_at TEXT)""")
     cols = [r[1] for r in con.execute("PRAGMA table_info(jobs)")]
     if "shortlisted" not in cols:
         con.execute("ALTER TABLE jobs ADD COLUMN shortlisted INTEGER DEFAULT 0")
@@ -1122,6 +1130,58 @@ def ensure_db():
         con.execute("ALTER TABLE jobs ADD COLUMN app_notes TEXT DEFAULT ''")
     con.commit()
     return con
+
+
+def create_user_session(profile, duration_months=1):
+    """Generate cryptographically secure session valid for 1, 3, or 6 months."""
+    import secrets
+    from datetime import datetime, timedelta, timezone
+    sid = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    days = 30 * max(1, int(duration_months))
+    expires_at = (now + timedelta(days=days)).isoformat()
+    con = ensure_db()
+    con.execute("""
+      INSERT OR REPLACE INTO user_sessions (sid, user_name, profile_json, duration_months, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    """, (sid, profile.get("name", "Developer"), json.dumps(profile), duration_months, now.isoformat(), expires_at))
+    con.commit()
+    con.close()
+    return sid, expires_at
+
+
+def get_user_session(sid):
+    """Validate and return profile if session is active and unexpired."""
+    if not sid or not isinstance(sid, str):
+        return None
+    try:
+        from datetime import datetime, timezone
+        con = ensure_db()
+        row = con.execute("SELECT profile_json, expires_at FROM user_sessions WHERE sid=?", (sid.strip(),)).fetchone()
+        con.close()
+        if not row:
+            return None
+        prof_json, exp_str = row[0], row[1]
+        exp_dt = datetime.fromisoformat(exp_str)
+        if datetime.now(timezone.utc) > exp_dt:
+            delete_user_session(sid)
+            return None
+        return json.loads(prof_json)
+    except Exception:
+        return None
+
+
+def delete_user_session(sid):
+    """Revoke and delete persistent session."""
+    if not sid:
+        return
+    try:
+        con = ensure_db()
+        con.execute("DELETE FROM user_sessions WHERE sid=?", (sid.strip(),))
+        con.commit()
+        con.close()
+    except Exception:
+        pass
 
 
 def is_job_closed(url):
@@ -1455,6 +1515,10 @@ def render_welcome_screen():
             if st.button("Explore Live Demo Workspace →", key="btn_recruiter_tour", type="primary", use_container_width=True):
                 save_active_profile(p_disk)
                 st.session_state["onboarded"] = True
+                sid, exp_at = create_user_session(p_disk, duration_months=1)
+                st.query_params["sid"] = sid
+                st.session_state["active_sid"] = sid
+                components.html(f"<script>try{{localStorage.setItem('jobscout_sid','{sid}');localStorage.setItem('jobscout_exp','{exp_at}');}}catch(e){{}}</script>", height=0)
                 st.toast("⚡ Welcome to JobScout Demo Workspace!", icon="🚀")
                 st.rerun()
 
@@ -1497,6 +1561,23 @@ def render_welcome_screen():
 
             with st.expander("Or paste plain text resume directly"):
                 onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=90, placeholder="Paste your resume content here...")
+
+            col_rem, col_dur = st.columns([1.1, 1.45], vertical_alignment="center")
+            with col_rem:
+                remember_me = st.checkbox("Remember me", value=True, key="onb_remember_me", help="Keeps your workspace session remembered on this browser")
+            with col_dur:
+                if remember_me:
+                    dur_label = st.segmented_control(
+                        "Duration",
+                        options=["1 Month", "3 Months", "6 Months"],
+                        default="1 Month",
+                        key="onb_remember_duration",
+                        label_visibility="collapsed"
+                    )
+                else:
+                    dur_label = "1 Month"
+
+            dur_months = 3 if (dur_label and "3" in dur_label) else (6 if (dur_label and "6" in dur_label) else 1)
 
             st.write("")
             launch_clicked = st.button("Analyze Resume & Build Workspace →", key="btn_onboard_launch", use_container_width=True)
@@ -1543,6 +1624,19 @@ def render_welcome_screen():
 
                     st.write("3. Assembling workspace...")
                     st.session_state["onboarded"] = True
+
+                    if remember_me:
+                        sid, exp_at = create_user_session(parsed_p, duration_months=dur_months)
+                        st.query_params["sid"] = sid
+                        st.session_state["active_sid"] = sid
+                        components.html(f"<script>try{{localStorage.setItem('jobscout_sid','{sid}');localStorage.setItem('jobscout_exp','{exp_at}');}}catch(e){{}}</script>", height=0)
+                    else:
+                        current_sid = st.query_params.get("sid") or st.session_state.get("active_sid")
+                        if current_sid:
+                            delete_user_session(current_sid)
+                            st.query_params.pop("sid", None)
+                        components.html("<script>try{{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');}}catch(e){{}}</script>", height=0)
+
                     status.update(label="🚀 Workspace Ready! Launching...", state="complete")
                     time.sleep(0.3)
 
@@ -2279,9 +2373,37 @@ st.session_state.setdefault("quick_run_tailor", False)
 st.session_state.setdefault("instant_tailor_expanded", False)
 st.session_state.setdefault("fast_tailor_tab_idx", 0)
 
-# Check onboarding state
+# Check session & onboarding state
 st.session_state.setdefault("onboarded", False)
+
+current_sid = st.query_params.get("sid")
+if current_sid and not st.session_state.get("onboarded", False):
+    sess_prof = get_user_session(current_sid)
+    if sess_prof:
+        save_active_profile(sess_prof)
+        st.session_state["onboarded"] = True
+        st.session_state["active_sid"] = current_sid
+
 if not st.session_state.get("onboarded", False):
+    # Auto-reconnect via LocalStorage on clean browser revisits
+    components.html(
+        """
+        <script>
+        try {
+            const sid = localStorage.getItem("jobscout_sid");
+            const exp = localStorage.getItem("jobscout_exp");
+            if (sid && exp && new Date(exp) > new Date()) {
+                const url = new URL(window.parent.location.href);
+                if (!url.searchParams.get("sid")) {
+                    url.searchParams.set("sid", sid);
+                    window.parent.location.replace(url.toString());
+                }
+            }
+        } catch (e) {}
+        </script>
+        """,
+        height=0
+    )
     render_welcome_screen()
     st.stop()
 
@@ -2380,7 +2502,13 @@ with top_user_col:
         """, unsafe_allow_html=True)
     with u_c2:
         if st.button("↺ Switch", key="btn_switch_resume_top", help="Upload a new resume or switch profile"):
+            current_sid = st.query_params.get("sid") or st.session_state.get("active_sid")
+            if current_sid:
+                delete_user_session(current_sid)
+                st.query_params.pop("sid", None)
             st.session_state["onboarded"] = False
+            st.session_state["active_sid"] = None
+            components.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');}catch(e){}</script>", height=0)
             st.rerun()
     with u_c3:
         if st.button("⚙️", key="btn_quick_settings_top", help="Open Settings"):
