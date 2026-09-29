@@ -614,91 +614,244 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
 
-/* Welcome / Onboarding Screen Styles */
-.welcome-container {
-    max-width: 900px;
-    margin: 1.5rem auto 1.8rem auto;
-    padding: 2.2rem 2.5rem;
-    background: radial-gradient(130% 130% at 50% 0%, rgba(16, 185, 129, 0.09) 0%, rgba(15, 23, 42, 0.88) 65%);
-    backdrop-filter: blur(28px);
-    -webkit-backdrop-filter: blur(28px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 22px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.12);
-    text-align: center;
-}
-.welcome-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    padding: 4px 14px;
-    border-radius: 999px;
-    margin-bottom: 1rem;
-    text-transform: uppercase;
-}
-.welcome-title {
-    font-size: 2.2rem;
-    font-weight: 850;
-    letter-spacing: -0.035em;
-    color: #ffffff;
-    line-height: 1.2;
-    margin: 0 0 0.8rem 0;
-}
-.welcome-subtitle {
-    font-size: 1.05rem;
-    color: #94a3b8;
-    line-height: 1.6;
-    margin: 0 auto 1.8rem auto;
-    max-width: 660px;
-}
-.welcome-stats-row {
+/* --- Product Proposition & Split Onboarding Screen Styles --- */
+.app-topbar {
     display: flex;
-    justify-content: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 0.5rem;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.2rem 0 1.5rem 0;
+    margin-bottom: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.welcome-stat-pill {
-    display: inline-flex;
+.app-brand {
+    display: flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
-    padding: 7px 16px;
-    font-size: 12px;
-    color: #cbd5e1;
+    font-size: 20px;
+    font-weight: 850;
+    color: #ffffff;
+    letter-spacing: -0.02em;
 }
-.welcome-stat-num {
+.app-brand-badge {
+    font-size: 10px;
     font-weight: 800;
     color: #10b981;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
 }
-.onboard-card {
-    background: #0d121f;
-    border: 1px solid #1c263c;
-    border-radius: 18px;
-    padding: 1.6rem 1.8rem;
-    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
-    margin-bottom: 1.5rem;
+
+/* Left Proposition Column */
+.prop-container {
+    padding-right: 1.2rem;
 }
-.onboard-step-badge {
+.prop-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 750;
-    color: #38bdf8;
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    padding: 2px 10px;
+    letter-spacing: 0.08em;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 3px 11px;
     border-radius: 999px;
+    text-transform: uppercase;
+    margin-bottom: 0.9rem;
+}
+.prop-headline {
+    font-size: 2.65rem;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    color: #ffffff;
+    line-height: 1.15;
+    margin: 0 0 0.9rem 0;
+}
+.prop-desc {
+    font-size: 1.02rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    margin-bottom: 1.2rem;
+}
+.prop-checklist {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+    margin-bottom: 1.4rem;
+}
+.prop-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+.prop-check-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.16);
+    color: #10b981;
+    font-size: 10.5px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+/* Product Preview Card (Miniature representation) */
+.preview-card-wrap {
+    background: #090d16;
+    border: 1px solid #1e293b;
+    border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 25px rgba(16, 185, 129, 0.07);
+    margin-bottom: 1.3rem;
+    position: relative;
+    overflow: hidden;
+}
+.preview-card-wrap::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #10b981, #06b6d4, transparent);
+}
+.preview-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 0.5rem;
+}
+.preview-label-tag {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    text-transform: uppercase;
+}
+.preview-score-badge {
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #34d399;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+.preview-job-title {
+    font-size: 15px;
+    font-weight: 750;
+    color: #f8fafc;
+    margin-bottom: 3px;
+}
+.preview-job-meta {
+    font-size: 11.5px;
+    color: #64748b;
+    margin-bottom: 0.75rem;
+}
+.preview-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 0.75rem;
+}
+.pchip {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-weight: 600;
+}
+.pchip.hit {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.pchip.gap {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+.preview-card-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 11px;
+    color: #94a3b8;
+}
+.preview-tailor-tag {
+    color: #38bdf8;
+    font-weight: 700;
+}
+
+/* Workflow Pipeline Indicator */
+.workflow-pipeline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 9px;
+    padding: 7px 11px;
+}
+.workflow-step {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.workflow-step.active {
+    color: #10b981;
+}
+.workflow-arrow {
+    color: #334155;
+    font-size: 9.5px;
+}
+
+/* Right Column: Elevated Onboarding Card */
+.onboard-box {
+    background: radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.05) 0%, #0d121f 65%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 20px;
+    padding: 1.8rem 2rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.1);
+}
+.onboard-header-title {
+    font-size: 1.45rem;
+    font-weight: 850;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.35rem 0;
+}
+.onboard-header-sub {
+    font-size: 12.5px;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin-bottom: 1.3rem;
+}
+.file-uploaded-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #10b981;
+    font-weight: 600;
 }
 </style>
 """
@@ -1143,39 +1296,123 @@ Resume:
 
 
 def render_welcome_screen():
-    st.markdown("""
-    <div class="welcome-container">
-        <div class="welcome-badge">⚡ JOBSCOUT AI • TECH JOB COPILOT</div>
-        <h1 class="welcome-title">Your Autonomous Job Search Begins Here</h1>
-        <p class="welcome-subtitle">
-            Enter your name and drop your resume. Our AI automatically extracts your tech stack,
-            calculates match scores against <b>1,160+ live developer openings</b>, and sets up your ATS tailor in seconds.
-        </p>
-        <div class="welcome-stats-row">
-            <div class="welcome-stat-pill"><span class="welcome-stat-num">1,160+</span> Live Tech Jobs</div>
-            <div class="welcome-stat-pill"><span class="welcome-stat-num">7+</span> Aggregated Platforms</div>
-            <div class="welcome-stat-pill"><span class="welcome-stat-num">Instant</span> Zero-Config Match</div>
+    # 1. Subtle, understated top bar
+    tb_l, tb_r = st.columns([3.5, 1.2], vertical_alignment="center")
+    with tb_l:
+        st.markdown("""
+        <div class="app-brand">
+            <span style="font-size:22px; filter:drop-shadow(0 0 10px rgba(16,185,129,0.4));">⚡</span>
+            <span>JOBSCOUT</span>
+            <span class="app-brand-badge">PRO</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+    with tb_r:
+        sb1, sb2 = st.columns([1, 1], vertical_alignment="center")
+        with sb1:
+            if st.button("Try Demo", key="btn_top_demo_action", use_container_width=True, help="Explore workspace with pre-populated demo profile"):
+                p_disk = load_profile()
+                save_active_profile(p_disk)
+                st.session_state["onboarded"] = True
+                st.toast("Loaded Demo Workspace!", icon="🚀")
+                st.rerun()
+        with sb2:
+            if st.button("Sign In", key="btn_top_signin_action", use_container_width=True, help="Restore saved session"):
+                p_disk = load_profile()
+                save_active_profile(p_disk)
+                st.session_state["onboarded"] = True
+                st.rerun()
 
-    with st.container():
-        wc1, wc2 = st.columns([1.05, 1.25], gap="large")
+    st.write("")
 
-        with wc1:
-            st.markdown("<div class='onboard-step-badge'>STEP 1 · YOUR PROFILE</div>", unsafe_allow_html=True)
-            onb_name = st.text_input("Your Full Name", value="", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
-            onb_city = st.text_input("Preferred City / Commute", value="Mumbai", placeholder="e.g. Mumbai, Pune, Remote", key="onb_city_input")
-            onb_role = st.text_input("Target Role (Optional)", value="", placeholder="e.g. PHP Developer • Full-Stack Developer", key="onb_role_input")
+    # 2. Split Screen: Left ~55% (Proposition + Preview) vs Right ~45% (Elevated Onboarding Card)
+    col_prop, col_onboard = st.columns([1.18, 1.0], gap="large")
 
-        with wc2:
-            st.markdown("<div class='onboard-step-badge'>STEP 2 · RESUME INGESTION</div>", unsafe_allow_html=True)
-            onb_file = st.file_uploader("Upload Resume (PDF, TXT, DOCX)", type=["pdf", "txt", "docx"], key="onb_file_input", help="Drop your resume to automatically extract your skills, experience and target keywords")
-            with st.expander("Or Paste Plain Text Resume Directly"):
-                onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=120, placeholder="Paste your resume content here...")
+    with col_prop:
+        st.markdown("""
+        <div class="prop-container">
+            <div class="prop-badge">⚡ Autonomous Job Copilot</div>
+            <h1 class="prop-headline">Your job search,<br/><span>automated.</span></h1>
+            <p class="prop-desc">
+                Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings across 7+ platforms, scores your fit against your exact stack, and organizes jobs around your profile.
+            </p>
+            <div class="prop-checklist">
+                <div class="prop-check-item"><span class="prop-check-icon">✓</span> Resume-aware stack matching</div>
+                <div class="prop-check-item"><span class="prop-check-icon">✓</span> Automated cross-platform discovery</div>
+                <div class="prop-check-item"><span class="prop-check-icon">✓</span> 0–100 deterministic fit scoring</div>
+                <div class="prop-check-item"><span class="prop-check-icon">✓</span> 1-click ATS resume tailoring</div>
+            </div>
+
+            <!-- Miniature Product Preview Card -->
+            <div class="preview-card-wrap">
+                <div class="preview-card-head">
+                    <span class="preview-label-tag">⚡ LIVE SYSTEM MATCH PREVIEW</span>
+                    <span class="preview-score-badge">87% FIT</span>
+                </div>
+                <div class="preview-job-title">Senior Full Stack Developer</div>
+                <div class="preview-job-meta">TechSolutions Pvt Ltd · Mumbai (Hybrid) · 1d ago</div>
+                <div class="preview-chips-row">
+                    <span class="pchip hit">✓ React</span>
+                    <span class="pchip hit">✓ Node.js</span>
+                    <span class="pchip hit">✓ MySQL</span>
+                    <span class="pchip hit">✓ REST APIs</span>
+                    <span class="pchip gap">⚠ AWS (Bonus)</span>
+                </div>
+                <div class="preview-card-foot">
+                    <span>Fit Breakdown: 4/4 Core Skills Matched</span>
+                    <span class="preview-tailor-tag">ATS-Ready Resume Ready ✓</span>
+                </div>
+            </div>
+
+            <!-- Visual Workflow Pipeline -->
+            <div class="workflow-pipeline">
+                <div class="workflow-step active"><span>1</span> RESUME</div>
+                <div class="workflow-arrow">→</div>
+                <div class="workflow-step"><span>2</span> ANALYZE</div>
+                <div class="workflow-arrow">→</div>
+                <div class="workflow-step"><span>3</span> DISCOVER</div>
+                <div class="workflow-arrow">→</div>
+                <div class="workflow-step"><span>4</span> 0–100 SCORE</div>
+                <div class="workflow-arrow">→</div>
+                <div class="workflow-step"><span>5</span> APPLY</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_onboard:
+        st.markdown("""
+        <div class="onboard-header-title">Start your job search</div>
+        <div class="onboard-header-sub">Upload your resume and we'll build your personalized workspace.</div>
+        """, unsafe_allow_html=True)
+
+        onb_name = st.text_input("Full Name", value="", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
+
+        c_loc, c_role = st.columns(2)
+        with c_loc:
+            onb_city = st.text_input("Location", value="Mumbai", placeholder="e.g. Mumbai or Remote", key="onb_city_input")
+        with c_role:
+            onb_role = st.text_input("Target Role", value="", placeholder="e.g. Full Stack Developer", key="onb_role_input")
+
+        onb_file = st.file_uploader(
+            "Upload Resume (PDF, DOCX, TXT)",
+            type=["pdf", "txt", "docx"],
+            key="onb_file_input",
+            help="Drop your resume to automatically extract your skills, experience and target keywords. Max 20MB."
+        )
+
+        if onb_file is not None:
+            f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
+            st.markdown(f"""
+            <div class="file-uploaded-badge">
+                <span>✓ <b>{html.escape(onb_file.name)}</b> ({f_size_kb} KB)</span>
+                <span style="color:#38bdf8;font-size:11px;font-weight:600;">File attached</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with st.expander("Or paste plain text resume directly"):
+            onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=110, placeholder="Paste your resume content here...")
 
         st.write("")
-        launch_clicked = st.button("🚀 Analyze Resume & Launch Workspace", type="primary", use_container_width=True, key="btn_onboard_launch")
+        launch_clicked = st.button("Analyze Resume → Launch Workspace", type="primary", use_container_width=True, key="btn_onboard_launch")
 
         if launch_clicked:
             resume_content = ""
@@ -1219,27 +1456,17 @@ def render_welcome_screen():
             time.sleep(0.4)
             st.rerun()
 
-        st.markdown("<div style='text-align: center; margin: 1.5rem 0 0.8rem 0; color: #64748b; font-size: 12px;'>─── OR QUICK EXPLORE ───</div>", unsafe_allow_html=True)
-
-        ft1, ft2 = st.columns(2)
-        with ft1:
-            if st.button("⚡ Continue as Prathamesh Jadhav (PHP / Full-Stack)", use_container_width=True, key="btn_ft_prathamesh"):
-                p_disk = load_profile()
-                p_disk["name"] = "Prathamesh Jadhav"
-                save_active_profile(p_disk)
-                st.session_state["onboarded"] = True
-                st.toast("Loaded Prathamesh's Profile & Resume!", icon="✅")
-                st.rerun()
-        with ft2:
-            if st.button("⚡ Explore with Demo Profile (Alex Developer)", use_container_width=True, key="btn_ft_demo"):
-                demo_p = os.path.join(BASE, "profile.example.json")
-                if os.path.exists(demo_p):
-                    with open(demo_p, encoding="utf-8") as df:
-                        p_demo = json.load(df)
-                    save_active_profile(p_demo)
-                st.session_state["onboarded"] = True
-                st.toast("Loaded Demo Profile!", icon="🚀")
-                st.rerun()
+        st.markdown("""
+        <div style="text-align: center; margin-top: 1.1rem; font-size: 12px; color: #64748b;">
+            Just exploring? Launch with pre-configured sample profile below
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Launch instant demo with sample profile →", key="btn_subtle_demo", use_container_width=True):
+            p_disk = load_profile()
+            save_active_profile(p_disk)
+            st.session_state["onboarded"] = True
+            st.toast("Loaded Demo Workspace!", icon="🚀")
+            st.rerun()
 
 
 def heuristic_tailor(resume_text, job, skills):
