@@ -136,11 +136,13 @@ init_background_scheduler()
 
 CSS = """
 <style>
-/* Global page & canvas cleanup */
+/* Global page & canvas cleanup - Expanded scale */
 .block-container {
-    max-width: 1240px;
-    padding-top: 0.75rem !important;
+    max-width: 1360px !important;
+    padding-top: 0.85rem !important;
     padding-bottom: 3.5rem !important;
+    padding-left: 2rem !important;
+    padding-right: 2rem !important;
 }
 
 /* Hide permanent sidebar and native collapse controls */
@@ -615,79 +617,83 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
 
-/* --- Product Proposition & Split Onboarding Screen Styles --- */
+/* --- Product Proposition & Split Onboarding Screen Styles (10-15% Scaled Up) --- */
 .app-topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.2rem 0 1.5rem 0;
-    margin-bottom: 0.8rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.3rem 0 1.6rem 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .app-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 20px;
+    gap: 10px;
+    font-size: 22px;
     font-weight: 850;
     color: #ffffff;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
 }
 .app-brand-badge {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
     color: #10b981;
     background: rgba(16, 185, 129, 0.14);
     border: 1px solid rgba(16, 185, 129, 0.35);
-    padding: 2px 7px;
+    padding: 2.5px 8px;
     border-radius: 999px;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
 }
 
 /* Left Proposition Column */
 .prop-container {
-    padding-right: 1.2rem;
+    padding-right: 1.8rem;
 }
 .prop-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 10.5px;
+    gap: 7px;
+    font-size: 11.5px;
     font-weight: 750;
     letter-spacing: 0.08em;
     color: #10b981;
     background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    padding: 3px 11px;
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    padding: 4px 13px;
     border-radius: 999px;
     text-transform: uppercase;
-    margin-bottom: 0.9rem;
+    margin-bottom: 1.15rem;
 }
 .prop-headline {
-    font-size: 2.65rem;
+    font-size: 3.25rem;
     font-weight: 900;
     letter-spacing: -0.04em;
     color: #ffffff;
-    line-height: 1.15;
-    margin: 0 0 0.9rem 0;
+    line-height: 1.12;
+    margin: 0 0 1.15rem 0;
+}
+.prop-headline span {
+    color: #10b981;
 }
 .prop-desc {
-    font-size: 1.02rem;
+    font-size: 1.12rem;
     color: #94a3b8;
-    line-height: 1.6;
-    margin-bottom: 1.2rem;
+    line-height: 1.65;
+    margin-bottom: 1.5rem;
+    max-width: 620px;
 }
 .prop-checklist {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px 14px;
-    margin-bottom: 1.4rem;
+    gap: 13px 20px;
+    margin-bottom: 1.65rem;
 }
 .prop-check-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12.5px;
+    gap: 9px;
+    font-size: 13.5px;
     font-weight: 600;
     color: #e2e8f0;
 }
@@ -695,24 +701,24 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 17px;
-    height: 17px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: rgba(16, 185, 129, 0.16);
     color: #10b981;
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 800;
     flex-shrink: 0;
 }
 
-/* Product Preview Card (Miniature representation) */
+/* Product Preview Card - Deliberate "What you'll get" Match Glimpse */
 .preview-card-wrap {
     background: #090d16;
     border: 1px solid #1e293b;
-    border-radius: 14px;
-    padding: 1.1rem 1.25rem;
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 25px rgba(16, 185, 129, 0.07);
-    margin-bottom: 1.3rem;
+    border-radius: 16px;
+    padding: 1.35rem 1.5rem;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 28px rgba(16, 185, 129, 0.08);
+    margin-bottom: 1.5rem;
     position: relative;
     overflow: hidden;
 }
@@ -722,52 +728,70 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     top: 0;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 2.5px;
     background: linear-gradient(90deg, #10b981, #06b6d4, transparent);
 }
 .preview-card-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.85rem;
 }
 .preview-label-tag {
-    font-size: 9.5px;
+    font-size: 10.5px;
     font-weight: 800;
     letter-spacing: 0.08em;
-    color: #64748b;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    padding: 3px 9px;
+    border-radius: 5px;
     text-transform: uppercase;
+}
+.preview-sub-hint {
+    font-size: 11.5px;
+    color: #64748b;
+    font-weight: 500;
+}
+.preview-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+.preview-job-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: -0.02em;
 }
 .preview-score-badge {
     background: rgba(16, 185, 129, 0.16);
     border: 1px solid rgba(16, 185, 129, 0.35);
     color: #34d399;
-    font-size: 12px;
+    font-size: 13.5px;
     font-weight: 800;
-    padding: 2px 8px;
-    border-radius: 6px;
-}
-.preview-job-title {
-    font-size: 15px;
-    font-weight: 750;
-    color: #f8fafc;
-    margin-bottom: 3px;
+    padding: 3px 10px;
+    border-radius: 7px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
 }
 .preview-job-meta {
-    font-size: 11.5px;
+    font-size: 12.5px;
     color: #64748b;
-    margin-bottom: 0.75rem;
+    margin-bottom: 1rem;
 }
 .preview-chips-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 0.75rem;
+    gap: 7px;
+    margin-bottom: 1.1rem;
 }
 .pchip {
-    font-size: 10.5px;
-    padding: 2px 8px;
-    border-radius: 5px;
+    font-size: 12px;
+    padding: 3.5px 10px;
+    border-radius: 6px;
     font-weight: 600;
 }
 .pchip.hit {
@@ -780,13 +804,45 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     color: #fbbf24;
     border: 1px solid rgba(245, 158, 11, 0.25);
 }
+.preview-fit-box {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 9px;
+    padding: 10px 13px;
+    margin-bottom: 1rem;
+}
+.preview-fit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 7px;
+}
+.preview-fit-num {
+    font-weight: 800;
+    color: #34d399;
+}
+.preview-bar-track {
+    height: 7px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.preview-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981 0%, #34d399 75%, #06b6d4 100%);
+    border-radius: 999px;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.45);
+}
 .preview-card-foot {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-top: 0.6rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    font-size: 11px;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 12.5px;
     color: #94a3b8;
 }
 .preview-tailor-tag {
@@ -800,59 +856,213 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     align-items: center;
     justify-content: space-between;
     background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 9px;
-    padding: 7px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 11px;
+    padding: 10px 14px;
 }
 .workflow-step {
-    font-size: 10.5px;
-    font-weight: 700;
+    font-size: 11.5px;
+    font-weight: 750;
     color: #64748b;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+}
+.workflow-step span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    font-size: 10.5px;
+    font-weight: 800;
 }
 .workflow-step.active {
     color: #10b981;
 }
+.workflow-step.active span {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
 .workflow-arrow {
-    color: #334155;
-    font-size: 9.5px;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 800;
 }
 
 /* Right Column: Elevated Onboarding Card */
-.onboard-box {
-    background: radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.05) 0%, #0d121f 65%);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 20px;
-    padding: 1.8rem 2rem;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.1);
+div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: radial-gradient(120% 120% at 50% 0%, rgba(16, 185, 129, 0.05) 0%, #0d121f 70%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 18px !important;
+    padding: 1.8rem 1.9rem !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.08) !important;
+}
+.onboard-steps-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.onboard-step-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+}
+.onboard-step-item.active {
+    color: #10b981;
+}
+.onboard-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+}
+.onboard-step-item.active .onboard-step-num {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.onboard-step-line {
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+}
+.onboard-step-line.active {
+    background: rgba(16, 185, 129, 0.35);
 }
 .onboard-header-title {
-    font-size: 1.45rem;
+    font-size: 1.7rem;
     font-weight: 850;
     color: #ffffff;
-    letter-spacing: -0.02em;
-    margin: 0 0 0.35rem 0;
+    letter-spacing: -0.025em;
+    margin: 0 0 0.4rem 0;
 }
 .onboard-header-sub {
-    font-size: 12.5px;
+    font-size: 13.5px;
     color: #94a3b8;
     line-height: 1.5;
-    margin-bottom: 1.3rem;
+    margin-bottom: 1.35rem;
 }
-.file-uploaded-badge {
+
+/* Form Input Scale & Styling */
+div[data-testid="stTextInput"] label, div[data-testid="stFileUploader"] label {
+    font-size: 13.5px !important;
+    font-weight: 650 !important;
+    color: #cbd5e1 !important;
+    margin-bottom: 5px !important;
+}
+div[data-testid="stTextInput"] input {
+    font-size: 14px !important;
+    padding: 10px 14px !important;
+    border-radius: 9px !important;
+    background: #090d16 !important;
+    border: 1px solid #1e293b !important;
+    color: #f8fafc !important;
+    transition: all 0.15s ease !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+    background: #0c121d !important;
+}
+
+/* Resume Upload Custom Zone */
+div[data-testid="stFileUploader"] section {
+    background: rgba(16, 185, 129, 0.03) !important;
+    border: 1.5px dashed rgba(16, 185, 129, 0.35) !important;
+    border-radius: 12px !important;
+    padding: 1.3rem 1.1rem !important;
+    transition: all 0.2s ease !important;
+    text-align: center !important;
+}
+div[data-testid="stFileUploader"] section:hover {
+    background: rgba(16, 185, 129, 0.07) !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.15) !important;
+}
+div[data-testid="stFileUploader"] button {
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+}
+
+/* Uploaded file card */
+.file-uploaded-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-top: 6px;
-    font-size: 12px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-top: 8px;
+}
+.file-card-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.file-card-check {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.2);
     color: #10b981;
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+}
+.file-card-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+.file-card-meta {
+    font-size: 11.5px;
+    color: #94a3b8;
+}
+.file-card-badge {
+    font-size: 11px;
+    font-weight: 750;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+/* Launch CTA button */
+div[data-testid="stButton"] button[kind="primary"] {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #ffffff !important;
+    font-size: 15.5px !important;
+    font-weight: 750 !important;
+    padding: 0.8rem 1.6rem !important;
+    border-radius: 10px !important;
+    border: none !important;
+    box-shadow: 0 6px 22px rgba(16, 185, 129, 0.38) !important;
+    letter-spacing: -0.01em !important;
+    transition: all 0.15s ease !important;
+}
+div[data-testid="stButton"] button[kind="primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 8px 28px rgba(16, 185, 129, 0.5) !important;
 }
 </style>
 """
@@ -1297,7 +1507,7 @@ Resume:
 
 
 WELCOME_PROP_HTML = """<div class="prop-container">
-<div class="prop-badge">⚡ Autonomous Job Copilot</div>
+<div class="prop-badge">✦ Autonomous Job Copilot</div>
 <h1 class="prop-headline">Your job search,<br/><span>automated.</span></h1>
 <p class="prop-desc">
 Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings across 7+ platforms, scores your fit against your exact stack, and organizes jobs around your profile.
@@ -1310,21 +1520,33 @@ Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings
 </div>
 <div class="preview-card-wrap">
 <div class="preview-card-head">
-<span class="preview-label-tag">⚡ LIVE SYSTEM MATCH PREVIEW</span>
+<span class="preview-label-tag">✦ LIVE MATCH PREVIEW</span>
+<span class="preview-sub-hint">Real-time candidate score</span>
+</div>
+<div class="preview-title-row">
+<span class="preview-job-title">Senior Full Stack Developer</span>
 <span class="preview-score-badge">87% FIT</span>
 </div>
-<div class="preview-job-title">Senior Full Stack Developer</div>
-<div class="preview-job-meta">TechSolutions Pvt Ltd · Mumbai (Hybrid) · 1d ago</div>
+<div class="preview-job-meta">TechNova · Mumbai (Hybrid) · 2 days ago · ₹18–24 LPA</div>
 <div class="preview-chips-row">
 <span class="pchip hit">✓ React</span>
 <span class="pchip hit">✓ Node.js</span>
-<span class="pchip hit">✓ MySQL</span>
+<span class="pchip hit">✓ PostgreSQL</span>
 <span class="pchip hit">✓ REST APIs</span>
 <span class="pchip gap">⚠ AWS (Bonus)</span>
 </div>
+<div class="preview-fit-box">
+<div class="preview-fit-header">
+<span>Fit breakdown · 4/4 Core Skills Matched</span>
+<span class="preview-fit-num">87%</span>
+</div>
+<div class="preview-bar-track">
+<div class="preview-bar-fill" style="width: 87%;"></div>
+</div>
+</div>
 <div class="preview-card-foot">
-<span>Fit Breakdown: 4/4 Core Skills Matched</span>
-<span class="preview-tailor-tag">ATS-Ready Resume Ready ✓</span>
+<span>⚡ 1,160+ jobs actively scored in workspace</span>
+<span class="preview-tailor-tag">ATS-ready resume ✓</span>
 </div>
 </div>
 <div class="workflow-pipeline">
@@ -1347,7 +1569,7 @@ def render_welcome_screen():
     with tb_l:
         st.markdown("""
         <div class="app-brand">
-            <span style="font-size:22px; filter:drop-shadow(0 0 10px rgba(16,185,129,0.4));">⚡</span>
+            <span style="font-size:24px; filter:drop-shadow(0 0 10px rgba(16,185,129,0.45));">⚡</span>
             <span>JOBSCOUT</span>
             <span class="app-brand-badge">PRO</span>
         </div>
@@ -1370,8 +1592,8 @@ def render_welcome_screen():
 
     st.write("")
 
-    # 2. Split Screen: Left ~55% (Proposition + Preview) vs Right ~45% (Elevated Onboarding Card)
-    col_prop, col_onboard = st.columns([1.18, 1.0], gap="large")
+    # 2. Split Screen: Left ~57.6% (Proposition + Deliberate Preview) vs Right ~42.4% (Elevated Onboarding Card)
+    col_prop, col_onboard = st.columns([1.36, 1.0], gap="large")
 
     with col_prop:
         st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
@@ -1379,8 +1601,21 @@ def render_welcome_screen():
     with col_onboard:
         with st.container(border=True):
             st.markdown("""
-            <div class="onboard-header-title">Start your job search</div>
-            <div class="onboard-header-sub">Upload your resume and we'll build your personalized workspace.</div>
+            <div class="onboard-steps-bar">
+                <div class="onboard-step-item active">
+                    <span class="onboard-step-num">01</span> Details
+                </div>
+                <div class="onboard-step-line active"></div>
+                <div class="onboard-step-item active">
+                    <span class="onboard-step-num">02</span> Resume
+                </div>
+                <div class="onboard-step-line"></div>
+                <div class="onboard-step-item">
+                    <span class="onboard-step-num">03</span> Launch
+                </div>
+            </div>
+            <div class="onboard-header-title">Build your job profile</div>
+            <div class="onboard-header-sub">Upload your resume and we'll configure your personalized workspace.</div>
             """, unsafe_allow_html=True)
 
             onb_name = st.text_input("Full Name", value="", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
@@ -1400,10 +1635,17 @@ def render_welcome_screen():
 
             if onb_file is not None:
                 f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
+                f_ext = onb_file.name.split(".")[-1].upper() if "." in onb_file.name else "FILE"
                 st.markdown(f"""
-                <div class="file-uploaded-badge">
-                    <span>✓ <b>{html.escape(onb_file.name)}</b> ({f_size_kb} KB)</span>
-                    <span style="color:#38bdf8;font-size:11px;font-weight:600;">File attached</span>
+                <div class="file-uploaded-card">
+                    <div class="file-card-left">
+                        <div class="file-card-check">✓</div>
+                        <div>
+                            <div class="file-card-name">{html.escape(onb_file.name)}</div>
+                            <div class="file-card-meta">{f_ext} · {f_size_kb} KB · Verified & Ready</div>
+                        </div>
+                    </div>
+                    <div class="file-card-badge">Attached</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1456,7 +1698,7 @@ def render_welcome_screen():
                 st.rerun()
 
             st.markdown("""
-            <div style="text-align: center; margin-top: 1.1rem; font-size: 12px; color: #64748b;">
+            <div style="text-align: center; margin-top: 1.15rem; font-size: 12.5px; color: #64748b;">
                 Just exploring? Launch with pre-configured sample profile below
             </div>
             """, unsafe_allow_html=True)
