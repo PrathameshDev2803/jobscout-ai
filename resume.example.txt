@@ -1,6 +1,6 @@
-ALEX DEVELOPER
+PRATHAMESH JADHAV
 FULL-STACK DEVELOPER • BACKEND ENGINEER
-Mumbai, India | +91 12345 67890 | alex.dev@example.com | github.com/alex-dev
+Mumbai, India | +91 93266 71284 | prathameshjadhav2803@gmail.com | github.com/PrathameshDev2803
 
 PROFESSIONAL SUMMARY
 Results-driven Full-Stack Developer with practical experience building responsive web applications, robust backend REST APIs, and database-driven systems. Proficient in Python, JavaScript, React, PHP, and modern web frameworks. Eager to solve real-world problems and deliver high-impact software.

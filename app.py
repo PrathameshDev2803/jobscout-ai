@@ -748,35 +748,6 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     padding: 1.8rem 1.9rem !important;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
 }
-.returning-minimal-box {
-    text-align: center;
-    padding: 1.8rem 1rem 1.2rem 1rem;
-}
-.returning-minimal-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #10b981;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    margin-bottom: 0.9rem;
-}
-.returning-minimal-title {
-    font-size: 1.45rem;
-    font-weight: 800;
-    color: #ffffff;
-    margin-bottom: 0.35rem;
-}
-.returning-minimal-sub {
-    font-size: 13px;
-    color: #94a3b8;
-    margin-bottom: 1.5rem;
-}
-
 .onboard-header-title {
     font-size: 1.55rem;
     font-weight: 800;
@@ -787,7 +758,75 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     font-size: 13px;
     color: #94a3b8;
     line-height: 1.5;
-    margin-bottom: 1.3rem;
+    margin-bottom: 1.15rem;
+}
+
+/* Recruiter Tour Card inside Action Panel */
+.recruiter-tour-card {
+    background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 182, 212, 0.04) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: 12px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 0.85rem;
+    transition: all 0.2s ease;
+}
+.recruiter-tour-card:hover {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: linear-gradient(145deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.06) 100%);
+}
+.tour-badge-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.45rem;
+}
+.tour-badge {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 2px 7px;
+    border-radius: 4px;
+}
+.tour-meta-tag {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 500;
+}
+.tour-title {
+    font-size: 15px;
+    font-weight: 750;
+    color: #f8fafc;
+    margin-bottom: 0.25rem;
+}
+.tour-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.45;
+}
+
+/* Subtle divider between Tour and Upload */
+.or-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 1.15rem 0 1.05rem 0;
+}
+.or-separator::before,
+.or-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.or-separator span {
+    padding: 0 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    text-transform: uppercase;
 }
 
 /* Form Input Scale & Styling */
@@ -1367,11 +1406,10 @@ JobScout scores your exact stack fit against 1,160+ active roles, surfaces high-
 
 def render_welcome_screen():
     p_disk = load_profile()
-    saved_name = (p_disk.get("name") or "").strip()
-    saved_role = p_disk.get("base_role", "Developer")
-    saved_skills = p_disk.get("skills", [])
-    has_saved_profile = bool(saved_name and saved_name.lower() not in ["", "developer", "guest"])
-    switch_mode = st.session_state.get("onb_switch_mode", False)
+    if p_disk.get("name", "").lower() in ["alex developer", "", "developer", "guest"]:
+        p_disk["name"] = "Prathamesh Jadhav"
+        p_disk["base_role"] = "PHP Developer • Full-Stack Developer"
+        save_active_profile(p_disk)
 
     # 1. Subtle, understated top bar
     tb_l, tb_r = st.columns([3.8, 1.0], vertical_alignment="center")
@@ -1392,7 +1430,7 @@ def render_welcome_screen():
 
     st.write("")
 
-    # 2. Split Screen: Left ~56% (Clean Showcase) vs Right ~44% (Focused Action Panel)
+    # 2. Split Screen: Left ~56% (Clean Showcase) vs Right ~44% (Dual-Action Action Panel)
     col_prop, col_onboard = st.columns([1.3, 1.0], gap="large")
 
     with col_prop:
@@ -1400,123 +1438,116 @@ def render_welcome_screen():
 
     with col_onboard:
         with st.container(border=True):
-            if has_saved_profile and not switch_mode:
-                # Minimal Returning User State: 1 action only
+            st.markdown("""
+            <div class="onboard-header-title">Launch Workspace</div>
+            <div class="onboard-header-sub">Explore the full platform in 1 click, or personalize with your resume.</div>
+            
+            <div class="recruiter-tour-card">
+                <div class="tour-badge-row">
+                    <span class="tour-badge">⚡ 1-CLICK DEMO TOUR</span>
+                    <span class="tour-meta-tag">For Recruiters & Evaluators</span>
+                </div>
+                <div class="tour-title">Interactive Developer Workspace</div>
+                <div class="tour-desc">Instantly test 1,160+ live jobs, deterministic 0–100 stack scoring, radar filters, and ATS auto-tailor with a verified developer profile.</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if st.button("Explore Live Demo Workspace →", key="btn_recruiter_tour", type="primary", use_container_width=True):
+                save_active_profile(p_disk)
+                st.session_state["onboarded"] = True
+                st.toast("⚡ Welcome to JobScout Demo Workspace!", icon="🚀")
+                st.rerun()
+
+            st.markdown("""
+            <div class="or-separator">
+                <span>OR PERSONALIZE WITH YOUR RESUME</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            onb_name = st.text_input("Full Name (Optional)", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
+
+            c_loc, c_role = st.columns(2)
+            with c_loc:
+                onb_city = st.text_input("Location", value="Mumbai", placeholder="e.g. Mumbai or Remote", key="onb_city_input")
+            with c_role:
+                onb_role = st.text_input("Target Role", value="Full Stack Developer", placeholder="e.g. Full Stack Developer", key="onb_role_input")
+
+            onb_file = st.file_uploader(
+                "Upload Resume (PDF, DOCX, TXT)",
+                type=["pdf", "txt", "docx"],
+                key="onb_file_input",
+                help="Drop your resume to automatically extract your skills, experience and target keywords. Max 20MB."
+            )
+
+            if onb_file is not None:
+                f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
+                f_ext = onb_file.name.split(".")[-1].upper() if "." in onb_file.name else "FILE"
                 st.markdown(f"""
-                <div class="returning-minimal-box">
-                    <div class="returning-minimal-avatar">⚡</div>
-                    <div class="returning-minimal-title">Welcome back, {html.escape(saved_name)}</div>
-                    <div class="returning-minimal-sub">{html.escape(saved_role)} · {len(saved_skills)} skills active in workspace</div>
+                <div class="file-uploaded-card">
+                    <div class="file-card-left">
+                        <div class="file-card-check">✓</div>
+                        <div>
+                            <div class="file-card-name">{html.escape(onb_file.name)}</div>
+                            <div class="file-card-meta">{f_ext} · {f_size_kb} KB · Verified & Ready</div>
+                        </div>
+                    </div>
+                    <div class="file-card-badge">Attached</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                if st.button(f"Continue to Workspace as {saved_name.split()[0]} →", key="btn_continue_saved", type="primary", use_container_width=True):
-                    save_active_profile(p_disk)
-                    st.session_state["onboarded"] = True
-                    st.toast(f"Welcome back, {saved_name}!", icon="👋")
-                    st.rerun()
+            with st.expander("Or paste plain text resume directly"):
+                onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=90, placeholder="Paste your resume content here...")
 
-                st.write("")
-                if st.button("Upload new resume or switch profile", key="btn_toggle_switch", use_container_width=True):
-                    st.session_state["onb_switch_mode"] = True
-                    st.rerun()
+            st.write("")
+            launch_clicked = st.button("Analyze Resume & Build Workspace →", key="btn_onboard_launch", use_container_width=True)
 
-            else:
-                # Minimal Onboarding Form: Focused & Uncluttered
-                st.markdown("""
-                <div class="onboard-header-title">Build your workspace</div>
-                <div class="onboard-header-sub">Upload your resume to automatically configure your profile and match jobs.</div>
-                """, unsafe_allow_html=True)
-
-                onb_name = st.text_input("Full Name", value=saved_name if switch_mode else "", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
-
-                c_loc, c_role = st.columns(2)
-                with c_loc:
-                    onb_city = st.text_input("Location", value="Mumbai", placeholder="e.g. Mumbai or Remote", key="onb_city_input")
-                with c_role:
-                    onb_role = st.text_input("Target Role", value=saved_role if switch_mode else "", placeholder="e.g. Full Stack Developer", key="onb_role_input")
-
-                onb_file = st.file_uploader(
-                    "Upload Resume (PDF, DOCX, TXT)",
-                    type=["pdf", "txt", "docx"],
-                    key="onb_file_input",
-                    help="Drop your resume to automatically extract your skills, experience and target keywords. Max 20MB."
-                )
-
+            if launch_clicked:
+                resume_content = ""
                 if onb_file is not None:
-                    f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
-                    f_ext = onb_file.name.split(".")[-1].upper() if "." in onb_file.name else "FILE"
-                    st.markdown(f"""
-                    <div class="file-uploaded-card">
-                        <div class="file-card-left">
-                            <div class="file-card-check">✓</div>
-                            <div>
-                                <div class="file-card-name">{html.escape(onb_file.name)}</div>
-                                <div class="file-card-meta">{f_ext} · {f_size_kb} KB · Verified & Ready</div>
-                            </div>
-                        </div>
-                        <div class="file-card-badge">Attached</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    fname = onb_file.name.lower()
+                    if fname.endswith(".pdf"):
+                        resume_content = extract_pdf(onb_file)
+                    else:
+                        try:
+                            resume_content = onb_file.read().decode("utf-8", errors="ignore")
+                        except Exception:
+                            resume_content = ""
+                elif onb_pasted and onb_pasted.strip():
+                    resume_content = onb_pasted.strip()
 
-                with st.expander("Or paste plain text resume directly"):
-                    onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=110, placeholder="Paste your resume content here...")
+                if not resume_content and not onb_name.strip():
+                    st.info("💡 Drop your resume above or click 'Explore Live Demo Workspace' to preview instantly.")
+                    return
 
-                st.write("")
-                launch_clicked = st.button("Launch Workspace →", type="primary", use_container_width=True, key="btn_onboard_launch")
+                with st.status("⚡ Launching JobScout Workspace...", expanded=True) as status:
+                    st.write("1. Extracting skills & technical history...")
+                    if not resume_content:
+                        sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
+                        if os.path.exists(sample_r):
+                            with open(sample_r, encoding="utf-8") as rf:
+                                resume_content = rf.read()
 
-                if has_saved_profile and switch_mode:
-                    if st.button("← Back to saved profile", key="btn_back_saved", use_container_width=True):
-                        st.session_state["onb_switch_mode"] = False
-                        st.rerun()
+                    api_k = get_gemini_api_key()
+                    parsed_p = parse_resume_to_profile(
+                        resume_content,
+                        name_input=onb_name,
+                        city_input=onb_city,
+                        role_input=onb_role,
+                        api_key=api_k
+                    )
+                    save_active_profile(parsed_p)
+                    time.sleep(0.2)
 
-                if launch_clicked:
-                    resume_content = ""
-                    if onb_file is not None:
-                        fname = onb_file.name.lower()
-                        if fname.endswith(".pdf"):
-                            resume_content = extract_pdf(onb_file)
-                        else:
-                            try:
-                                resume_content = onb_file.read().decode("utf-8", errors="ignore")
-                            except Exception:
-                                resume_content = ""
-                    elif onb_pasted and onb_pasted.strip():
-                        resume_content = onb_pasted.strip()
+                    st.write("2. Matching against 1,160+ active database roles...")
+                    time.sleep(0.2)
 
-                    if not resume_content and not onb_name.strip():
-                        st.error("Please enter your name or upload a resume to get started.")
-                        return
+                    st.write("3. Assembling workspace...")
+                    st.session_state["onboarded"] = True
+                    status.update(label="🚀 Workspace Ready! Launching...", state="complete")
+                    time.sleep(0.3)
 
-                    with st.status("⚡ Launching JobScout Workspace...", expanded=True) as status:
-                        st.write("1. Extracting skills & technical history...")
-                        if not resume_content:
-                            sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
-                            if os.path.exists(sample_r):
-                                with open(sample_r, encoding="utf-8") as rf:
-                                    resume_content = rf.read()
-
-                        api_k = get_gemini_api_key()
-                        parsed_p = parse_resume_to_profile(
-                            resume_content,
-                            name_input=onb_name,
-                            city_input=onb_city,
-                            role_input=onb_role,
-                            api_key=api_k
-                        )
-                        save_active_profile(parsed_p)
-                        time.sleep(0.2)
-
-                        st.write("2. Matching against 1,160+ active database roles...")
-                        time.sleep(0.2)
-
-                        st.write("3. Assembling workspace...")
-                        st.session_state["onboarded"] = True
-                        status.update(label="🚀 Workspace Ready! Launching...", state="complete")
-                        time.sleep(0.3)
-
-                    st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}!", icon="🚀")
-                    st.rerun()
+                st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}!", icon="🚀")
+                st.rerun()
 
 
 def heuristic_tailor(resume_text, job, skills):
