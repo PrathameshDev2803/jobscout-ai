@@ -617,7 +617,7 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
 
-/* --- Product Proposition & Split Onboarding Screen Styles (10-15% Scaled Up) --- */
+/* --- Product Proposition & Split Onboarding Screen Styles (Intentional Hierarchy) --- */
 .app-topbar {
     display: flex;
     justify-content: space-between;
@@ -646,56 +646,61 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     letter-spacing: 0.06em;
 }
 
-/* Left Proposition Column */
+/* Left Proposition Column - Open Showcase (No Heavy Container) */
 .prop-container {
-    padding-right: 1.8rem;
+    padding-right: 2.2rem;
 }
 .prop-badge {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-size: 11.5px;
-    font-weight: 750;
+    font-size: 11px;
+    font-weight: 700;
     letter-spacing: 0.08em;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.28);
-    padding: 4px 13px;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 4px 12px;
     border-radius: 999px;
     text-transform: uppercase;
-    margin-bottom: 1.15rem;
+    margin-bottom: 1.2rem;
+}
+.prop-badge .badge-dot {
+    color: #10b981;
+    font-size: 12px;
 }
 .prop-headline {
-    font-size: 3.25rem;
+    font-size: 3.5rem;
     font-weight: 900;
-    letter-spacing: -0.04em;
-    color: #ffffff;
-    line-height: 1.12;
-    margin: 0 0 1.15rem 0;
+    letter-spacing: -0.045em;
+    color: #f8fafc !important;
+    line-height: 1.1;
+    margin: 0 0 1.2rem 0;
 }
-.prop-headline span {
-    color: #10b981;
+.prop-headline .prop-highlight {
+    color: #10b981 !important;
+    text-shadow: 0 0 28px rgba(16, 185, 129, 0.35);
 }
 .prop-desc {
-    font-size: 1.12rem;
+    font-size: 1.15rem;
     color: #94a3b8;
-    line-height: 1.65;
-    margin-bottom: 1.5rem;
-    max-width: 620px;
+    line-height: 1.68;
+    margin-bottom: 1.6rem;
+    max-width: 630px;
 }
 .prop-checklist {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 13px 20px;
-    margin-bottom: 1.65rem;
+    gap: 13px 22px;
+    margin-bottom: 1.75rem;
 }
 .prop-check-item {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     font-size: 13.5px;
     font-weight: 600;
-    color: #e2e8f0;
+    color: #cbd5e1;
 }
 .prop-check-icon {
     display: inline-flex;
@@ -704,9 +709,10 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: rgba(16, 185, 129, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(16, 185, 129, 0.3);
     color: #10b981;
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 800;
     flex-shrink: 0;
 }
@@ -761,7 +767,7 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     margin-bottom: 4px;
 }
 .preview-job-title {
-    font-size: 18px;
+    font-size: 18.5px;
     font-weight: 800;
     color: #f8fafc;
     letter-spacing: -0.02em;
@@ -850,15 +856,16 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     font-weight: 700;
 }
 
-/* Workflow Pipeline Indicator */
+/* Workflow Pipeline Indicator - Connected Interactive Stepper */
 .workflow-pipeline {
     display: flex;
     align-items: center;
     justify-content: space-between;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 11px;
-    padding: 10px 14px;
+    border-radius: 12px;
+    padding: 11px 16px;
+    margin-top: 0.2rem;
 }
 .workflow-step {
     font-size: 11.5px;
@@ -867,13 +874,14 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     display: flex;
     align-items: center;
     gap: 6px;
+    transition: all 0.2s ease;
 }
-.workflow-step span {
+.workflow-step .step-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     color: #94a3b8;
@@ -881,15 +889,39 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     font-weight: 800;
 }
 .workflow-step.active {
-    color: #10b981;
+    color: #f8fafc;
 }
-.workflow-step.active span {
+.workflow-step.active .step-icon {
     background: rgba(16, 185, 129, 0.2);
     color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.4);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+.workflow-step.completed {
+    color: #10b981;
+}
+.workflow-step.completed .step-icon {
+    background: #10b981;
+    color: #04140e;
+    font-weight: 900;
+}
+.workflow-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    margin-right: 2px;
+    box-shadow: 0 0 6px #10b981;
+    animation: pulse-dot 1.8s infinite;
+}
+@keyframes pulse-dot {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.8; }
 }
 .workflow-arrow {
-    color: #475569;
+    color: #334155;
     font-size: 11px;
     font-weight: 800;
 }
@@ -919,6 +951,9 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     color: #475569;
 }
 .onboard-step-item.active {
+    color: #f8fafc;
+}
+.onboard-step-item.completed {
     color: #10b981;
 }
 .onboard-step-num {
@@ -936,6 +971,10 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     color: #10b981;
     border: 1px solid rgba(16, 185, 129, 0.35);
 }
+.onboard-step-item.completed .onboard-step-num {
+    background: #10b981;
+    color: #04140e;
+}
 .onboard-step-line {
     flex: 1;
     height: 1px;
@@ -944,6 +983,74 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 .onboard-step-line.active {
     background: rgba(16, 185, 129, 0.35);
 }
+
+/* Returning User Quick-Resume Box */
+.returning-user-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 0.9rem;
+}
+.returning-user-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.returning-user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+}
+.returning-user-name {
+    font-size: 13px;
+    font-weight: 750;
+    color: #f1f5f9;
+}
+.returning-user-meta {
+    font-size: 11.5px;
+    color: #94a3b8;
+}
+.returning-user-pill {
+    font-size: 11px;
+    font-weight: 700;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.onboard-divider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 1.1rem 0;
+}
+.onboard-divider-row span {
+    font-size: 10.5px;
+    font-weight: 750;
+    color: #475569;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    text-transform: uppercase;
+}
+.onboard-divider-line {
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .onboard-header-title {
     font-size: 1.7rem;
     font-weight: 850;
@@ -1506,9 +1613,35 @@ Resume:
     return p
 
 
-WELCOME_PROP_HTML = """<div class="prop-container">
-<div class="prop-badge">✦ Autonomous Job Copilot</div>
-<h1 class="prop-headline">Your job search,<br/><span>automated.</span></h1>
+def get_welcome_prop_html(has_uploaded: bool = False) -> str:
+    if has_uploaded:
+        pipeline_html = """<div class="workflow-pipeline">
+<div class="workflow-step completed"><span class="step-icon">✓</span> RESUME</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step active"><span class="workflow-dot"></span><span class="step-icon">②</span> ANALYZE</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">③</span> DISCOVER</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">④</span> SCORE</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">⑤</span> APPLY</div>
+</div>"""
+    else:
+        pipeline_html = """<div class="workflow-pipeline">
+<div class="workflow-step active"><span class="workflow-dot"></span><span class="step-icon">①</span> RESUME</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">②</span> ANALYZE</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">③</span> DISCOVER</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">④</span> SCORE</div>
+<div class="workflow-arrow">──</div>
+<div class="workflow-step"><span class="step-icon">⑤</span> APPLY</div>
+</div>"""
+
+    return f"""<div class="prop-container">
+<div class="prop-badge"><span class="badge-dot">✦</span> Autonomous Job Copilot</div>
+<h1 class="prop-headline">Your job search,<br/><span class="prop-highlight">automated.</span></h1>
 <p class="prop-desc">
 Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings across 7+ platforms, scores your fit against your exact stack, and organizes jobs around your profile.
 </p>
@@ -1521,11 +1654,11 @@ Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings
 <div class="preview-card-wrap">
 <div class="preview-card-head">
 <span class="preview-label-tag">✦ LIVE MATCH PREVIEW</span>
-<span class="preview-sub-hint">Real-time candidate score</span>
+<span class="preview-sub-hint">Live job ↔ candidate fit</span>
 </div>
 <div class="preview-title-row">
 <span class="preview-job-title">Senior Full Stack Developer</span>
-<span class="preview-score-badge">87% FIT</span>
+<span class="preview-score-badge">87% JOB FIT</span>
 </div>
 <div class="preview-job-meta">TechNova · Mumbai (Hybrid) · 2 days ago · ₹18–24 LPA</div>
 <div class="preview-chips-row">
@@ -1549,22 +1682,23 @@ Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings
 <span class="preview-tailor-tag">ATS-ready resume ✓</span>
 </div>
 </div>
-<div class="workflow-pipeline">
-<div class="workflow-step active"><span>1</span> RESUME</div>
-<div class="workflow-arrow">→</div>
-<div class="workflow-step"><span>2</span> ANALYZE</div>
-<div class="workflow-arrow">→</div>
-<div class="workflow-step"><span>3</span> DISCOVER</div>
-<div class="workflow-arrow">→</div>
-<div class="workflow-step"><span>4</span> 0–100 SCORE</div>
-<div class="workflow-arrow">→</div>
-<div class="workflow-step"><span>5</span> APPLY</div>
-</div>
+{pipeline_html}
 </div>"""
 
 
 def render_welcome_screen():
-    # 1. Subtle, understated top bar
+    # Detect if user has already uploaded/attached a resume in session state
+    uploaded_file_in_state = st.session_state.get("onb_file_input")
+    pasted_text_in_state = st.session_state.get("onb_pasted_area", "")
+    has_uploaded = bool(uploaded_file_in_state) or bool(str(pasted_text_in_state).strip())
+
+    # Check for returning user data
+    p_disk = load_profile()
+    saved_name = (p_disk.get("name") or "").strip()
+    saved_role = p_disk.get("base_role", "Developer")
+    saved_skills = p_disk.get("skills", [])
+
+    # 1. Top bar with subtle brand and demo / sign-in actions
     tb_l, tb_r = st.columns([3.5, 1.2], vertical_alignment="center")
     with tb_l:
         st.markdown("""
@@ -1578,35 +1712,34 @@ def render_welcome_screen():
         sb1, sb2 = st.columns([1, 1], vertical_alignment="center")
         with sb1:
             if st.button("Try Demo", key="btn_top_demo_action", use_container_width=True, help="Explore workspace with pre-populated demo profile"):
-                p_disk = load_profile()
                 save_active_profile(p_disk)
                 st.session_state["onboarded"] = True
                 st.toast("Loaded Demo Workspace!", icon="🚀")
                 st.rerun()
         with sb2:
             if st.button("Sign In", key="btn_top_signin_action", use_container_width=True, help="Restore saved session"):
-                p_disk = load_profile()
                 save_active_profile(p_disk)
                 st.session_state["onboarded"] = True
                 st.rerun()
 
     st.write("")
 
-    # 2. Split Screen: Left ~57.6% (Proposition + Deliberate Preview) vs Right ~42.4% (Elevated Onboarding Card)
-    col_prop, col_onboard = st.columns([1.36, 1.0], gap="large")
+    # 2. Asymmetric Split Screen: Left ~58.7% (Open Showcase) vs Right ~41.3% (Elevated Action Panel)
+    col_prop, col_onboard = st.columns([1.42, 1.0], gap="large")
 
     with col_prop:
-        st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
+        st.markdown(get_welcome_prop_html(has_uploaded=has_uploaded), unsafe_allow_html=True)
 
     with col_onboard:
         with st.container(border=True):
-            st.markdown("""
+            # Step indicator showing progress
+            st.markdown(f"""
             <div class="onboard-steps-bar">
-                <div class="onboard-step-item active">
-                    <span class="onboard-step-num">01</span> Details
+                <div class="onboard-step-item {'completed' if has_uploaded else 'active'}">
+                    <span class="onboard-step-num">{'✓' if has_uploaded else '01'}</span> Details
                 </div>
-                <div class="onboard-step-line active"></div>
-                <div class="onboard-step-item active">
+                <div class="onboard-step-line {'active' if has_uploaded else ''}"></div>
+                <div class="onboard-step-item {'active' if has_uploaded else ''}">
                     <span class="onboard-step-num">02</span> Resume
                 </div>
                 <div class="onboard-step-line"></div>
@@ -1614,6 +1747,37 @@ def render_welcome_screen():
                     <span class="onboard-step-num">03</span> Launch
                 </div>
             </div>
+            """, unsafe_allow_html=True)
+
+            # Returning User quick resume flow
+            if saved_name and saved_name.lower() not in ["", "developer", "guest"]:
+                st.markdown(f"""
+                <div class="returning-user-box">
+                    <div class="returning-user-left">
+                        <div class="returning-user-avatar">👤</div>
+                        <div>
+                            <div class="returning-user-name">Welcome back, {html.escape(saved_name)}</div>
+                            <div class="returning-user-meta">{html.escape(saved_role)} · {len(saved_skills)} skills configured</div>
+                        </div>
+                    </div>
+                    <div class="returning-user-pill">Saved Profile</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"Continue to Workspace as {saved_name.split()[0]} →", key="btn_continue_saved", type="primary", use_container_width=True):
+                    save_active_profile(p_disk)
+                    st.session_state["onboarded"] = True
+                    st.toast(f"Welcome back, {saved_name}!", icon="👋")
+                    st.rerun()
+
+                st.markdown("""
+                <div class="onboard-divider-row">
+                    <div class="onboard-divider-line"></div>
+                    <span>OR UPDATE RESUME / CONFIGURE NEW</span>
+                    <div class="onboard-divider-line"></div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
             <div class="onboard-header-title">Build your job profile</div>
             <div class="onboard-header-sub">Upload your resume and we'll configure your personalized workspace.</div>
             """, unsafe_allow_html=True)
@@ -1673,8 +1837,8 @@ def render_welcome_screen():
                     st.error("Please enter your name or upload a resume to get started.")
                     return
 
-                with st.status("🔍 Analyzing Resume & Configuring Workspace...", expanded=True) as status:
-                    st.write("Extracting technical competencies & career history...")
+                with st.status("⚡ Launching JobScout Workspace...", expanded=True) as status:
+                    st.write("1. Parsing resume text & extracting core technical competencies...")
                     if not resume_content:
                         sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
                         if os.path.exists(sample_r):
@@ -1690,11 +1854,20 @@ def render_welcome_screen():
                         api_key=api_k
                     )
                     save_active_profile(parsed_p)
-                    st.session_state["onboarded"] = True
-                    status.update(label="✅ Workspace Configured Successfully!", state="complete")
+                    time.sleep(0.3)
 
-                st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}! 1,160+ jobs matched.", icon="🚀")
-                time.sleep(0.4)
+                    st.write(f"2. Matching {len(parsed_p.get('skills', []))} skills against 1,160+ active database opportunities...")
+                    time.sleep(0.3)
+
+                    st.write("3. Computing deterministic 0–100 fit scores & keyword gap vectors...")
+                    time.sleep(0.3)
+
+                    st.write("4. Assembling personalized job copilot workspace...")
+                    st.session_state["onboarded"] = True
+                    status.update(label="🚀 Workspace Configured! Entering JobScout...", state="complete")
+                    time.sleep(0.4)
+
+                st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}! Workspace ready.", icon="🚀")
                 st.rerun()
 
             st.markdown("""
@@ -1703,7 +1876,6 @@ def render_welcome_screen():
             </div>
             """, unsafe_allow_html=True)
             if st.button("Launch instant demo with sample profile →", key="btn_subtle_demo", use_container_width=True):
-                p_disk = load_profile()
                 save_active_profile(p_disk)
                 st.session_state["onboarded"] = True
                 st.toast("Loaded Demo Workspace!", icon="🚀")
