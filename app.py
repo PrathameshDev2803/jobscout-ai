@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import textwrap
 import time
 import urllib.parse
 from datetime import datetime
@@ -1295,6 +1296,51 @@ Resume:
     return p
 
 
+WELCOME_PROP_HTML = """<div class="prop-container">
+<div class="prop-badge">⚡ Autonomous Job Copilot</div>
+<h1 class="prop-headline">Your job search,<br/><span>automated.</span></h1>
+<p class="prop-desc">
+Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings across 7+ platforms, scores your fit against your exact stack, and organizes jobs around your profile.
+</p>
+<div class="prop-checklist">
+<div class="prop-check-item"><span class="prop-check-icon">✓</span> Resume-aware stack matching</div>
+<div class="prop-check-item"><span class="prop-check-icon">✓</span> Automated cross-platform discovery</div>
+<div class="prop-check-item"><span class="prop-check-icon">✓</span> 0–100 deterministic fit scoring</div>
+<div class="prop-check-item"><span class="prop-check-icon">✓</span> 1-click ATS resume tailoring</div>
+</div>
+<div class="preview-card-wrap">
+<div class="preview-card-head">
+<span class="preview-label-tag">⚡ LIVE SYSTEM MATCH PREVIEW</span>
+<span class="preview-score-badge">87% FIT</span>
+</div>
+<div class="preview-job-title">Senior Full Stack Developer</div>
+<div class="preview-job-meta">TechSolutions Pvt Ltd · Mumbai (Hybrid) · 1d ago</div>
+<div class="preview-chips-row">
+<span class="pchip hit">✓ React</span>
+<span class="pchip hit">✓ Node.js</span>
+<span class="pchip hit">✓ MySQL</span>
+<span class="pchip hit">✓ REST APIs</span>
+<span class="pchip gap">⚠ AWS (Bonus)</span>
+</div>
+<div class="preview-card-foot">
+<span>Fit Breakdown: 4/4 Core Skills Matched</span>
+<span class="preview-tailor-tag">ATS-Ready Resume Ready ✓</span>
+</div>
+</div>
+<div class="workflow-pipeline">
+<div class="workflow-step active"><span>1</span> RESUME</div>
+<div class="workflow-arrow">→</div>
+<div class="workflow-step"><span>2</span> ANALYZE</div>
+<div class="workflow-arrow">→</div>
+<div class="workflow-step"><span>3</span> DISCOVER</div>
+<div class="workflow-arrow">→</div>
+<div class="workflow-step"><span>4</span> 0–100 SCORE</div>
+<div class="workflow-arrow">→</div>
+<div class="workflow-step"><span>5</span> APPLY</div>
+</div>
+</div>"""
+
+
 def render_welcome_screen():
     # 1. Subtle, understated top bar
     tb_l, tb_r = st.columns([3.5, 1.2], vertical_alignment="center")
@@ -1328,145 +1374,98 @@ def render_welcome_screen():
     col_prop, col_onboard = st.columns([1.18, 1.0], gap="large")
 
     with col_prop:
-        st.markdown("""
-        <div class="prop-container">
-            <div class="prop-badge">⚡ Autonomous Job Copilot</div>
-            <h1 class="prop-headline">Your job search,<br/><span>automated.</span></h1>
-            <p class="prop-desc">
-                Stop opening 20 tabs. JobScout analyzes your resume, discovers relevant openings across 7+ platforms, scores your fit against your exact stack, and organizes jobs around your profile.
-            </p>
-            <div class="prop-checklist">
-                <div class="prop-check-item"><span class="prop-check-icon">✓</span> Resume-aware stack matching</div>
-                <div class="prop-check-item"><span class="prop-check-icon">✓</span> Automated cross-platform discovery</div>
-                <div class="prop-check-item"><span class="prop-check-icon">✓</span> 0–100 deterministic fit scoring</div>
-                <div class="prop-check-item"><span class="prop-check-icon">✓</span> 1-click ATS resume tailoring</div>
-            </div>
-
-            <!-- Miniature Product Preview Card -->
-            <div class="preview-card-wrap">
-                <div class="preview-card-head">
-                    <span class="preview-label-tag">⚡ LIVE SYSTEM MATCH PREVIEW</span>
-                    <span class="preview-score-badge">87% FIT</span>
-                </div>
-                <div class="preview-job-title">Senior Full Stack Developer</div>
-                <div class="preview-job-meta">TechSolutions Pvt Ltd · Mumbai (Hybrid) · 1d ago</div>
-                <div class="preview-chips-row">
-                    <span class="pchip hit">✓ React</span>
-                    <span class="pchip hit">✓ Node.js</span>
-                    <span class="pchip hit">✓ MySQL</span>
-                    <span class="pchip hit">✓ REST APIs</span>
-                    <span class="pchip gap">⚠ AWS (Bonus)</span>
-                </div>
-                <div class="preview-card-foot">
-                    <span>Fit Breakdown: 4/4 Core Skills Matched</span>
-                    <span class="preview-tailor-tag">ATS-Ready Resume Ready ✓</span>
-                </div>
-            </div>
-
-            <!-- Visual Workflow Pipeline -->
-            <div class="workflow-pipeline">
-                <div class="workflow-step active"><span>1</span> RESUME</div>
-                <div class="workflow-arrow">→</div>
-                <div class="workflow-step"><span>2</span> ANALYZE</div>
-                <div class="workflow-arrow">→</div>
-                <div class="workflow-step"><span>3</span> DISCOVER</div>
-                <div class="workflow-arrow">→</div>
-                <div class="workflow-step"><span>4</span> 0–100 SCORE</div>
-                <div class="workflow-arrow">→</div>
-                <div class="workflow-step"><span>5</span> APPLY</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
     with col_onboard:
-        st.markdown("""
-        <div class="onboard-header-title">Start your job search</div>
-        <div class="onboard-header-sub">Upload your resume and we'll build your personalized workspace.</div>
-        """, unsafe_allow_html=True)
-
-        onb_name = st.text_input("Full Name", value="", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
-
-        c_loc, c_role = st.columns(2)
-        with c_loc:
-            onb_city = st.text_input("Location", value="Mumbai", placeholder="e.g. Mumbai or Remote", key="onb_city_input")
-        with c_role:
-            onb_role = st.text_input("Target Role", value="", placeholder="e.g. Full Stack Developer", key="onb_role_input")
-
-        onb_file = st.file_uploader(
-            "Upload Resume (PDF, DOCX, TXT)",
-            type=["pdf", "txt", "docx"],
-            key="onb_file_input",
-            help="Drop your resume to automatically extract your skills, experience and target keywords. Max 20MB."
-        )
-
-        if onb_file is not None:
-            f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
-            st.markdown(f"""
-            <div class="file-uploaded-badge">
-                <span>✓ <b>{html.escape(onb_file.name)}</b> ({f_size_kb} KB)</span>
-                <span style="color:#38bdf8;font-size:11px;font-weight:600;">File attached</span>
-            </div>
+        with st.container(border=True):
+            st.markdown("""
+            <div class="onboard-header-title">Start your job search</div>
+            <div class="onboard-header-sub">Upload your resume and we'll build your personalized workspace.</div>
             """, unsafe_allow_html=True)
 
-        with st.expander("Or paste plain text resume directly"):
-            onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=110, placeholder="Paste your resume content here...")
+            onb_name = st.text_input("Full Name", value="", placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
 
-        st.write("")
-        launch_clicked = st.button("Analyze Resume → Launch Workspace", type="primary", use_container_width=True, key="btn_onboard_launch")
+            c_loc, c_role = st.columns(2)
+            with c_loc:
+                onb_city = st.text_input("Location", value="Mumbai", placeholder="e.g. Mumbai or Remote", key="onb_city_input")
+            with c_role:
+                onb_role = st.text_input("Target Role", value="", placeholder="e.g. Full Stack Developer", key="onb_role_input")
 
-        if launch_clicked:
-            resume_content = ""
+            onb_file = st.file_uploader(
+                "Upload Resume (PDF, DOCX, TXT)",
+                type=["pdf", "txt", "docx"],
+                key="onb_file_input",
+                help="Drop your resume to automatically extract your skills, experience and target keywords. Max 20MB."
+            )
+
             if onb_file is not None:
-                fname = onb_file.name.lower()
-                if fname.endswith(".pdf"):
-                    resume_content = extract_pdf(onb_file)
-                else:
-                    try:
-                        resume_content = onb_file.read().decode("utf-8", errors="ignore")
-                    except Exception:
-                        resume_content = ""
-            elif onb_pasted and onb_pasted.strip():
-                resume_content = onb_pasted.strip()
+                f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
+                st.markdown(f"""
+                <div class="file-uploaded-badge">
+                    <span>✓ <b>{html.escape(onb_file.name)}</b> ({f_size_kb} KB)</span>
+                    <span style="color:#38bdf8;font-size:11px;font-weight:600;">File attached</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-            if not resume_content and not onb_name.strip():
-                st.error("Please enter your name or upload a resume to get started.")
-                return
+            with st.expander("Or paste plain text resume directly"):
+                onb_pasted = st.text_area("Paste plain resume text", key="onb_pasted_area", height=110, placeholder="Paste your resume content here...")
 
-            with st.status("🔍 Analyzing Resume & Configuring Workspace...", expanded=True) as status:
-                st.write("Extracting technical competencies & career history...")
-                if not resume_content:
-                    sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
-                    if os.path.exists(sample_r):
-                        with open(sample_r, encoding="utf-8") as rf:
-                            resume_content = rf.read()
+            st.write("")
+            launch_clicked = st.button("Analyze Resume → Launch Workspace", type="primary", use_container_width=True, key="btn_onboard_launch")
 
-                api_k = get_gemini_api_key()
-                parsed_p = parse_resume_to_profile(
-                    resume_content,
-                    name_input=onb_name,
-                    city_input=onb_city,
-                    role_input=onb_role,
-                    api_key=api_k
-                )
-                save_active_profile(parsed_p)
+            if launch_clicked:
+                resume_content = ""
+                if onb_file is not None:
+                    fname = onb_file.name.lower()
+                    if fname.endswith(".pdf"):
+                        resume_content = extract_pdf(onb_file)
+                    else:
+                        try:
+                            resume_content = onb_file.read().decode("utf-8", errors="ignore")
+                        except Exception:
+                            resume_content = ""
+                elif onb_pasted and onb_pasted.strip():
+                    resume_content = onb_pasted.strip()
+
+                if not resume_content and not onb_name.strip():
+                    st.error("Please enter your name or upload a resume to get started.")
+                    return
+
+                with st.status("🔍 Analyzing Resume & Configuring Workspace...", expanded=True) as status:
+                    st.write("Extracting technical competencies & career history...")
+                    if not resume_content:
+                        sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
+                        if os.path.exists(sample_r):
+                            with open(sample_r, encoding="utf-8") as rf:
+                                resume_content = rf.read()
+
+                    api_k = get_gemini_api_key()
+                    parsed_p = parse_resume_to_profile(
+                        resume_content,
+                        name_input=onb_name,
+                        city_input=onb_city,
+                        role_input=onb_role,
+                        api_key=api_k
+                    )
+                    save_active_profile(parsed_p)
+                    st.session_state["onboarded"] = True
+                    status.update(label="✅ Workspace Configured Successfully!", state="complete")
+
+                st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}! 1,160+ jobs matched.", icon="🚀")
+                time.sleep(0.4)
+                st.rerun()
+
+            st.markdown("""
+            <div style="text-align: center; margin-top: 1.1rem; font-size: 12px; color: #64748b;">
+                Just exploring? Launch with pre-configured sample profile below
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Launch instant demo with sample profile →", key="btn_subtle_demo", use_container_width=True):
+                p_disk = load_profile()
+                save_active_profile(p_disk)
                 st.session_state["onboarded"] = True
-                status.update(label="✅ Workspace Configured Successfully!", state="complete")
-
-            st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}! 1,160+ jobs matched.", icon="🚀")
-            time.sleep(0.4)
-            st.rerun()
-
-        st.markdown("""
-        <div style="text-align: center; margin-top: 1.1rem; font-size: 12px; color: #64748b;">
-            Just exploring? Launch with pre-configured sample profile below
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Launch instant demo with sample profile →", key="btn_subtle_demo", use_container_width=True):
-            p_disk = load_profile()
-            save_active_profile(p_disk)
-            st.session_state["onboarded"] = True
-            st.toast("Loaded Demo Workspace!", icon="🚀")
-            st.rerun()
+                st.toast("Loaded Demo Workspace!", icon="🚀")
+                st.rerun()
 
 
 def heuristic_tailor(resume_text, job, skills):
