@@ -1237,266 +1237,19 @@ def get_jobs(q=""):
     return rows
 
 
-EXCLUDED_PORTFOLIO_DOMAINS = {
-    "github.com", "linkedin.com", "twitter.com", "x.com", "facebook.com", "instagram.com",
-    "youtube.com", "leetcode.com", "hackerrank.com", "coursera.org", "udemy.com", "credly.com",
-    "freecodecamp.org", "php.net", "python.org", "react.dev", "w3schools.com",
-    "developer.mozilla.org", "google.com", "gmail.com", "yahoo.com", "outlook.com",
-    "medium.com", "npmjs.com", "gitlab.com", "bitbucket.org", "stackoverflow.com",
-    "kaggle.com", "geeksforgeeks.org", "codechef.com", "codeforces.com", "stream.io",
-    "streamlit.app", "streamlit.io", "whatsapp.com", "t.me", "telegram.org"
-}
-
-
-def unwrap_text_urls(text: str) -> str:
-    """Fix URLs broken across line breaks in PDF column layouts."""
-    if not text:
-        return ""
-    # Pattern 1: URL ending with hyphen broken across lines (e.g., https://.../foo-\nbar)
-    text = re.sub(r'((?:https?://|www\.|[a-zA-Z0-9_\-\.]+\.(?:com|in|io|dev|me|app)/)[^\s\n]*)-\s*\n\s*([a-zA-Z0-9_\-\./]+)', r'\1\2', text)
-    # Pattern 2: URL ending with slash broken across line (e.g., https://linkedin.com/in/\nusername or github.com/\nuser)
-    text = re.sub(r'((?:https?://|www\.|(?:linkedin\.com/in|github\.com)/)[^\s\n]*?/\s*)\n\s*([a-zA-Z0-9_\-]+)', r'\1\2', text)
-    # Pattern 3: Domain broken across dot (e.g., https://github.\ncom/user)
-    text = re.sub(r'((?:https?://|www\.)[a-zA-Z0-9_\-]+\.\s*)\n\s*([a-zA-Z0-9_\-\./]+)', r'\1\2', text)
-    return text
-
-
-def sanitize_url(raw_url: str) -> str | None:
-    """Sanitize and validate extracted URL. Rejects dangerous schemes and prompt injection."""
-    if not raw_url or not isinstance(raw_url, str):
-        return None
-    url = raw_url.strip()
-    # Strip quotes, brackets, angle brackets, commas, trailing punctuation
-    url = re.sub(r'^[\s"\'\(<\[]+|[\s"\'\)>\]\,\.]+$', '', url)
-
-    # Reject dangerous schemes and control chars
-    if any(ctrl in url for ctrl in ['\r', '\n', '\t', '\0', '`', '<', '>']):
-        return None
-    low = url.lower()
-    if any(low.startswith(bad) for bad in ['javascript:', 'data:', 'file:', 'vbscript:', 'blob:', 'mailto:']):
-        return None
-    if len(url) > 250:
-        return None
-
-    # Auto-prepend https:// if missing
-    if not (low.startswith("http://") or low.startswith("https://")):
-        if re.match(r'^(?:[a-zA-Z0-9_\-]+\.)+[a-zA-Z]{2,}(?:/.*)?$', url):
-            url = f"https://{url}"
-        else:
-            return None
-
+def extract_pdf(file):
     try:
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in ('http', 'https'):
-            return None
-        netloc = parsed.netloc.lower()
-        if not netloc or "." not in netloc or "localhost" in netloc or netloc.startswith("127."):
-            return None
-
-        # Clean tracking query parameters
-        cleaned_query = []
-        if parsed.query:
-            qs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=False)
-            for k, v in qs:
-                k_low = k.lower()
-                if not any(k_low.startswith(prefix) for prefix in ['utm_', 'trk', 'ref', 'source', 'locale', 'fbclid', 'gclid']):
-                    cleaned_query.append((k, v))
-        new_query = urllib.parse.urlencode(cleaned_query)
-        path = parsed.path.rstrip('/')
-
-        clean_url = urllib.parse.urlunparse((
-            parsed.scheme,
-            parsed.netloc,
-            path,
-            parsed.params,
-            new_query,
-            ''
-        ))
-        return clean_url
+        import fitz
+        doc = fitz.open(stream=file.read(), filetype="pdf")
+        return "\n".join(p.get_text() for p in doc)[:12000]
     except Exception:
-        return None
-
-
-def classify_links(links: list, raw_text: str = "") -> dict:
-    """
-    Classify candidate URLs into LinkedIn, GitHub, Portfolio, and other links.
-    Avoids classifying company sites, universities, or docs as portfolio.
-    """
-    res = {
-        "linkedin": "",
-        "github": "",
-        "portfolio": "",
-        "other_links": []
-    }
-    seen = set()
-
-    candidates = []
-    for lk in links or []:
-        cleaned = sanitize_url(lk)
-        if cleaned and cleaned not in seen:
-            seen.add(cleaned)
-            candidates.append(cleaned)
-
-    # 1. Detect LinkedIn
-    for c in candidates:
-        if "linkedin.com/in/" in c.lower():
-            m = re.search(r"linkedin\.com/in/([a-zA-Z0-9_\-\.]+)", c, re.I)
-            if m and not res["linkedin"]:
-                handle = m.group(1).rstrip('/')
-                res["linkedin"] = f"https://www.linkedin.com/in/{handle}"
-                break
-
-    # 2. Detect GitHub
-    for c in candidates:
-        low = c.lower()
-        if "github.com/" in low and "github.io" not in low:
-            m = re.search(r"github\.com/([a-zA-Z0-9_\-]+)(?:/)?$", c, re.I)
-            if m and not res["github"]:
-                username = m.group(1)
-                if username.lower() not in {"features", "pricing", "pulls", "issues", "explore", "settings", "topics", "marketplace", "orgs"}:
-                    res["github"] = f"https://github.com/{username}"
-                    break
-
-    # 3. Detect Portfolio / Personal Website
-    portfolio_candidates = []
-    for c in candidates:
-        if c == res["linkedin"] or c == res["github"]:
-            continue
-        try:
-            parsed = urllib.parse.urlparse(c)
-            domain = parsed.netloc.lower()
-            if any(domain == exc or domain.endswith("." + exc) for exc in EXCLUDED_PORTFOLIO_DOMAINS):
-                # Exception: username.github.io is allowed as portfolio
-                if domain.endswith(".github.io") and domain != "github.io":
-                    portfolio_candidates.append((c, 10))
-                continue
-            if any(ext in domain for ext in [".edu", ".ac.in", ".gov.", ".gov"]):
-                continue
-
-            score = 0
-            if any(domain.endswith("." + h) for h in ["github.io", "vercel.app", "netlify.app", "pages.dev", "web.app", "firebaseapp.com"]):
-                score += 10
-            elif any(domain.endswith(tld) for tld in [".dev", ".me", ".tech", ".site", ".bio", ".space"]):
-                score += 8
-
-            if raw_text:
-                near_ctx = re.search(rf"(?:portfolio|website|personal\s*site|personal\s*web)[^\n\r]{{0,60}}{re.escape(domain)}", raw_text, re.I)
-                if near_ctx:
-                    score += 15
-
-            if score > 0:
-                portfolio_candidates.append((c, score))
-            else:
-                res["other_links"].append(c)
-        except Exception:
-            continue
-
-    if portfolio_candidates and not res["portfolio"]:
-        portfolio_candidates.sort(key=lambda x: x[1], reverse=True)
-        res["portfolio"] = portfolio_candidates[0][0]
-
-    return res
-
-
-def extract_pdf_rich(file):
-    """
-    Extract visible text and clickable URI hyperlinks from PDF.
-    Returns:
-        dict: {
-            "text": str,
-            "links": list[str],
-            "classified_links": dict,
-            "is_scanned": bool,
-            "error": str | None
-        }
-    """
-    all_text_parts = []
-    extracted_uris = []
-    error_msg = None
-
-    try:
-        file_bytes = file.read() if hasattr(file, "read") else bytes(file)
-        if hasattr(file, "seek"):
-            file.seek(0)
-    except Exception as e:
-        return {"text": "", "links": [], "classified_links": {}, "is_scanned": False, "error": f"Read failure: {e}"}
-
-    # 1. Primary: PyMuPDF (fitz)
-    try:
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        for page in doc:
-            t = page.get_text() or ""
-            if t.strip():
-                all_text_parts.append(t)
-            try:
-                for lk in page.get_links():
-                    uri = lk.get("uri")
-                    if uri and isinstance(uri, str):
-                        s_uri = sanitize_url(uri)
-                        if s_uri and s_uri not in extracted_uris:
-                            extracted_uris.append(s_uri)
-            except Exception:
-                pass
-    except Exception as e_fitz:
-        # 2. Fallback: pypdf
+        file.seek(0)
         try:
             from pypdf import PdfReader
-            import io
-            reader = PdfReader(io.BytesIO(file_bytes))
-            for page in reader.pages:
-                txt = page.extract_text() or ""
-                if txt.strip():
-                    all_text_parts.append(txt)
-                try:
-                    if "/Annots" in page:
-                        for annot in page["/Annots"]:
-                            obj = annot.get_object()
-                            if "/A" in obj and "/URI" in obj["/A"]:
-                                s_uri = sanitize_url(obj["/A"]["/URI"])
-                                if s_uri and s_uri not in extracted_uris:
-                                    extracted_uris.append(s_uri)
-                except Exception:
-                    pass
-        except Exception as e_pypdf:
-            error_msg = f"PyMuPDF ({e_fitz}) & PyPDF ({e_pypdf}) both failed"
-
-    raw_text = "\n".join(all_text_parts)[:15000]
-    unwrapped_text = unwrap_text_urls(raw_text)
-
-    # Scanned PDF detection: check alphanumeric words
-    words = re.findall(r"[a-zA-Z]{2,}", unwrapped_text)
-    is_scanned = (len(words) < 15 or len(unwrapped_text.strip()) < 60) and not error_msg
-
-    # Also search visible text for plain-text URLs
-    url_patterns = [
-        r"(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_\-\.\/]+",
-        r"(?:https?:\/\/)?(?:www\.)?github\.com\/[a-zA-Z0-9_\-\.]+",
-        r"(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9_\-]+\.(?:github\.io|vercel\.app|netlify\.app|pages\.dev|web\.app|firebaseapp\.com|dev|me|tech|site|bio)(?:\/[^\s\)\],<]*)?",
-        r"https?:\/\/[a-zA-Z0-9_\-\.]+\.[a-zA-Z]{2,}(?:\/[^\s\)\],<]*)?"
-    ]
-    for pat in url_patterns:
-        for match in re.findall(pat, unwrapped_text, re.I):
-            s_match = sanitize_url(match)
-            if s_match and s_match not in extracted_uris:
-                extracted_uris.append(s_match)
-
-    classified = classify_links(extracted_uris, unwrapped_text)
-
-    return {
-        "text": unwrapped_text,
-        "links": extracted_uris[:25],
-        "classified_links": classified,
-        "is_scanned": is_scanned,
-        "error": error_msg
-    }
-
-
-def extract_pdf(file):
-    """Backward compatible wrapper returning extracted text string."""
-    res = extract_pdf_rich(file)
-    if res.get("error"):
-        return f"PDF parse fail: {res['error']}"
-    return res.get("text", "")
+            r = PdfReader(file)
+            return "\n".join(p.extract_text() or "" for p in r.pages)[:12000]
+        except Exception as e:
+            return f"PDF parse fail: {e}"
 
 
 def call_gemini_api(prompt, api_key):
@@ -1543,7 +1296,7 @@ def save_active_profile(p):
             pass
 
 
-def parse_resume_heuristics(text, name_input="", city_input="", role_input="", links=None, classified_links=None):
+def parse_resume_heuristics(text, name_input="", city_input="", role_input=""):
     """Instant deterministic resume parser: regex pattern matching across all tech stacks."""
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     name = name_input.strip()
@@ -1561,30 +1314,6 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
 
     phone_m = re.search(r"(\+?\d{1,3}[\s-]?)?\(?\d{3,5}\)?[\s-]?\d{3,5}[\s-]?\d{3,5}", text)
     phone = phone_m.group(0) if phone_m else ""
-
-    # Classify links and profile handles
-    if classified_links:
-        classified = classified_links
-    elif links:
-        classified = classify_links(links, text)
-    else:
-        unwrapped = unwrap_text_urls(text)
-        found_urls = []
-        for pat in [
-            r"(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[a-zA-Z0-9_\-\.\/]+",
-            r"(?:https?:\/\/)?(?:www\.)?github\.com\/[a-zA-Z0-9_\-\.]+",
-            r"(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9_\-]+\.(?:github\.io|vercel\.app|netlify\.app|pages\.dev|web\.app|firebaseapp\.com|dev|me|tech|site|bio)(?:\/[^\s\)\],<]*)?",
-            r"https?:\/\/[a-zA-Z0-9_\-\.]+\.[a-zA-Z]{2,}(?:\/[^\s\)\],<]*)?"
-        ]:
-            for m in re.findall(pat, unwrapped, re.I):
-                s = sanitize_url(m)
-                if s and s not in found_urls:
-                    found_urls.append(s)
-        classified = classify_links(found_urls, unwrapped)
-
-    linkedin = classified.get("linkedin", "")
-    github = classified.get("github", "")
-    portfolio = classified.get("portfolio", "")
 
     tech_pool = {
         "Backend": ["PHP", "Laravel", "Python", "Django", "FastAPI", "Flask", "Node.js", "Express.js", "C#", ".NET", "ASP.NET", "Java", "Spring", "Go", "Ruby", "Rails", "REST APIs", "GraphQL", "Microservices"],
@@ -1644,9 +1373,8 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
         "name": name or "Tech Developer",
         "email": email,
         "phone": phone,
-        "linkedin": linkedin,
-        "github": github,
-        "portfolio": portfolio,
+        "linkedin": "",
+        "github": "",
         "base_role": base_role,
         "search_terms": list(dict.fromkeys(search_terms)),
         "skills": matched_skills if matched_skills else ["JavaScript", "HTML5", "CSS3", "Git"],
@@ -1675,31 +1403,16 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
     }
 
 
-def parse_resume_to_profile(text, name_input="", city_input="", role_input="", api_key="", links=None, classified_links=None):
+def parse_resume_to_profile(text, name_input="", city_input="", role_input="", api_key=""):
     """Dual-engine resume parser: Fast deterministic heuristics + Gemini AI enhancement."""
-    p = parse_resume_heuristics(
-        text,
-        name_input=name_input,
-        city_input=city_input,
-        role_input=role_input,
-        links=links,
-        classified_links=classified_links
-    )
+    p = parse_resume_heuristics(text, name_input=name_input, city_input=city_input, role_input=role_input)
 
     if api_key and len(text.strip()) > 50:
-        verified_links = links or list(filter(None, [p.get("linkedin"), p.get("github"), p.get("portfolio")]))
-        prompt = f"""You are an ATS technical recruiter. Analyze the following resume text and candidate profile links.
-Return STRICT JSON with keys:
+        prompt = f"""You are an ATS technical recruiter. Analyze the following resume text and return STRICT JSON with keys:
 "skills": ["string"],
 "base_role": "string",
 "search_terms": ["string"],
-"experience_years": 1.0,
-"linkedin": "string or empty",
-"github": "string or empty",
-"portfolio": "string or empty"
-
-Verified candidate links extracted from PDF annotations/text:
-{json.dumps(verified_links[:15])}
+"experience_years": 1.0
 
 Resume:
 {text[:4000]}
@@ -1725,12 +1438,6 @@ Resume:
                             p["experience_years"] = float(ai_data["experience_years"])
                         except Exception:
                             pass
-                    # Merge social links if heuristic didn't find them
-                    for k in ["linkedin", "github", "portfolio"]:
-                        if not p.get(k) and ai_data.get(k):
-                            clean_val = sanitize_url(str(ai_data[k]))
-                            if clean_val:
-                                p[k] = clean_val
             except Exception:
                 pass
 
@@ -1892,23 +1599,10 @@ def render_welcome_screen():
 
             if launch_clicked:
                 resume_content = ""
-                extracted_links = []
-                classified_links = {}
-
                 if onb_file is not None:
                     fname = onb_file.name.lower()
                     if fname.endswith(".pdf"):
-                        pdf_meta = extract_pdf_rich(onb_file)
-                        if pdf_meta.get("is_scanned"):
-                            st.error("⚠️ **Scanned or image-based PDF detected.** We could not extract selectable text from this document. Please upload a digital PDF with selectable text, or paste your resume text in the box below.")
-                            return
-                        elif pdf_meta.get("error"):
-                            st.error(f"⚠️ PDF parse error: {pdf_meta['error']}. Please try another file or paste text.")
-                            return
-                        else:
-                            resume_content = pdf_meta["text"]
-                            extracted_links = pdf_meta["links"]
-                            classified_links = pdf_meta["classified_links"]
+                        resume_content = extract_pdf(onb_file)
                     else:
                         try:
                             resume_content = onb_file.read().decode("utf-8", errors="ignore")
@@ -1935,9 +1629,7 @@ def render_welcome_screen():
                         name_input=onb_name,
                         city_input=onb_city,
                         role_input=onb_role,
-                        api_key=api_k,
-                        links=extracted_links,
-                        classified_links=classified_links
+                        api_key=api_k
                     )
                     save_active_profile(parsed_p)
                     time.sleep(0.2)
@@ -2361,21 +2053,7 @@ def build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean"):
     phone = profile.get("phone") or "9326671284"
     email = profile.get("email") or "prathameshjadhav2803@gmail.com"
     github = profile.get("github") or "github.com/PrathameshDev2803"
-    linkedin = profile.get("linkedin") or ""
-    portfolio = profile.get("portfolio") or ""
-
-    contact_parts = [loc_str, phone, email]
-    if github:
-        clean_gh = github.replace("https://", "").replace("http://", "").rstrip("/")
-        contact_parts.append(clean_gh)
-    if linkedin and len(contact_parts) < 4:
-        clean_li = linkedin.replace("https://", "").replace("http://", "").rstrip("/")
-        contact_parts.append(clean_li)
-    elif portfolio and len(contact_parts) < 4:
-        clean_pf = portfolio.replace("https://", "").replace("http://", "").rstrip("/")
-        contact_parts.append(clean_pf)
-
-    contact_line = "   |   ".join(contact_parts[:4])
+    contact_line = f"{loc_str}   |   {phone}   |   {email}   |   {github}"
 
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*c_meta)
@@ -2680,8 +2358,11 @@ def render_job_card(j, col, is_filtered=False, key_prefix=""):
             st.session_state.tailored = None
             st.rerun()
         if b2.button("Tailor →", key=f"{key_prefix}t_{j['url_hash']}"):
-            st.session_state.sel = j["url_hash"]
-            st.session_state.auto_tailor = True
+            st.session_state.quick_job = j
+            st.session_state.quick_tailored = None
+            st.session_state.quick_run_tailor = True
+            st.session_state["nav_tab"] = "Tailor"
+            st.session_state.sel = None
             st.rerun()
         b3.link_button("Apply", j["url"] or "#")
         close_icon = "↺" if is_closed else "✕"
@@ -2694,7 +2375,7 @@ def render_job_card(j, col, is_filtered=False, key_prefix=""):
 
 
 # ---------- state defaults ----------
-st.session_state.setdefault("nav_tab", "Jobs")
+st.session_state.setdefault("nav_tab", "Discover")
 st.session_state.setdefault("sel", None)
 st.session_state.setdefault("flt", "New")
 st.session_state.setdefault("only_strong", False)
@@ -2820,11 +2501,25 @@ with top_brand_col:
     """, unsafe_allow_html=True)
 
 with top_nav_col:
-    nav_options = ["Jobs", "Applications", "Resume", "Settings"]
-    current_tab = st.session_state.get("nav_tab", "Jobs")
+    nav_options = ["Discover", "Tailor", "Tracker", "Profile"]
+    nav_aliases = {
+        "Jobs": "Discover",
+        "Applications": "Tracker",
+        "Resume": "Profile",
+        "Settings": "Profile",
+    }
+    current_tab = st.session_state.get("nav_tab", "Discover")
+    if current_tab in nav_aliases:
+        current_tab = nav_aliases[current_tab]
+        st.session_state["nav_tab"] = current_tab
     if current_tab not in nav_options:
-        current_tab = "Jobs"
+        current_tab = "Discover"
+        st.session_state["nav_tab"] = "Discover"
     
+    # Sync widget key if programmatic change occurred
+    if st.session_state.get("main_nav_selector") != current_tab:
+        st.session_state["main_nav_selector"] = current_tab
+
     selected_nav = st.segmented_control(
         "Main Navigation",
         options=nav_options,
@@ -2863,8 +2558,8 @@ with top_user_col:
             st.session_state["purge_sid_from_localstorage"] = True
             st.rerun()
     with u_c3:
-        if st.button("⚙️", key="btn_quick_settings_top", help="Open Settings"):
-            st.session_state["nav_tab"] = "Settings"
+        if st.button("⚙️", key="btn_quick_settings_top", help="Open Profile & Settings"):
+            st.session_state["nav_tab"] = "Profile"
             st.rerun()
 
 st.write("")
@@ -2883,12 +2578,12 @@ n_shortlisted = len([j for j in scored if j.get("shortlisted") and not j.get("cl
 n_hidden = len(ineligible_pool)
 n_closed = len(closed_pool)
 
-active_nav = st.session_state.get("nav_tab", "Jobs")
+active_nav = st.session_state.get("nav_tab", "Discover")
 
 # =========================================================================
-# WORKSPACE 1: JOBS (Clean Job Matches, Concept 1 Filter Pills & Utility Bar)
+# WORKSPACE 1: DISCOVER (Clean Job Matches, Concept 1 Filter Pills & Utility Bar)
 # =========================================================================
-if active_nav == "Jobs":
+if active_nav == "Discover":
     flt = st.session_state.get("flt", "New")
     is_filtered_view = False
     if flt == "New":
@@ -3001,16 +2696,16 @@ if active_nav == "Jobs":
         u1, u2, u3, u4 = st.columns([1.3, 1.1, 1.1, 1.2], vertical_alignment="center")
         u1.markdown("<span style='font-size:13px;font-weight:750;color:#f8fafc;'>🔥 Fast Tailor:</span>", unsafe_allow_html=True)
         if u2.button("📋 Paste JD", key="u_btn_jd", use_container_width=True):
-            st.session_state.instant_tailor_expanded = True
-            st.session_state.fast_tailor_tab_idx = 0
+            st.session_state["nav_tab"] = "Tailor"
+            st.session_state["fast_tailor_tab_idx"] = 0
             st.rerun()
         if u3.button("🔗 Paste Link", key="u_btn_link", use_container_width=True):
-            st.session_state.instant_tailor_expanded = True
-            st.session_state.fast_tailor_tab_idx = 1
+            st.session_state["nav_tab"] = "Tailor"
+            st.session_state["fast_tailor_tab_idx"] = 1
             st.rerun()
         if u4.button("🌐 10 Platforms", key="u_btn_plat", use_container_width=True):
-            st.session_state.instant_tailor_expanded = True
-            st.session_state.fast_tailor_tab_idx = 2
+            st.session_state["nav_tab"] = "Tailor"
+            st.session_state["fast_tailor_tab_idx"] = 2
             st.rerun()
 
     with util_r:
@@ -3813,26 +3508,12 @@ elif active_nav == "Resume":
         
         up_file = st.file_uploader("Upload New Resume (PDF)", type=["pdf"], key="res_tab_uploader")
         if up_file:
-            pdf_res = extract_pdf_rich(up_file)
-            if pdf_res.get("is_scanned"):
-                st.error("⚠️ Uploaded PDF appears to be a scanned image with no selectable text. Please upload a standard digital PDF.")
-            elif pdf_res.get("error"):
-                st.error(f"⚠️ PDF parse error: {pdf_res['error']}.")
-            else:
-                extracted_txt = pdf_res.get("text", "")
-                p["resume_text"] = extracted_txt
-                st.session_state.resume_name = up_file.name
-                cl = pdf_res.get("classified_links", {})
-                if cl.get("linkedin"):
-                    p["linkedin"] = cl["linkedin"]
-                if cl.get("github"):
-                    p["github"] = cl["github"]
-                if cl.get("portfolio"):
-                    p["portfolio"] = cl["portfolio"]
-                save_active_profile(p)
-                with open(RESUME_TXT, "w", encoding="utf-8") as f:
-                    f.write(extracted_txt)
-                st.success(f"Uploaded & persisted! Extracted {len(extracted_txt)} characters.")
+            extracted_txt = extract_pdf(up_file)
+            p["resume_text"] = extracted_txt
+            st.session_state.resume_name = up_file.name
+            with open(RESUME_TXT, "w", encoding="utf-8") as f:
+                f.write(extracted_txt)
+            st.success(f"Uploaded & persisted! Extracted {len(extracted_txt)} characters.")
 
         st.markdown("#### 🎯 Active Profile")
         st.write(f"**Target Role:** {p.get('base_role','Full Stack Developer')}")
