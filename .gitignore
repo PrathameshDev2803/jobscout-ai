@@ -12,6 +12,8 @@ resume.txt
 *.csv
 *.db
 !jobs.db
+sessions.db
+sessions.db-journal
 
 # Runtime status and background worker logs
 scheduler_status.json

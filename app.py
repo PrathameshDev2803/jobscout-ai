@@ -1,10 +1,12 @@
 """Personal job tool: Top navigation + clean job workspace. Find -> Tailor -> Apply."""
+import concurrent.futures
 import html
 import json
 import os
 import re
 import sqlite3
 import textwrap
+import threading
 import time
 import urllib.parse
 from datetime import datetime
@@ -25,6 +27,9 @@ from scheduler import (get_scheduler_status, set_scheduler_enabled,
 from notifier import (get_smtp_config, is_smtp_configured, send_test_email)
 from dotenv import dotenv_values, load_dotenv
 from fetch import fetch_job_from_url, save
+from session_store import (clear_onboard_marker, create_user_session,
+                           delete_user_session, get_user_session,
+                           has_onboard_marker, set_onboard_marker)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(BASE, ".env")
@@ -951,6 +956,91 @@ div[data-testid="stButton"] button[kind="primary"]:hover {
     transform: translateY(-1px) !important;
     box-shadow: 0 8px 28px rgba(16, 185, 129, 0.5) !important;
 }
+
+/* Confirm screen: centered reveal card, quiet by design */
+.confirm-wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 4px;
+}
+.confirm-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #10b981;
+    margin-bottom: 6px;
+}
+.confirm-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #f8fafc;
+    margin: 0 0 4px 0;
+}
+.confirm-sub {
+    font-size: 13.5px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+.confirm-card {
+    background: #0b0f19;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 14px;
+}
+.tw-line { margin-bottom: 6px; }
+.tw-name { font-size: 24px; font-weight: 800; color: #f8fafc; letter-spacing: -0.02em; }
+.tw-role { font-size: 15px; font-weight: 650; color: #34d399; }
+.tw-fact { font-size: 13px; color: #94a3b8; }
+.tw-label {
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin: 14px 0 4px 0;
+}
+.tw-active .tw-text::after {
+    content: '▍';
+    color: #10b981;
+    animation: tw-blink 0.8s steps(1) infinite;
+}
+@keyframes tw-blink { 50% { opacity: 0; } }
+.confirm-sec-title {
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin: 0 0 8px 0;
+    padding-top: 4px;
+}
+.confirm-exp-role { font-size: 14px; font-weight: 700; color: #f1f5f9; }
+.confirm-exp-sub { font-size: 12.5px; color: #94a3b8; margin-bottom: 4px; }
+.confirm-exp-bullets { font-size: 12.5px; color: #cbd5e1; margin: 0 0 10px 0; padding-left: 16px; }
+.confirm-exp-bullets li { margin-bottom: 2px; }
+.confirm-link { font-size: 12.5px; color: #cbd5e1; margin-bottom: 2px; }
+.confirm-link span { color: #64748b; }
+.sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+div[data-testid="stButton"] button:focus-visible,
+div[data-testid="stTextInput"] input:focus-visible {
+    outline: 2px solid #10b981 !important;
+    outline-offset: 2px !important;
+}
+@media (max-width: 640px) {
+    .confirm-card { padding: 16px; }
+    .confirm-title { font-size: 22px; }
+    .tw-name { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tw-active .tw-text::after { display: none; }
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -1124,14 +1214,8 @@ def ensure_db():
     con.execute("""CREATE TABLE IF NOT EXISTS jobs(
       url_hash TEXT PRIMARY KEY, title TEXT, company TEXT, location TEXT,
       description TEXT, url TEXT, source TEXT, posted_at TEXT, created_at TEXT,
-      applied INTEGER DEFAULT 0)""")
-    con.execute("""CREATE TABLE IF NOT EXISTS user_sessions(
-      sid TEXT PRIMARY KEY,
-      user_name TEXT,
-      profile_json TEXT,
-      duration_months INTEGER,
-      created_at TEXT,
-      expires_at TEXT)""")
+       applied INTEGER DEFAULT 0)""")
+    # ponytail: sid sessions live in sessions.db (gitignored); jobs.db is git-tracked
     cols = [r[1] for r in con.execute("PRAGMA table_info(jobs)")]
     if "shortlisted" not in cols:
         con.execute("ALTER TABLE jobs ADD COLUMN shortlisted INTEGER DEFAULT 0")
@@ -1147,58 +1231,7 @@ def ensure_db():
     return con
 
 
-def create_user_session(profile, duration_months=1):
-    """Generate cryptographically secure session valid for 1, 3, or 6 months."""
-    import secrets
-    from datetime import datetime, timedelta, timezone
-    sid = secrets.token_urlsafe(24)
-    now = datetime.now(timezone.utc)
-    days = 30 * max(1, int(duration_months))
-    expires_at = (now + timedelta(days=days)).isoformat()
-    con = ensure_db()
-    con.execute("""
-      INSERT OR REPLACE INTO user_sessions (sid, user_name, profile_json, duration_months, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    """, (sid, profile.get("name", "Developer"), json.dumps(profile), duration_months, now.isoformat(), expires_at))
-    con.commit()
-    con.close()
-    return sid, expires_at
-
-
-def get_user_session(sid):
-    """Validate and return profile if session is active and unexpired."""
-    if not sid or not isinstance(sid, str):
-        return None
-    try:
-        from datetime import datetime, timezone
-        con = ensure_db()
-        row = con.execute("SELECT profile_json, expires_at FROM user_sessions WHERE sid=?", (sid.strip(),)).fetchone()
-        con.close()
-        if not row:
-            return None
-        prof_json, exp_str = row[0], row[1]
-        exp_dt = datetime.fromisoformat(exp_str)
-        if datetime.now(timezone.utc) > exp_dt:
-            delete_user_session(sid)
-            return None
-        return json.loads(prof_json)
-    except Exception:
-        return None
-
-
-def delete_user_session(sid):
-    """Revoke and delete persistent session."""
-    if not sid:
-        return
-    try:
-        con = ensure_db()
-        con.execute("DELETE FROM user_sessions WHERE sid=?", (sid.strip(),))
-        con.commit()
-        con.close()
-    except Exception:
-        pass
-
-
+# ponytail: session CRUD moved to session_store.py (sessions.db, gitignored)
 def is_job_closed(url):
     if not url or url == "#":
         return False
@@ -1535,6 +1568,8 @@ def save_active_profile(p):
             json.dump(p, f, indent=2)
     except Exception:
         pass
+    # ponytail: stamp on-disk onboarding so reopen skips re-upload (Switch clears it)
+    set_onboard_marker(PROFILE)
     if p.get("resume_text"):
         try:
             with open(RESUME_TXT, "w", encoding="utf-8") as f:
@@ -1772,7 +1807,284 @@ JobScout scores your exact stack fit against 1,160+ active roles, surfaces high-
 </div>"""
 
 
+def _confirm_reveal_lines(p):
+    """Ordered (text, css-class) pairs for the typewriter reveal. Data only, no fabrication."""
+    lines = []
+    name = (p.get("name") or "").strip()
+    if name:
+        lines.append((name, "tw-name"))
+    role = (p.get("base_role") or "").strip()
+    if role:
+        lines.append((role, "tw-role"))
+    facts = []
+    try:
+        ey = float(p.get("experience_years") or 0)
+    except (TypeError, ValueError):
+        ey = 0
+    if ey > 0:
+        ey_txt = str(int(ey)) if float(ey).is_integer() else str(ey)
+        facts.append(f"{ey_txt} year{'s' if float(ey) != 1 else ''} experience")
+    loc = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
+    if loc.get("city"):
+        facts.append(str(loc["city"]).strip())
+    if p.get("email"):
+        facts.append(str(p["email"]).strip())
+    if facts:
+        lines.append((" · ".join(facts), "tw-fact"))
+    skills = [s for s in (p.get("skills") or []) if str(s).strip()][:8]
+    if skills:
+        lines.append(("Skills", "tw-label"))
+        lines.append((" · ".join(skills), "tw-fact"))
+    exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
+    if exps:
+        lines.append(("Experience", "tw-label"))
+        e0 = exps[0]
+        er, ec = (e0.get("role") or "").strip(), (e0.get("company") or "").strip()
+        if er or ec:
+            lines.append((f"{er} — {ec}" if er and ec else (er or ec), "tw-fact"))
+    edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
+    if edus:
+        lines.append(("Education", "tw-label"))
+        d0 = edus[0]
+        lines.append(((d0.get("degree") or "").strip() or "Education", "tw-fact"))
+    return [(t, c) for t, c in lines if t.strip()]
+
+
+def render_confirm_screen():
+    """Review-before-activate: animate already-extracted profile, edit inline, confirm to persist."""
+    p = st.session_state.get("pending_profile") or {}
+    if not isinstance(p, dict) or not p:
+        st.session_state.pop("pending_profile", None)
+        return
+
+    animated = st.session_state.get("confirm_animated", False)
+    edit_mode = st.session_state.get("confirm_edit", False)
+
+    st.markdown("""
+    <div class="app-brand">
+        <span style="font-size:22px; filter:drop-shadow(0 0 10px rgba(16,185,129,0.4));">⚡</span>
+        <span>JOBSCOUT</span>
+        <span class="app-brand-badge">PRO</span>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume"):
+        for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated"):
+            st.session_state.pop(k, None)
+        st.rerun()
+
+    st.markdown("""
+    <div class="confirm-wrap">
+        <div class="confirm-eyebrow">Resume processed</div>
+        <h2 class="confirm-title">We found your profile</h2>
+        <div class="confirm-sub">Here's what we extracted from your resume. Review it before continuing.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- Typewriter reveal (presentation only; extraction already complete) ---
+    reveal = _confirm_reveal_lines(p)
+    tw_html = ['<div class="confirm-wrap"><div class="confirm-card" id="confirm-reveal" aria-live="off" aria-label="Extracted profile summary">']
+    for text, cls in reveal:
+        esc = html.escape(text)
+        tw_html.append(f'<div class="tw-line {cls}"><span class="tw-text">{esc}</span></div>')
+    tw_html.append("</div></div>")
+    st.markdown("\n".join(tw_html), unsafe_allow_html=True)
+    if not animated and reveal:
+        st.html("""
+        <script>
+        (function() {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            var root = document.getElementById('confirm-reveal');
+            if (!root) return;
+            var els = Array.prototype.slice.call(root.querySelectorAll('.tw-text'));
+            var full = els.map(function(el) { return el.textContent; });
+            var total = full.join('').length || 1;
+            var perChar = Math.max(8, Math.min(42, 4200 / total));
+            var li = 0, ci = 0;
+            els.forEach(function(el) { el.textContent = ''; });
+            function step() {
+                if (li >= els.length) return;
+                var el = els[li], txt = full[li], line = el.parentElement;
+                line.classList.add('tw-active');
+                if (ci <= txt.length) { el.textContent = txt.slice(0, ci); ci++; setTimeout(step, perChar); }
+                else { line.classList.remove('tw-active'); li++; ci = 0; setTimeout(step, 200); }
+            }
+            step();
+        })();
+        </script>
+        """, unsafe_allow_javascript=True)
+    st.session_state["confirm_animated"] = True
+
+    # --- Static section cards (only non-empty sections) ---
+    st.markdown('<div class="confirm-wrap">', unsafe_allow_html=True)
+    with st.container(border=False):
+        loc = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
+        contact_bits = []
+        if p.get("phone"):
+            contact_bits.append(f"<div class='confirm-link'><span>Phone · </span>{html.escape(str(p['phone']))}</div>")
+        for k, label in (("linkedin", "LinkedIn"), ("github", "GitHub"), ("portfolio", "Portfolio")):
+            if p.get(k):
+                contact_bits.append(f"<div class='confirm-link'><span>{label} · </span>{html.escape(str(p[k]))}</div>")
+        if contact_bits:
+            st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Contact & Links</h3>{''.join(contact_bits)}</div>", unsafe_allow_html=True)
+
+        exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
+        if exps:
+            parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3>"]
+            for e in exps[:4]:
+                er, ec, ep = html.escape(str(e.get("role") or "")), html.escape(str(e.get("company") or "")), html.escape(str(e.get("period") or ""))
+                head = f"{er} — {ec}" if er and ec else (er or ec)
+                parts.append(f"<div class='confirm-exp-role'>{head}</div>")
+                if ep:
+                    parts.append(f"<div class='confirm-exp-sub'>{ep}</div>")
+                bullets = [b for b in (e.get("bullets") or []) if str(b).strip()][:4]
+                if bullets:
+                    parts.append("<ul class='confirm-exp-bullets'>" + "".join(f"<li>{html.escape(str(b))}</li>" for b in bullets) + "</ul>")
+            parts.append("</div>")
+            st.markdown("".join(parts), unsafe_allow_html=True)
+
+        cats = p.get("skills_categorized") or {}
+        skills = [s for s in (p.get("skills") or []) if str(s).strip()]
+        if isinstance(cats, dict) and any(cats.values()):
+            parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3>"]
+            for cat, val in cats.items():
+                items = [s.strip() for s in str(val).split(",") if s.strip()][:12]
+                if items:
+                    parts.append(f"<div class='confirm-exp-sub'>{html.escape(str(cat))}</div>")
+                    parts.append("<div>" + "".join(f"<span class='chip'>{html.escape(s)}</span>" for s in items) + "</div>")
+            parts.append("</div>")
+            st.markdown("".join(parts), unsafe_allow_html=True)
+        elif skills:
+            chips = "".join(f"<span class='chip'>{html.escape(str(s))}</span>" for s in skills[:30])
+            st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3><div>{chips}</div></div>", unsafe_allow_html=True)
+
+        edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
+        if edus:
+            rows = []
+            for e in edus[:3]:
+                deg, inst, yr = html.escape(str(e.get("degree") or "")), html.escape(str(e.get("institution") or "")), html.escape(str(e.get("year") or ""))
+                rows.append(f"<div class='confirm-exp-role'>{deg}</div><div class='confirm-exp-sub'>{' · '.join(x for x in (inst, yr) if x)}</div>")
+            st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Education</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+
+        projs = [e for e in (p.get("projects") or []) if isinstance(e, dict)]
+        if projs:
+            rows = []
+            for pr in projs[:3]:
+                nm, st_ = html.escape(str(pr.get("name") or "")), html.escape(str(pr.get("stack") or ""))
+                rows.append(f"<div class='confirm-exp-role'>{nm}</div>")
+                if st_:
+                    rows.append(f"<div class='confirm-exp-sub'>{st_}</div>")
+                b0 = (pr.get("bullets") or [None])[0]
+                if b0:
+                    rows.append(f"<div class='confirm-exp-sub'>{html.escape(str(b0))}</div>")
+            st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # --- Edit details (inline correction of extracted data) ---
+    st.markdown('<div class="confirm-wrap">', unsafe_allow_html=True)
+    if not edit_mode:
+        if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
+            st.session_state["confirm_edit"] = True
+            st.rerun()
+    else:
+        with st.container(border=True):
+            st.markdown("### Edit details")
+            e_name = st.text_input("Full name", value=str(p.get("name") or ""), key="cedit_name")
+            e_role = st.text_input("Professional title", value=str(p.get("base_role") or ""), key="cedit_role")
+            c1, c2 = st.columns(2)
+            with c1:
+                e_city = st.text_input("Location", value=str(loc.get("city") or ""), key="cedit_city")
+                e_email = st.text_input("Email", value=str(p.get("email") or ""), key="cedit_email")
+                e_linkedin = st.text_input("LinkedIn", value=str(p.get("linkedin") or ""), key="cedit_linkedin")
+            with c2:
+                e_phone = st.text_input("Phone", value=str(p.get("phone") or ""), key="cedit_phone")
+                e_github = st.text_input("GitHub", value=str(p.get("github") or ""), key="cedit_github")
+                e_portfolio = st.text_input("Portfolio", value=str(p.get("portfolio") or ""), key="cedit_portfolio")
+            e_skills = st.text_area("Skills (comma separated)", value=", ".join(str(s) for s in skills), height=70, key="cedit_skills")
+            if exps:
+                e0 = exps[0]
+                ec1, ec2, ec3 = st.columns(3)
+                with ec1:
+                    e_xrole = st.text_input("Job title", value=str(e0.get("role") or ""), key="cedit_xrole")
+                with ec2:
+                    e_xco = st.text_input("Company", value=str(e0.get("company") or ""), key="cedit_xco")
+                with ec3:
+                    e_xper = st.text_input("Dates", value=str(e0.get("period") or ""), key="cedit_xper")
+                e_xbul = st.text_area("Role bullets (one per line)", value="\n".join(str(b) for b in (e0.get("bullets") or [])), height=90, key="cedit_xbul")
+            else:
+                e_xrole = e_xco = e_xper = e_xbul = ""
+            if edus:
+                d0 = edus[0]
+                ed1, ed2, ed3 = st.columns(3)
+                with ed1:
+                    e_ddeg = st.text_input("Degree", value=str(d0.get("degree") or ""), key="cedit_ddeg")
+                with ed2:
+                    e_dinst = st.text_input("Institution", value=str(d0.get("institution") or ""), key="cedit_dinst")
+                with ed3:
+                    e_dyr = st.text_input("Year", value=str(d0.get("year") or ""), key="cedit_dyr")
+            else:
+                e_ddeg = e_dinst = e_dyr = ""
+            s1, s2 = st.columns(2)
+            with s1:
+                if st.button("Save changes", type="primary", key="btn_cedit_save", use_container_width=True):
+                    if not e_name.strip():
+                        st.error("Name can't be empty.")
+                    else:
+                        p["name"] = e_name.strip()
+                        p["base_role"] = e_role.strip()
+                        p["location"] = {**(p.get("location") or {}), "city": e_city.strip()} if isinstance(p.get("location"), dict) else {"city": e_city.strip()}
+                        p["email"] = e_email.strip()
+                        p["phone"] = e_phone.strip()
+                        for k, v in (("linkedin", e_linkedin), ("github", e_github), ("portfolio", e_portfolio)):
+                            v = (v or "").strip()
+                            p[k] = sanitize_url(v) or v  # ponytail: keep raw text over dropping user input
+                        p["skills"] = [s.strip() for s in e_skills.split(",") if s.strip()]
+                        if exps and (e_xrole or e_xco or e_xper or e_xbul):
+                            exps[0]["role"], exps[0]["company"], exps[0]["period"] = e_xrole.strip(), e_xco.strip(), e_xper.strip()
+                            exps[0]["bullets"] = [b.strip("-• ").strip() for b in e_xbul.splitlines() if b.strip()]
+                            p["experience"] = exps
+                        if edus and (e_ddeg or e_dinst or e_dyr):
+                            edus[0]["degree"], edus[0]["institution"], edus[0]["year"] = e_ddeg.strip(), e_dinst.strip(), e_dyr.strip()
+                            p["education"] = edus
+                        st.session_state["pending_profile"] = p
+                        st.session_state["confirm_edit"] = False
+                        st.toast("Details updated", icon="✅")
+                        st.rerun()
+            with s2:
+                if st.button("Cancel", key="btn_cedit_cancel", use_container_width=True):
+                    st.session_state["confirm_edit"] = False
+                    st.rerun()
+
+    # --- Confirm & Continue (existing persistence, then dashboard) ---
+    st.markdown("<div style='text-align:center;color:#94a3b8;font-size:13px;margin:14px 0 8px 0;'>Everything look right?</div>", unsafe_allow_html=True)
+    if st.button("Confirm & Continue →", type="primary", key="btn_confirm_go", use_container_width=True):
+        if not (p.get("name") or "").strip():
+            st.error("We need at least your name — add it via Edit details.")
+        else:
+            save_active_profile(p)
+            st.session_state["onboarded"] = True
+            if st.session_state.get("pending_remember", True):
+                sid, exp_at = create_user_session(p, duration_months=st.session_state.get("pending_dur_months", 1))
+                st.query_params["sid"] = sid
+                st.session_state["active_sid"] = sid
+                st.session_state["persist_sid_to_localstorage"] = (sid, exp_at)
+            else:
+                cur = st.query_params.get("sid") or st.session_state.get("active_sid")
+                if cur:
+                    delete_user_session(cur)
+                    st.query_params.pop("sid", None)
+                st.session_state["purge_sid_from_localstorage"] = True
+            for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated"):
+                st.session_state.pop(k, None)
+            st.toast(f"Welcome, {p.get('name', 'Developer')}!", icon="🚀")
+            st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_welcome_screen():
+    # ponytail: extracted-but-unconfirmed profile takes over until Confirm / Back
+    if st.session_state.get("pending_profile"):
+        render_confirm_screen()
+        return
     p_disk = load_profile()
     if p_disk.get("name", "").lower() in ["alex developer", "", "developer", "guest"]:
         p_disk["name"] = "Prathamesh Jadhav"
@@ -1872,7 +2184,7 @@ def render_welcome_screen():
 
             col_rem, col_dur = st.columns([1.1, 1.45], vertical_alignment="center")
             with col_rem:
-                remember_me = st.checkbox("Remember me", value=True, key="onb_remember_me", help="Keeps your workspace session remembered on this browser")
+                remember_me = st.checkbox("Remember me", value=True, key="onb_remember_me", help="Resume stays saved on this machine regardless; this keeps the browser signed in for the chosen duration")
             with col_dur:
                 if remember_me:
                     dur_label = st.segmented_control(
@@ -1921,49 +2233,46 @@ def render_welcome_screen():
                     st.info("💡 Drop your resume above or click 'Explore Live Demo Workspace' to preview instantly.")
                     return
 
-                with st.status("⚡ Launching JobScout Workspace...", expanded=True) as status:
-                    st.write("1. Extracting skills & technical history...")
+                with st.status("Reading your resume...", expanded=True) as status:
+                    st.write("Reading your resume")
                     if not resume_content:
                         sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
                         if os.path.exists(sample_r):
                             with open(sample_r, encoding="utf-8") as rf:
                                 resume_content = rf.read()
 
+                    st.write("Extracting your experience")
                     api_k = get_gemini_api_key()
-                    parsed_p = parse_resume_to_profile(
-                        resume_content,
-                        name_input=onb_name,
-                        city_input=onb_city,
-                        role_input=onb_role,
-                        api_key=api_k,
-                        links=extracted_links,
-                        classified_links=classified_links
-                    )
-                    save_active_profile(parsed_p)
+                    try:
+                        parsed_p = parse_resume_to_profile(
+                            resume_content,
+                            name_input=onb_name,
+                            city_input=onb_city,
+                            role_input=onb_role,
+                            api_key=api_k,
+                            links=extracted_links,
+                            classified_links=classified_links
+                        )
+                    except Exception:
+                        st.error("**We couldn't read this resume.** Something went wrong while extracting your profile. Try again or upload another resume.")
+                        return
+                    if not isinstance(parsed_p, dict) or not parsed_p.get("name"):
+                        st.error("**We couldn't read this resume.** Something went wrong while extracting your profile. Try again or upload another resume.")
+                        return
+
+                    st.write("Building your profile")
                     time.sleep(0.2)
 
-                    st.write("2. Matching against 1,160+ active database roles...")
-                    time.sleep(0.2)
+                    # ponytail: stash unconfirmed; confirm screen reviews → save_active_profile on Confirm
+                    st.session_state["pending_profile"] = parsed_p
+                    st.session_state["pending_remember"] = bool(remember_me)
+                    st.session_state["pending_dur_months"] = dur_months
+                    st.session_state["confirm_edit"] = False
+                    st.session_state["confirm_animated"] = False
 
-                    st.write("3. Assembling workspace...")
-                    st.session_state["onboarded"] = True
-
-                    if remember_me:
-                        sid, exp_at = create_user_session(parsed_p, duration_months=dur_months)
-                        st.query_params["sid"] = sid
-                        st.session_state["active_sid"] = sid
-                        st.session_state["persist_sid_to_localstorage"] = (sid, exp_at)
-                    else:
-                        current_sid = st.query_params.get("sid") or st.session_state.get("active_sid")
-                        if current_sid:
-                            delete_user_session(current_sid)
-                            st.query_params.pop("sid", None)
-                        st.session_state["purge_sid_from_localstorage"] = True
-
-                    status.update(label="🚀 Workspace Ready! Launching...", state="complete")
+                    status.update(label="Profile ready for review", state="complete")
                     time.sleep(0.3)
 
-                st.toast(f"🎉 Welcome, {parsed_p.get('name', 'Developer')}!", icon="🚀")
                 st.rerun()
 
 
@@ -2713,6 +3022,13 @@ st.session_state.setdefault("fast_tailor_tab_idx", 0)
 # Check session & onboarding state
 st.session_state.setdefault("onboarded", False)
 
+# Flush queued LocalStorage writes FIRST — never stranded behind st.stop() below
+if "persist_sid_to_localstorage" in st.session_state:
+    p_sid, p_exp = st.session_state.pop("persist_sid_to_localstorage")
+    st.html(f"<script>try{{localStorage.setItem('jobscout_sid','{p_sid}');localStorage.setItem('jobscout_exp','{p_exp}');}}catch(e){{}}</script>", unsafe_allow_javascript=True)
+if st.session_state.pop("purge_sid_from_localstorage", False):
+    st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');}catch(e){}</script>", unsafe_allow_javascript=True)
+
 current_sid = st.query_params.get("sid")
 if current_sid and not st.session_state.get("onboarded", False):
     sess_prof = get_user_session(current_sid)
@@ -2724,6 +3040,10 @@ if current_sid and not st.session_state.get("onboarded", False):
         st.query_params.pop("sid", None)
         st.session_state["purge_sid_from_localstorage"] = True
 
+# Disk fallback: resume already saved on this machine → skip re-upload entirely
+if not st.session_state.get("onboarded", False) and has_onboard_marker(PROFILE):
+    st.session_state["user_profile"] = load_profile()
+    st.session_state["onboarded"] = True
 if not st.session_state.get("onboarded", False):
     # Auto-reconnect via LocalStorage on clean browser revisits (safe same-frame DOM execution)
     st.html(
@@ -2749,15 +3069,8 @@ if not st.session_state.get("onboarded", False):
         """,
         unsafe_allow_javascript=True
     )
-    if st.session_state.pop("purge_sid_from_localstorage", False):
-        st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');}catch(e){}</script>", unsafe_allow_javascript=True)
     render_welcome_screen()
     st.stop()
-
-# Flush queued LocalStorage persistence to live DOM if set
-if "persist_sid_to_localstorage" in st.session_state:
-    p_sid, p_exp = st.session_state.pop("persist_sid_to_localstorage")
-    st.html(f"<script>try{{localStorage.setItem('jobscout_sid','{p_sid}');localStorage.setItem('jobscout_exp','{p_exp}');}}catch(e){{}}</script>", unsafe_allow_javascript=True)
 
 p = get_active_profile()
 
@@ -2861,6 +3174,7 @@ with top_user_col:
             st.session_state["onboarded"] = False
             st.session_state["active_sid"] = None
             st.session_state["purge_sid_from_localstorage"] = True
+            clear_onboard_marker(PROFILE)  # ponytail: allow fresh upload, else disk auto-login loops back
             st.rerun()
     with u_c3:
         if st.button("⚙️", key="btn_quick_settings_top", help="Open Settings"):
@@ -3003,14 +3317,17 @@ if active_nav == "Jobs":
         if u2.button("📋 Paste JD", key="u_btn_jd", use_container_width=True):
             st.session_state.instant_tailor_expanded = True
             st.session_state.fast_tailor_tab_idx = 0
+            st.session_state.fast_tailor_tab_switch = "📄 Paste JD"
             st.rerun()
         if u3.button("🔗 Paste Link", key="u_btn_link", use_container_width=True):
             st.session_state.instant_tailor_expanded = True
             st.session_state.fast_tailor_tab_idx = 1
+            st.session_state.fast_tailor_tab_switch = "🔗 Paste Job Link"
             st.rerun()
         if u4.button("🌐 10 Platforms", key="u_btn_plat", use_container_width=True):
             st.session_state.instant_tailor_expanded = True
             st.session_state.fast_tailor_tab_idx = 2
+            st.session_state.fast_tailor_tab_switch = "🌐 Platform Search"
             st.rerun()
 
     with util_r:
@@ -3041,27 +3358,47 @@ if active_nav == "Jobs":
             with sr1:
                 st.markdown(f"<span class='{badge_cls}' style='font-size:11.5px;'>{badge_icon} <b>{badge_text}</b></span>", unsafe_allow_html=True)
             with sr2:
-                if st.button("↻ Fetch", key="util_fetch_btn", use_container_width=True, help="Fetch latest jobs immediately"):
-                    with st.spinner("Fetching jobs..."):
-                        res = trigger_immediate_fetch(include_jobspy=True, max_spy_wanted=20)
-                        if res and res.get("status") == "success":
-                            st.toast(f"Added {res.get('new_rows', 0)} new jobs!", icon="✅")
-                        st.rerun()
+                # ponytail: JobSpy scraping takes 1-3 min — never block the script
+                # thread on it, or every click sits under a black "running" veil.
+                if st.button("↻ Fetch" if not is_fetch else "⏳ Fetching…", key="util_fetch_btn", use_container_width=True, help="Fetch latest jobs in background", disabled=is_fetch):
+                    if get_scheduler_status().get("is_fetching"):
+                        st.toast("Fetch already running in background…", icon="⏳")
+                    else:
+                        def _bg_fetch():
+                            try:
+                                trigger_immediate_fetch(include_jobspy=True, max_spy_wanted=20)
+                            except Exception as e:
+                                print(f"Background manual fetch error: {e}")
+                        threading.Thread(target=_bg_fetch, daemon=True, name="ManualFetch").start()
+                        st.toast("🔄 Fetch started in background — new jobs pop in automatically.", icon="🚀")
+                    st.rerun(scope="fragment")
             with sr3:
-                if st.button("🔍 Clean", key="util_clean_btn", use_container_width=True, help="Clean expired / closed jobs"):
-                    with st.spinner("Checking status..."):
-                        to_check = [x for x in scored if x["_eligible"] and not x.get("closed")]
-                        closed_cnt = 0
-                        con = ensure_db()
-                        for cj in to_check:
-                            if is_job_closed(cj.get("url")):
-                                con.execute("UPDATE jobs SET closed=1 WHERE url_hash=?", (cj["url_hash"],))
-                                closed_cnt += 1
-                        con.commit(); con.close()
-                        if closed_cnt:
-                            st.toast(f"Cleaned {closed_cnt} jobs!", icon="🧹")
+                if st.button("🔍 Clean", key="util_clean_btn", use_container_width=True, help="Check top 20 visible jobs for closed postings"):
+                    # ponytail: sequential HTTP x N jobs froze UI for minutes.
+                    # Cap to 20 + 8 parallel workers + single batched DB write.
+                    to_check = [x for x in scored if x["_eligible"] and not x.get("closed")][:20]
+                    if not to_check:
+                        st.toast("Nothing to check.", icon="✓")
+                    else:
+                        prog = st.progress(0)
+                        closed_hashes = []
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as _ex:
+                            futs = {_ex.submit(is_job_closed, cj.get("url")): cj for cj in to_check}
+                            for _i, _f in enumerate(concurrent.futures.as_completed(futs)):
+                                try:
+                                    if _f.result():
+                                        closed_hashes.append(futs[_f]["url_hash"])
+                                except Exception:
+                                    pass
+                                prog.progress((_i + 1) / len(futs))
+                        prog.empty()
+                        if closed_hashes:
+                            con = ensure_db()
+                            con.executemany("UPDATE jobs SET closed=1 WHERE url_hash=?", [(h,) for h in closed_hashes])
+                            con.commit(); con.close()
+                            st.toast(f"Cleaned {len(closed_hashes)} jobs!", icon="🧹")
                         else:
-                            st.toast("All eligible jobs active!", icon="✓")
+                            st.toast("All checked jobs active!", icon="✓")
                         st.rerun()
 
         render_utility_sync()
@@ -3072,9 +3409,26 @@ if active_nav == "Jobs":
     with st.expander("⚡ Fast Tailor (Paste JD, Paste Job Link or Platform Search)", expanded=quick_expanded):
         st.markdown("<p style='font-size:12.5px;color:#9ca3af;margin-bottom:8px;'><b style='color:#10b981;'>⚡ Instant ATS Tailoring:</b> Paste raw JD text or any job link. Gemini extracts title, company, location & skills in one shot, computes match score, and generates a tailored ATS resume PDF in 5 seconds.</p>", unsafe_allow_html=True)
         
-        q_tab_jd, q_tab_link, q_tab_platforms = st.tabs(["📄 Paste JD", "🔗 Paste Job Link", "🌐 Platform Search"])
+        # ponytail: st.tabs can't be switched programmatically, so use a controlled
+        # segmented control bound to fast_tailor_tab_idx — utility-bar buttons set it.
+        ft_options = ["📄 Paste JD", "🔗 Paste Job Link", "🌐 Platform Search"]
+        try:
+            _ft_idx = int(st.session_state.get("fast_tailor_tab_idx", 0) or 0)
+        except (TypeError, ValueError):
+            _ft_idx = 0
+        _ft_idx = max(0, min(_ft_idx, len(ft_options) - 1))
+        _sel_ft = st.segmented_control(
+            "Fast Tailor input",
+            options=ft_options,
+            default=ft_options[_ft_idx],
+            key="fast_tailor_tab_switch",
+            label_visibility="collapsed",
+        )
+        if _sel_ft in ft_options:
+            _ft_idx = ft_options.index(_sel_ft)
+            st.session_state.fast_tailor_tab_idx = _ft_idx
 
-        with q_tab_jd:
+        if _ft_idx == 0:
             st.markdown("<p style='font-size:13px;color:#94a3b8;margin:2px 0 8px 0;'><b style='color:#f8fafc;'>Paste the complete job description below.</b><br/>No formatting required — just copy everything from the job page (Ctrl+A → Ctrl+C → Ctrl+V). Gemini will auto-extract title, company, location, experience, and skills.</p>", unsafe_allow_html=True)
             
             raw_jd_val = st.text_area(
@@ -3113,7 +3467,7 @@ if active_nav == "Jobs":
                             st.session_state.instant_tailor_expanded = True
                             st.rerun()
 
-        with q_tab_link:
+        elif _ft_idx == 1:
             st.markdown("<p style='font-size:12px;color:#9ca3af;margin:0 0 6px 0;'>Paste any job URL from Indeed, LinkedIn, SmartRecruiters, Greenhouse, etc. <b>Indeed URLs auto-extract with 100% precision via GraphQL!</b></p>", unsafe_allow_html=True)
             cl1, cl2 = st.columns([3.5, 1])
             with cl1:
@@ -3156,7 +3510,7 @@ if active_nav == "Jobs":
                     st.markdown(card_html, unsafe_allow_html=True)
                     st.link_button(f"Search {plat['name'].split()[0]} ↗", plat["url"], use_container_width=True, key=f"q_plat_btn_{plat['id']}")
 
-        with q_tab_platforms:
+        else:
             platforms = get_major_platforms(p, target_q)
             st.markdown(f"<p style='font-size:12.5px;color:#94a3b8;margin-bottom:12px;'>One-click direct launchers pre-configured for <b>{html.escape(target_q)}</b> in <b>{html.escape(user_city)}</b>. Open any platform, find any job, copy the URL or description, and switch to <b>Tab 1 or Tab 2</b> above to tailor your resume in 5 seconds!</p>", unsafe_allow_html=True)
 
