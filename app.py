@@ -3025,9 +3025,9 @@ st.session_state.setdefault("onboarded", False)
 # Flush queued LocalStorage writes FIRST — never stranded behind st.stop() below
 if "persist_sid_to_localstorage" in st.session_state:
     p_sid, p_exp = st.session_state.pop("persist_sid_to_localstorage")
-    st.html(f"<script>try{{localStorage.setItem('jobscout_sid','{p_sid}');localStorage.setItem('jobscout_exp','{p_exp}');}}catch(e){{}}</script>", unsafe_allow_javascript=True)
+    st.html(f"<script>try{{localStorage.setItem('jobscout_sid','{p_sid}');localStorage.setItem('jobscout_exp','{p_exp}');sessionStorage.removeItem('jobscout_redirected');}}catch(e){{}}</script>", unsafe_allow_javascript=True)
 if st.session_state.pop("purge_sid_from_localstorage", False):
-    st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');}catch(e){}</script>", unsafe_allow_javascript=True)
+    st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');sessionStorage.removeItem('jobscout_redirected');}catch(e){}</script>", unsafe_allow_javascript=True)
 
 current_sid = st.query_params.get("sid")
 if current_sid and not st.session_state.get("onboarded", False):
@@ -3037,8 +3037,14 @@ if current_sid and not st.session_state.get("onboarded", False):
         st.session_state["onboarded"] = True
         st.session_state["active_sid"] = current_sid
     else:
+        # ponytail: stale sid (fresh deploy wipes sessions.db). Purge localStorage
+        # in THIS run — a full-page location.replace reload kills session_state,
+        # so a deferred purge flag alone never executes and the auto-login
+        # script below redirect-loops forever (load → flash → reload).
         st.query_params.pop("sid", None)
         st.session_state["purge_sid_from_localstorage"] = True
+        st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');sessionStorage.removeItem('jobscout_redirected');}catch(e){}</script>", unsafe_allow_javascript=True)
+        st.rerun()
 
 # Disk fallback: resume already saved on this machine → skip re-upload entirely
 if not st.session_state.get("onboarded", False) and has_onboard_marker(PROFILE):
@@ -3046,6 +3052,8 @@ if not st.session_state.get("onboarded", False) and has_onboard_marker(PROFILE):
     st.session_state["onboarded"] = True
 if not st.session_state.get("onboarded", False):
     # Auto-reconnect via LocalStorage on clean browser revisits (safe same-frame DOM execution)
+    # ponytail: sessionStorage loop-breaker — if we redirected with sid X and came
+    # back un-logged-in, the server rejected X: drop it, never redirect with X again.
     st.html(
         """
         <script>
@@ -3056,12 +3064,20 @@ if not st.session_state.get("onboarded", False):
                 if (sid && exp && new Date(exp) > new Date()) {
                     const url = new URL(window.location.href);
                     if (!url.searchParams.get("sid")) {
-                        url.searchParams.set("sid", sid);
-                        window.location.replace(url.toString());
+                        if (sessionStorage.getItem("jobscout_redirected") === sid) {
+                            localStorage.removeItem("jobscout_sid");
+                            localStorage.removeItem("jobscout_exp");
+                            sessionStorage.removeItem("jobscout_redirected");
+                        } else {
+                            sessionStorage.setItem("jobscout_redirected", sid);
+                            url.searchParams.set("sid", sid);
+                            window.location.replace(url.toString());
+                        }
                     }
                 } else if (sid) {
                     localStorage.removeItem("jobscout_sid");
                     localStorage.removeItem("jobscout_exp");
+                    sessionStorage.removeItem("jobscout_redirected");
                 }
             } catch (e) {}
         })();
