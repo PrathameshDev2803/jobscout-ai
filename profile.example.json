@@ -56,13 +56,16 @@
   "experience_years": 1,
   "experience": [
     {
-      "company": "Tech Solutions Pvt Ltd",
+      "company": "Traction Shastra",
       "role": "Web Developer",
-      "period": "Jan 2025 – Present",
+      "period": "Nov 2025 – Present",
       "bullets": [
-        "Develop and maintain web applications with backend logic, database integrations, and responsive UIs.",
-        "Implement REST API endpoints and integrate third-party web services.",
-        "Use Git/GitHub for version control and adhere to clean code standards."
+        "Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS.",
+        "Build backend functionality, CRUD operations, SQL queries and database integrations.",
+        "Develop responsive interfaces using JavaScript, React, Bootstrap and Tailwind CSS.",
+        "Integrate REST APIs and third-party services; work with PHPMailer and PhpOffice libraries.",
+        "Use Git/GitHub for version control and contribute to structured, maintainable development.",
+        "Implement WCAG 2.2 AA accessibility improvements, responsive fixes and SEO-related technical updates."
       ]
     }
   ],

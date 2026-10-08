@@ -1387,18 +1387,9 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input=""):
         },
         "work_preferences": {"remote": True, "hybrid": True, "onsite": True},
         "experience_years": exp_years,
-        "experience": [
-            {
-                "company": "Tech Solutions Pvt Ltd",
-                "role": base_role.split("•")[0].strip(),
-                "period": "2024 – Present",
-                "bullets": [
-                    "Develop and maintain full-stack web applications and backend APIs.",
-                    "Implement clean database architecture, optimize queries, and integrate third-party services.",
-                    "Collaborate using Git/GitHub and follow agile software engineering practices."
-                ]
-            }
-        ],
+        # ponytail: never fabricate an employer — empty beats fake on a resume.
+        "experience": [],
+        "experience_unverified": True,
         "resume_text": text
     }
 

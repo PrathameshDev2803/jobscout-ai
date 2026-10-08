@@ -1578,6 +1578,90 @@ def save_active_profile(p):
             pass
 
 
+# ponytail: single source of truth for real experience. Parser extracts it from
+# resume text, PDF builder prints profile["experience"] with this as fallback.
+# Nothing here is invented — every field mirrors resume.txt on disk.
+TRUTH_EXPERIENCE = {
+    "company": "Traction Shastra",
+    "role": "Web Developer",
+    "period": "Nov 2025 – Present",
+    "bullets": [
+        "Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS.",
+        "Build backend functionality, CRUD operations, SQL queries and database integrations.",
+        "Develop responsive interfaces using JavaScript, React, Bootstrap and Tailwind CSS.",
+        "Integrate REST APIs and third-party services; work with PHPMailer and PhpOffice libraries.",
+        "Use Git/GitHub for version control and contribute to structured, maintainable development.",
+        "Implement WCAG 2.2 AA accessibility improvements, responsive fixes and SEO-related technical updates."
+    ]
+}
+
+# Fabrication guard: any "experience" whose company contains these is placeholder
+# junk (old seeds / parser fallbacks), never a real employer. Stripped at parse.
+PLACEHOLDER_COMPANIES = {
+    "tech solutions", "example", "acme", "abc corp", "xyz", "your company",
+    "company name", "sample company", "test company", "lorem ipsum", "demo company"
+}
+
+
+def is_placeholder_company(company: str) -> bool:
+    low = (company or "").lower()
+    return bool(low) and any(ph in low for ph in PLACEHOLDER_COMPANIES)
+
+
+def extract_experience_entries(text: str) -> list:
+    """Deterministic experience extraction. Returns [] unless real evidence found.
+
+    Accepts header lines like `Company — Role | Period` inside a PROFESSIONAL /
+    WORK EXPERIENCE section, plus following •/- bullets. Never fabricates.
+    """
+    if not text:
+        return []
+    lines = [(l or "").strip(" \t") for l in text.splitlines()]
+    start = None
+    for i, l in enumerate(lines):
+        if re.match(r"^(professional\s+experience|work\s+experience|employment(\s+history)?|experience)\s*$", l, re.I):
+            start = i + 1
+            break
+    if start is None:
+        return []
+    end = len(lines)
+    for j in range(start, len(lines)):
+        lj = lines[j]
+        if re.match(r"^[A-Z][A-Z\s&/]{3,}$", lj) and len(lj.split()) <= 4:
+            if any(k in lj.lower() for k in ["project", "education", "skill", "summary", "certification", "additional", "contact", "achievement"]):
+                end = j
+                break
+    body = [l for l in lines[start:end]]
+    hdr_pat = re.compile(r"^(.+?)\s+[—–-]\s+(.+?)\s*\|\s*(.+)$")
+    date_pat = re.compile(r"(19|20)\d{2}|present|current|now", re.I)
+    entries = []
+    i = 0
+    while i < len(body):
+        m = hdr_pat.match(body[i])
+        if m:
+            company, role, period = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+            if (company and role and date_pat.search(period)
+                    and not is_placeholder_company(company)
+                    and len(company) <= 60 and len(role) <= 60):
+                bullets = []
+                k = i + 1
+                while k < len(body) and len(bullets) < 8:
+                    bl = body[k]
+                    if hdr_pat.match(bl):
+                        break
+                    bm = re.match(r"^[•\-\*▪‣]\s*(.+)$", bl)
+                    if bm and len(bm.group(1).strip()) >= 10:
+                        bullets.append(bm.group(1).strip()[:300])
+                    elif bl.strip() and len(bl.strip()) >= 40 and not bl.isupper():
+                        bullets.append(bl.strip()[:300])
+                    k += 1
+                entries.append({"company": company, "role": role, "period": period, "bullets": bullets})
+                i = k
+                continue
+        i += 1
+    return entries[:3]
+
+
 def parse_resume_heuristics(text, name_input="", city_input="", role_input="", links=None, classified_links=None):
     """Instant deterministic resume parser: regex pattern matching across all tech stacks."""
     lines = [l.strip() for l in text.split("\n") if l.strip()]
@@ -1675,6 +1759,8 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
     if ("React" in matched_skills or "React.js" in matched_skills) and "React Developer" not in search_terms:
         search_terms.append("React Developer")
 
+    extracted_exp = extract_experience_entries(text)
+
     return {
         "name": name or "Tech Developer",
         "email": email,
@@ -1694,18 +1780,10 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
         },
         "work_preferences": {"remote": True, "hybrid": True, "onsite": True},
         "experience_years": exp_years,
-        "experience": [
-            {
-                "company": "Tech Solutions Pvt Ltd",
-                "role": base_role.split("•")[0].strip(),
-                "period": "2024 – Present",
-                "bullets": [
-                    "Develop and maintain full-stack web applications and backend APIs.",
-                    "Implement clean database architecture, optimize queries, and integrate third-party services.",
-                    "Collaborate using Git/GitHub and follow agile software engineering practices."
-                ]
-            }
-        ],
+        # ponytail: extract real evidence or return [] — a fake employer on a
+        # resume is a career-ending liability, an empty box is just a form field.
+        "experience": extracted_exp,
+        "experience_unverified": not bool(extracted_exp),
         "resume_text": text
     }
 
@@ -1941,6 +2019,8 @@ def render_confirm_screen():
                     parts.append("<ul class='confirm-exp-bullets'>" + "".join(f"<li>{html.escape(str(b))}</li>" for b in bullets) + "</ul>")
             parts.append("</div>")
             st.markdown("".join(parts), unsafe_allow_html=True)
+        elif p.get("experience_unverified"):
+            st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>⚠️ No work block detected in resume — add it via <b>Edit details</b> below. Nothing invented on your behalf.</div></div>", unsafe_allow_html=True)
 
         cats = p.get("skills_categorized") or {}
         skills = [s for s in (p.get("skills") or []) if str(s).strip()]
@@ -2000,18 +2080,17 @@ def render_confirm_screen():
                 e_github = st.text_input("GitHub", value=str(p.get("github") or ""), key="cedit_github")
                 e_portfolio = st.text_input("Portfolio", value=str(p.get("portfolio") or ""), key="cedit_portfolio")
             e_skills = st.text_area("Skills (comma separated)", value=", ".join(str(s) for s in skills), height=70, key="cedit_skills")
-            if exps:
-                e0 = exps[0]
-                ec1, ec2, ec3 = st.columns(3)
-                with ec1:
-                    e_xrole = st.text_input("Job title", value=str(e0.get("role") or ""), key="cedit_xrole")
-                with ec2:
-                    e_xco = st.text_input("Company", value=str(e0.get("company") or ""), key="cedit_xco")
-                with ec3:
-                    e_xper = st.text_input("Dates", value=str(e0.get("period") or ""), key="cedit_xper")
-                e_xbul = st.text_area("Role bullets (one per line)", value="\n".join(str(b) for b in (e0.get("bullets") or [])), height=90, key="cedit_xbul")
-            else:
-                e_xrole = e_xco = e_xper = e_xbul = ""
+            # ponytail: fields always visible — an empty parse must still let the
+            # user add their real job instead of inheriting a fabricated one.
+            e0 = exps[0] if exps else {}
+            ec1, ec2, ec3 = st.columns(3)
+            with ec1:
+                e_xrole = st.text_input("Job title", value=str(e0.get("role") or ""), key="cedit_xrole")
+            with ec2:
+                e_xco = st.text_input("Company", value=str(e0.get("company") or ""), key="cedit_xco")
+            with ec3:
+                e_xper = st.text_input("Dates", value=str(e0.get("period") or ""), key="cedit_xper")
+            e_xbul = st.text_area("Role bullets (one per line)", value="\n".join(str(b) for b in (e0.get("bullets") or [])), height=90, key="cedit_xbul")
             if edus:
                 d0 = edus[0]
                 ed1, ed2, ed3 = st.columns(3)
@@ -2038,10 +2117,15 @@ def render_confirm_screen():
                             v = (v or "").strip()
                             p[k] = sanitize_url(v) or v  # ponytail: keep raw text over dropping user input
                         p["skills"] = [s.strip() for s in e_skills.split(",") if s.strip()]
-                        if exps and (e_xrole or e_xco or e_xper or e_xbul):
-                            exps[0]["role"], exps[0]["company"], exps[0]["period"] = e_xrole.strip(), e_xco.strip(), e_xper.strip()
-                            exps[0]["bullets"] = [b.strip("-• ").strip() for b in e_xbul.splitlines() if b.strip()]
+                        if e_xrole or e_xco or e_xper or e_xbul:
+                            if exps:
+                                exps[0]["role"], exps[0]["company"], exps[0]["period"] = e_xrole.strip(), e_xco.strip(), e_xper.strip()
+                                exps[0]["bullets"] = [b.strip("-• ").strip() for b in e_xbul.splitlines() if b.strip()]
+                            else:
+                                exps = [{"role": e_xrole.strip(), "company": e_xco.strip(), "period": e_xper.strip(),
+                                         "bullets": [b.strip("-• ").strip() for b in e_xbul.splitlines() if b.strip()]}]
                             p["experience"] = exps
+                            p["experience_unverified"] = False
                         if edus and (e_ddeg or e_dinst or e_dyr):
                             edus[0]["degree"], edus[0]["institution"], edus[0]["year"] = e_ddeg.strip(), e_dinst.strip(), e_dyr.strip()
                             p["education"] = edus
@@ -2302,14 +2386,7 @@ def heuristic_tailor(resume_text, job, skills):
         f"aligned with {title} requirements at {company}."
     )
 
-    ts_bullets = [
-        "Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS.",
-        "Build backend functionality, CRUD operations, SQL queries and database integrations.",
-        "Develop responsive interfaces using JavaScript, React, Bootstrap and Tailwind CSS.",
-        "Integrate REST APIs and third-party services; work with PHPMailer and PhpOffice libraries.",
-        "Use Git/GitHub for version control and contribute to structured, maintainable development.",
-        "Implement WCAG 2.2 AA accessibility improvements, responsive fixes and SEO-related technical updates."
-    ]
+    ts_bullets = list(TRUTH_EXPERIENCE["bullets"])
 
     cat_skills = {
         "Backend & APIs:": "PHP, Laravel, Node.js, Express.js, REST APIs",
@@ -2737,30 +2814,27 @@ def build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean"):
     pdf.ln(3.5)
 
     # 4. Professional Experience
+    # ponytail: prints profile["experience"][0] — what you confirmed is what prints.
+    # TRUTH fallback only when profile has nothing; placeholders never reach paper.
     section_hdr("PROFESSIONAL EXPERIENCE")
+    prof_exps = [e for e in (profile.get("experience") or []) if isinstance(e, dict)]
+    exp0 = prof_exps[0] if prof_exps and not is_placeholder_company(str(prof_exps[0].get("company") or "")) else dict(TRUTH_EXPERIENCE)
     pdf.set_font("Helvetica", "B", 10.5)
     pdf.set_text_color(*c_head)
-    pdf.cell(130, 5, "TRACTION SHASTRA", new_x="RIGHT", new_y="TOP")
+    pdf.cell(130, 5, sanitize_pdf_text(str(exp0.get("company") or TRUTH_EXPERIENCE["company"]).upper()), new_x="RIGHT", new_y="TOP")
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(*c_meta)
-    pdf.cell(0, 5, "Nov 2025 - Present", new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.cell(0, 5, sanitize_pdf_text(str(exp0.get("period") or TRUTH_EXPERIENCE["period"])), new_x="LMARGIN", new_y="NEXT", align="R")
 
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.set_text_color(*c_accent)
-    pdf.cell(0, 4.8, "Web Developer", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 4.8, sanitize_pdf_text(str(exp0.get("role") or TRUTH_EXPERIENCE["role"])), new_x="LMARGIN", new_y="NEXT")
 
     pdf.set_font("Helvetica", "", 9.2)
     pdf.set_text_color(*c_text)
     ts_bullets = tailored_data.get("traction_shastra_bullets") or tailored_data.get("tailored_bullets", [])
     if not ts_bullets:
-        ts_bullets = [
-            "Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS.",
-            "Build backend functionality, CRUD operations, SQL queries and database integrations.",
-            "Develop responsive interfaces using JavaScript, React, Bootstrap and Tailwind CSS.",
-            "Integrate REST APIs and third-party services; work with PHPMailer and PhpOffice libraries.",
-            "Use Git/GitHub for version control and contribute to structured, maintainable development.",
-            "Implement WCAG 2.2 AA accessibility improvements, responsive fixes and SEO-related technical updates."
-        ]
+        ts_bullets = list(exp0.get("bullets") or TRUTH_EXPERIENCE["bullets"])
     for b in ts_bullets:
         pdf.multi_cell(0, 4.6, f"-  {sanitize_pdf_text(b)}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(0.5)
@@ -2852,14 +2926,7 @@ def make_pdf(name, role, summary, bullets, skills, template="Modern Clean"):
     tailored = {
         "tailored_title": role,
         "tailored_summary": summary,
-        "traction_shastra_bullets": bullets if bullets else [
-            "Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS.",
-            "Build backend functionality, CRUD operations, SQL queries and database integrations.",
-            "Develop responsive interfaces using JavaScript, React, Bootstrap and Tailwind CSS.",
-            "Integrate REST APIs and third-party services; work with PHPMailer and PhpOffice libraries.",
-            "Use Git/GitHub for version control and contribute to structured, maintainable development.",
-            "Implement WCAG 2.2 AA accessibility improvements, responsive fixes and SEO-related technical updates."
-        ],
+        "traction_shastra_bullets": bullets if bullets else list(TRUTH_EXPERIENCE["bullets"]),
         "categorized_skills": {
             "Backend & APIs:": "PHP, Laravel, Node.js, Express.js, REST APIs",
             "Database & Storage:": "MySQL, SQL, MongoDB, phpMyAdmin",

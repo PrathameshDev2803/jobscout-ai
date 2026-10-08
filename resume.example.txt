@@ -12,11 +12,13 @@ Frontend: HTML5, CSS3, JavaScript (ES6+), React.js, Tailwind CSS
 Concepts & Tools: MVC, CRUD, OOP, Git, GitHub, Docker, Postman
 
 PROFESSIONAL EXPERIENCE
-Tech Solutions Pvt Ltd — Web Developer | Jan 2025 – Present
-• Build and maintain client-facing web applications with modern responsive user interfaces.
-• Design, implement, and optimize database schemas and queries using SQL.
-• Integrate third-party APIs and services with clean error handling and security practices.
-• Utilize Git and GitHub for collaborative version control and CI/CD workflows.
+Traction Shastra — Web Developer | Nov 2025 – Present
+• Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS.
+• Build backend functionality, CRUD operations, SQL queries and database integrations.
+• Develop responsive interfaces using JavaScript, React, Bootstrap and Tailwind CSS.
+• Integrate REST APIs and third-party services; work with PHPMailer and PhpOffice libraries.
+• Use Git/GitHub for version control and contribute to structured, maintainable development.
+• Implement WCAG 2.2 AA accessibility improvements, responsive fixes and SEO-related technical updates.
 
 KEY PROJECTS
 JobScout AI — Tech Job Radar & ATS Tailor | Python, Streamlit, Gemini API
