@@ -1608,56 +1608,165 @@ def is_placeholder_company(company: str) -> bool:
     return bool(low) and any(ph in low for ph in PLACEHOLDER_COMPANIES)
 
 
+ROLE_KEYWORDS = {
+    "developer", "engineer", "designer", "manager", "analyst", "intern",
+    "consultant", "specialist", "architect", "lead", "executive", "associate",
+    "trainee", "administrator", "tester", "scientist", "writer", "marketer",
+    "accountant", "freelancer", "founder", "cto", "ceo",
+}
+
+DATE_RANGE_PAT = re.compile(
+    r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(?:19|20)\d{2}|(?:19|20)\d{2})"
+    r"\s*[–—\-‐/to]+\s*"
+    r"(Present|Current|Now|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+(?:19|20)\d{2}|(?:19|20)\d{2})",
+    re.I,
+)
+
+
+def _looks_like_role(s: str) -> bool:
+    low = (s or "").lower()
+    return any(k in low for k in ROLE_KEYWORDS)
+
+
+def _split_company_role(a: str, b: str):
+    """Order-agnostic: whichever part carries a job keyword is the role."""
+    a, b = (a or "").strip(), (b or "").strip()
+    if _looks_like_role(b) and not _looks_like_role(a):
+        return a, b
+    if _looks_like_role(a) and not _looks_like_role(b):
+        return b, a
+    return a, b  # default: Company — Role
+
+
+def _valid_entry(company: str, role: str, period: str) -> bool:
+    return bool(
+        company and role and period
+        and DATE_RANGE_PAT.search(period)
+        and not is_placeholder_company(company)
+        and len(company) <= 60 and len(role) <= 60
+    )
+
+
 def extract_experience_entries(text: str) -> list:
     """Deterministic experience extraction. Returns [] unless real evidence found.
 
-    Accepts header lines like `Company — Role | Period` inside a PROFESSIONAL /
-    WORK EXPERIENCE section, plus following •/- bullets. Never fabricates.
+    Handles PDF quirks (column layouts, split lines, dash variants) and header
+    shapes: `Company — Role | Period`, `Role at Company, Period`,
+    `(Period)` suffixes, and two-line headers. Never fabricates.
     """
     if not text:
         return []
-    lines = [(l or "").strip(" \t") for l in text.splitlines()]
+    # Normalize: mojibake dashes/columns into plain forms on a working copy.
+    work = text.replace("\r\n", "\n").replace("\r", "\n")
+    for bad, good in (("â€”", "-"), ("â€“", "-"), ("\u00a0", " ")):
+        work = work.replace(bad, good)
+    low = work.lower()
+
+    # Substring section slice (robust to inline/column-mangled headers).
+    # ponytail: longest keys first — bare "experience" also occurs inside the
+    # summary ("hands-on experience"), which would slice the section too early.
+    sec_keys = ["professional experience", "work experience", "work history",
+                "employment history", "career history", "employment", "experience"]
     start = None
-    for i, l in enumerate(lines):
-        if re.match(r"^(professional\s+experience|work\s+experience|employment(\s+history)?|experience)\s*$", l, re.I):
-            start = i + 1
+    for key in sec_keys:
+        occ, pos = [], low.find(key)
+        while pos != -1:
+            occ.append(pos)
+            pos = low.find(key, pos + 1)
+        if occ:
+            # prefer a line-start occurrence (real header) over prose mentions
+            hdr = next((p for p in occ if p == 0 or low[p - 1] == "\n"), occ[0])
+            start = hdr + len(key)
             break
     if start is None:
         return []
-    end = len(lines)
-    for j in range(start, len(lines)):
-        lj = lines[j]
-        if re.match(r"^[A-Z][A-Z\s&/]{3,}$", lj) and len(lj.split()) <= 4:
-            if any(k in lj.lower() for k in ["project", "education", "skill", "summary", "certification", "additional", "contact", "achievement"]):
-                end = j
+    end_keys = ["selected projects", "key projects", "additional information",
+                "professional summary", "technical skills", "open source",
+                "certifications", "achievements", "projects", "education",
+                "summary", "skills", "contact", "links"]
+    end = len(work)
+    for key in end_keys:
+        # only a line-start occurrence ends the section (bullets may mention
+        # words like "skills" mid-line — those must not cut the slice)
+        pos, idx = start, -1
+        while True:
+            pos = low.find(key, pos)
+            if pos == -1 or pos >= end:
                 break
-    body = [l for l in lines[start:end]]
-    hdr_pat = re.compile(r"^(.+?)\s+[—–-]\s+(.+?)\s*\|\s*(.+)$")
-    date_pat = re.compile(r"(19|20)\d{2}|present|current|now", re.I)
+            if pos == 0 or low[pos - 1] == "\n":
+                idx = pos
+                break
+            pos += 1
+        if idx != -1 and work[start:idx].count("\n") >= 1:
+            end = idx
+    body = [l.strip(" \t") for l in work[start:end].splitlines()]
+
+    hdr_pat = re.compile(r"^(.+?)\s+[—–\-‐|·:]\s+(.+?)\s*[\|,·]\s*(.+)$")
+    hdr_dash = re.compile(r"^(.+?)\s+[—–\-‐]\s+(.+)$")
+    paren_pat = re.compile(r"^(.+?)\s*\(\s*(.+?)\s*\)\s*$")
+    at_pat = re.compile(r"^(.+?)\s+at\s+(.+?)\s*[,|]\s*(.+)$", re.I)
     entries = []
+
+    def collect_bullets(fro: int) -> tuple:
+        bullets = []
+        k = fro
+        while k < len(body) and len(bullets) < 8:
+            bl = body[k].strip()
+            if not bl:
+                k += 1
+                continue
+            if hdr_pat.match(bl) or hdr_dash.match(bl) and DATE_RANGE_PAT.search(bl):
+                break
+            if DATE_RANGE_PAT.search(bl) and len(bl) <= 90 and not bl[:1] in "•-*▪‣":
+                break  # next header without dash (two-line form handled below)
+            bm = re.match(r"^[•\-\*▪‣>]\s*(.+)$", bl)
+            if bm and len(bm.group(1).strip()) >= 10:
+                bullets.append(bm.group(1).strip()[:300])
+            elif len(bl) >= 40 and not bl.isupper():
+                bullets.append(bl[:300])
+            k += 1
+        return bullets, k
+
     i = 0
     while i < len(body):
-        m = hdr_pat.match(body[i])
-        if m:
-            company, role, period = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
-            if (company and role and date_pat.search(period)
-                    and not is_placeholder_company(company)
-                    and len(company) <= 60 and len(role) <= 60):
-                bullets = []
-                k = i + 1
-                while k < len(body) and len(bullets) < 8:
-                    bl = body[k]
-                    if hdr_pat.match(bl):
-                        break
-                    bm = re.match(r"^[•\-\*▪‣]\s*(.+)$", bl)
-                    if bm and len(bm.group(1).strip()) >= 10:
-                        bullets.append(bm.group(1).strip()[:300])
-                    elif bl.strip() and len(bl.strip()) >= 40 and not bl.isupper():
-                        bullets.append(bl.strip()[:300])
-                    k += 1
-                entries.append({"company": company, "role": role, "period": period, "bullets": bullets})
-                i = k
-                continue
+        line = body[i].strip()
+        nxt = body[i + 1].strip() if i + 1 < len(body) else ""
+        matched = None
+
+        m = hdr_pat.match(line)
+        if m and DATE_RANGE_PAT.search(m.group(3)):
+            company, role = _split_company_role(m.group(1), m.group(2))
+            matched = (company, role, m.group(3).strip())
+        if not matched:
+            m = at_pat.match(line)
+            if m and DATE_RANGE_PAT.search(m.group(3)):
+                matched = (m.group(2).strip(), m.group(1).strip(), m.group(3).strip())
+        if not matched:
+            m = paren_pat.match(line)
+            if m and DATE_RANGE_PAT.search(m.group(2)):
+                inner = m.group(1)
+                dm = hdr_dash.match(inner)
+                if dm:
+                    company, role = _split_company_role(dm.group(1), dm.group(2))
+                    matched = (company, role, m.group(2).strip())
+        if not matched and nxt:
+            # Two-line header: `Company` / `Role | Period` (or with dash/comma).
+            dm = re.match(r"^(.+?)\s*[\|,—–\-‐·]\s*(.+)$", nxt)
+            if (dm and DATE_RANGE_PAT.search(dm.group(2)) and len(line) <= 60
+                    and not DATE_RANGE_PAT.search(line) and line
+                    and not line[:1] in "•-*▪‣"):
+                company, role = _split_company_role(line, dm.group(1))
+                if _valid_entry(company, role, dm.group(2).strip()):
+                    matched = (company, role, dm.group(2).strip())
+                    i += 1  # consume the second header line
+        if matched and _valid_entry(*matched):
+            company, role, period = matched
+            bullets, k = collect_bullets(i + 1)
+            entries.append({"company": company, "role": role, "period": period, "bullets": bullets})
+            i = k
+            if len(entries) >= 3:
+                break
+            continue
         i += 1
     return entries[:3]
 
