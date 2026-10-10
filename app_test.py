@@ -1303,7 +1303,7 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input=""):
     if not name and lines:
         for candidate in lines[:4]:
             cand_clean = re.sub(r"[^a-zA-Z\s\.]", "", candidate).strip()
-            if 2 <= len(cand_clean.split()) <= 4 and not any(kw in cand_clean.lower() for kw in ["resume", "curriculum", "page", "developer", "engineer", "contact", "email", "phone"]):
+            if 2 <= len(cand_clean.split()) <= 4 and not any(kw in cand_clean.lower() for kw in ["resume", "curriculum", "page", "developer", "engineer", "contact", "email", "phone", "profile", "career", "master", "portfolio", "biodata", "summary", "objective"]):
                 name = cand_clean
                 break
         if not name:
@@ -1650,6 +1650,26 @@ def render_welcome_screen():
                 st.rerun()
 
 
+def clean_job_title(raw, fallback="Full-Stack Developer"):
+    """Reduce a raw JD title fragment to a short role label. Never leak JD sentences into resume headlines."""
+    if not raw or not str(raw).strip():
+        return fallback
+    t = re.sub(r"\s+", " ", str(raw).strip())
+    # keep first segment before separators like " - ", " | ", " : "
+    t = re.split(r"\s+[|\-:–—]\s+", t, maxsplit=1)[0].strip()
+    # cut JD-sentence clauses ("we are looking for...", "to assist in...", ...)
+    m = re.search(r"\b(we are looking|we're looking|we are hiring|to assist|join our|about the role|job description|immediate joiner|looking for a|looking for an)\b", t, re.IGNORECASE)
+    if m:
+        t = t[:m.start()].strip(" -–—:,")
+    words = t.split()
+    if len(words) > 6:
+        t = " ".join(words[:6])
+    t = t.strip(" -–—:,")[:60].strip()
+    if len(t) < 3:
+        return fallback
+    return t
+
+
 def heuristic_tailor(resume_text, job, skills):
     """Smart ATS tailor with Prathamesh Jadhav's authentic career details and JD keyword injection."""
     jd_text = (job.get("description") or "").lower()
@@ -1660,6 +1680,7 @@ def heuristic_tailor(resume_text, job, skills):
     matched = [s for s in user_skills if s.lower() in jd_text]
 
     title = job.get("title") or "PHP Developer / Full-Stack Developer"
+    title = clean_job_title(title)
     company = job.get("company") or "the company"
 
     base_score = 80
@@ -1693,10 +1714,16 @@ def heuristic_tailor(resume_text, job, skills):
         "Tools & Libraries:": "Git, GitHub, Composer, XAMPP, PHPMailer, PhpOffice, Tiptap"
     }
 
+    # ponytail: cleaned title is already a role label — prefix only when it lacks one
+    _tl = title.lower()
+    if any(k in _tl for k in ["developer", "engineer", "intern", "analyst", "designer", "lead", "architect"]):
+        tailored_title = title
+    else:
+        tailored_title = f"PHP Developer - {title}" if "php" in _tl else f"Full-Stack Developer - {title}"
     return {
         "ats_score": score,
         "missing_skills": missing,
-        "tailored_title": f"PHP Developer - {title}" if "php" in title.lower() else f"Full-Stack Developer - {title}",
+        "tailored_title": tailored_title,
         "tailored_summary": summary,
         "traction_shastra_bullets": ts_bullets,
         "categorized_skills": cat_skills,
@@ -1717,7 +1744,7 @@ def gemini_parse_jd(raw_text):
         for line in lines[:10]:
             clean_l = re.sub(r'^[^\w]+', '', line)
             if any(k in clean_l.lower() for k in ["developer", "engineer", "lead", "architect", "programmer", "php", "full stack", "frontend", "backend", "intern", "react", "node", "python"]):
-                title = clean_l[:60]
+                title = clean_job_title(clean_l[:120])
                 break
         company = "Not detected"
         for line in lines[:12]:
@@ -1795,7 +1822,7 @@ Return STRICT JSON only:
             if m_json:
                 data = json.loads(m_json.group(0))
                 return {
-                    "title": data.get("title") or "Software Developer",
+                    "title": clean_job_title(data.get("title") or "Software Developer"),
                     "company": data.get("company") or "Not detected",
                     "location": data.get("location") or "Not detected",
                     "experience_raw": data.get("experience_raw") or "Not specified",
@@ -1831,7 +1858,7 @@ Return STRICT JSON only:
 {{
   "ats_score": 88,
   "missing_skills": ["Skill1", "Skill2"],
-  "tailored_title": "PHP Developer - {job.get('title')}",
+  "tailored_title": "Short 2-5 word role label only, e.g. 'PHP Developer' or 'Full-Stack Developer'. Never copy a JD sentence.",
   "tailored_summary": "...2-3 impactful lines highlighting PHP/Laravel, MySQL, JavaScript/React, REST APIs tailored to {job.get('company')}...",
   "traction_shastra_bullets": [
     "Develop and maintain business websites and web applications using PHP, MySQL, JavaScript, HTML and CSS...",
@@ -1858,6 +1885,8 @@ No commentary or text outside JSON."""
             m_json = re.search(r"\{.*\}", txt, re.DOTALL)
             if m_json:
                 data = json.loads(m_json.group(0))
+                if data.get("tailored_title"):
+                    data["tailored_title"] = clean_job_title(data["tailored_title"])
                 if "tailored_bullets" not in data and "traction_shastra_bullets" in data:
                     data["tailored_bullets"] = data["traction_shastra_bullets"]
                 if "traction_shastra_bullets" not in data and "tailored_bullets" in data:
@@ -2034,6 +2063,7 @@ def build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean"):
     pdf.cell(0, 7.5, sanitize_pdf_text(name.upper()), new_x="LMARGIN", new_y="NEXT", align="C")
 
     role_title = tailored_data.get("tailored_title") or profile.get("base_role") or "PHP DEVELOPER | FULL-STACK DEVELOPER"
+    role_title = clean_job_title(role_title)[:70]  # ponytail: headline guard — JD sentences must never reach the PDF
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(*c_accent)
     pdf.cell(0, 5, sanitize_pdf_text(role_title.upper()), new_x="LMARGIN", new_y="NEXT", align="C")
