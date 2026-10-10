@@ -1839,6 +1839,11 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
 
     phone_m = re.search(r"(\+?\d{1,3}[\s-]?)?\(?\d{3,5}\)?[\s-]?\d{3,5}[\s-]?\d{3,5}", text)
     phone = phone_m.group(0) if phone_m else ""
+    if not phone:
+        # ponytail: Indian 5+5 mobile format ("93266 71284", "+91 93266 71284") the generic pattern misses
+        m10 = re.search(r"\+?91[\s-]?\d{5}[\s-]?\d{5}|\b\d{5}[\s-]\d{5}\b", text)
+        if m10:
+            phone = m10.group(0)
 
     # Classify links and profile handles
     if classified_links:
@@ -2572,10 +2577,12 @@ def heuristic_tailor(resume_text, job, skills):
     missing = [s for s in common_reqs if s.lower() in jd_text and s.lower() not in resume_text.lower()][:4]
 
     primary_skills = ", ".join(matched[:4]) if matched else "PHP, MySQL, JavaScript, React, REST APIs"
+    # ponytail: never claim Laravel unless it is in the effective skill set (validator would flag it)
+    laravel_clause = " and actively expanding backend expertise with Laravel" if any("laravel" in s.lower() for s in user_skills) else ""
     summary = (
         f"PHP / Full-Stack Developer with hands-on experience in PHP, MySQL, JavaScript, HTML, CSS, React and Git. "
         f"Currently developing client websites and web applications with backend logic, database integrations, REST APIs, "
-        f"and responsive interfaces. Experienced with {primary_skills} and actively expanding backend expertise with Laravel "
+        f"and responsive interfaces. Experienced with {primary_skills}{laravel_clause} "
         f"aligned with {title} requirements at {company}."
     )
 
