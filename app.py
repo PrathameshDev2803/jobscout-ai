@@ -3716,7 +3716,7 @@ if active_nav == "Jobs":
             # ponytail: editable role/city — empty city = broad All-India pool, "Developer" = all dev jobs
             st.session_state.setdefault("plat_q_override", target_q)
             st.session_state.setdefault("plat_city_override", user_city)
-            pc1, pc2, pc3 = st.columns([2.2, 1.8, 1.2], vertical_alignment="end")
+            pc1, pc2, pc3 = st.columns([2.2, 1.8, 1.2], vertical_alignment="bottom")
             with pc1:
                 plat_q_val = st.text_input("Role keyword", value=st.session_state.get("plat_q_override", target_q), key="plat_q_input", placeholder="e.g. Developer, PHP Developer...")
             with pc2:
