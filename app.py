@@ -3276,9 +3276,59 @@ if not st.session_state.get("onboarded", False):
 
 p = get_active_profile()
 
-# Load raw jobs
+# ponytail: scoring ~1257 jobs cost ~2s local / ~10s on Cloud on EVERY click (no cache).
+# Cache load+score 120s; db_sig + profile_sig args auto-invalidate on any DB/profile change.
+def _profile_sig(pp):
+    try:
+        return json.dumps({"b": pp.get("base_role"), "s": pp.get("skills"), "l": pp.get("location"),
+                           "t": pp.get("search_terms"), "e": pp.get("experience_years")}, sort_keys=True)
+    except Exception:
+        return str(int(time.time() // 120))
+
+
+def _db_sig():
+    try:
+        c = sqlite3.connect(DB, timeout=5.0)
+        n = c.execute("SELECT COUNT(*), MAX(created_at) FROM jobs").fetchone()
+        try:
+            extra = c.execute("SELECT COALESCE(SUM(closed),0), COALESCE(SUM(applied),0) FROM jobs").fetchone()
+        except Exception:
+            extra = (0, 0)
+        c.close()
+        return f"{n[0]}|{n[1]}|{extra[0]}|{extra[1]}|{os.path.getmtime(DB)}"
+    except Exception:
+        return str(int(time.time() // 120))
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _cached_scored_jobs(q, psig, dsig, prof_json):
+    pp = json.loads(prof_json)
+    out = []
+    for jj in get_jobs(q):
+        m = compute_match(pp, jj)
+        jj["_score"] = m["match_score"]
+        jj["_cat"] = m["category"]
+        jj["_eligible"] = m["eligible"]
+        jj["_loc_ok"] = m["location_match"]
+        jj["_loc_reason"] = m["location_reason"]
+        jj["_rej"] = m["rejection_reasons"]
+        jj["_tiers"] = m["tiers"]
+        jj["_matched"] = m["matched_skills"]
+        jj["_missing_core"] = m["missing_core_skills"]
+        jj["_exp"] = m["experience_detail"]
+        jj["_core"] = m["jd_primary_stack"]
+        out.append(jj)
+    return out
+
+# Load raw jobs (scored, cached)
 q_search = st.session_state.get("q_search", "")
-raw_jobs = get_jobs(q_search)
+try:
+    _prof_json = json.dumps({"base_role": p.get("base_role"), "skills": p.get("skills"),
+                             "location": p.get("location"), "search_terms": p.get("search_terms"),
+                             "experience_years": p.get("experience_years")}, sort_keys=True)
+except Exception:
+    _prof_json = "{}"
+raw_jobs = _cached_scored_jobs(q_search, _profile_sig(p), _db_sig(), _prof_json)
 unique_sources = ["All Sources"] + sorted(list(set(j.get("source", "other") for j in raw_jobs if j.get("source"))))
 sel_source = st.session_state.get("source_flt", "All Sources")
 if sel_source not in unique_sources:
@@ -3290,23 +3340,9 @@ hc_state = {"searchQuery": target_q, "sortBy": "date"}
 hc_encoded = urllib.parse.quote(json.dumps(hc_state))
 hc_url = f"https://hiring.cafe/?searchState={hc_encoded}"
 
-# ---------- data: discovery (eligible) + match score ----------
+# ---------- data: discovery (eligible) + match score (already scored in cached loader) ----------
 all_jobs = raw_jobs if sel_source == "All Sources" else [j for j in raw_jobs if j.get("source") == sel_source]
-scored = []
-for j in all_jobs:
-    m = compute_match(p, j)
-    j["_score"] = m["match_score"]
-    j["_cat"] = m["category"]
-    j["_eligible"] = m["eligible"]
-    j["_loc_ok"] = m["location_match"]
-    j["_loc_reason"] = m["location_reason"]
-    j["_rej"] = m["rejection_reasons"]
-    j["_tiers"] = m["tiers"]
-    j["_matched"] = m["matched_skills"]
-    j["_missing_core"] = m["missing_core_skills"]
-    j["_exp"] = m["experience_detail"]
-    j["_core"] = m["jd_primary_stack"]
-    scored.append(j)
+scored = list(all_jobs)  # ponytail: copy — never sort-mutate the cached list in place
 
 sort_mode = st.session_state.get("sort_mode", "Highest Match %")
 if sort_mode == "Newest":
