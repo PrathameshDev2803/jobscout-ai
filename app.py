@@ -3171,18 +3171,39 @@ def build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean"):
             "name": "JobScout AI — Tech Job Radar & ATS Tailor",
             "stack": "Python, Streamlit, Gemini API, SQLite",
             "repo_url": "https://github.com/PrathameshDev2803/jobscout-ai",
+            "live_url": "https://jobscout-dev.streamlit.app",
             "bullets": ["Autonomous multi-portal job aggregator, heuristic match scoring engine, and Gemini AI ATS resume tailor."]
         }
     ]
     for prj in projects:
-        pdf.set_font("Helvetica", "B", 9.5)
-        pdf.set_text_color(*c_head)
         p_name = prj.get("name", "").upper()
-        repo_link = prj.get("repo_url", "")
+        repo_link = prj.get("repo_url", "") or ""
+        live_link = prj.get("live_url", "") or prj.get("demo_url", "") or ""
+        # ponytail: visible beside-title links (old title-only link was hover-only / invisible in print)
+        vis_links = []
         if repo_link:
-            pdf.cell(125, 4.8, sanitize_pdf_text(p_name), link=repo_link, new_x="RIGHT", new_y="TOP")
-        else:
-            pdf.cell(125, 4.8, sanitize_pdf_text(p_name), new_x="RIGHT", new_y="TOP")
+            vis_links.append(("View on GitHub", repo_link))
+        if live_link:
+            vis_links.append(("View Live", live_link))
+        t_txt = sanitize_pdf_text(p_name)
+        pdf.set_font("Helvetica", "B", 9.5)
+        t_w = pdf.get_string_width(t_txt) + 1
+        pdf.set_font("Helvetica", "U", 8)
+        link_ws = [pdf.get_string_width(" " + lbl) + 1 for lbl, _ in vis_links]
+        pdf.set_font("Helvetica", "B", 9.5)
+        if t_w + sum(link_ws) > 124:
+            # ponytail: extreme-length guard — ellipsis title so links never collide with the right stack label
+            while t_txt and pdf.get_string_width(t_txt + "...") + 1 + sum(link_ws) > 124:
+                t_txt = t_txt[:-1]
+            if t_txt != sanitize_pdf_text(p_name):
+                t_txt += "..."
+            t_w = pdf.get_string_width(t_txt) + 1
+        pdf.set_text_color(*c_head)
+        pdf.cell(t_w, 4.8, t_txt, link=(repo_link or 0), new_x="RIGHT", new_y="TOP")
+        pdf.set_font("Helvetica", "U", 8)
+        pdf.set_text_color(*c_accent)
+        for (lbl, url), w in zip(vis_links, link_ws):
+            pdf.cell(w, 4.8, " " + lbl, link=url, new_x="RIGHT", new_y="TOP")
         pdf.set_font("Helvetica", "I", 8.5)
         pdf.set_text_color(*c_meta)
         pdf.cell(0, 4.8, sanitize_pdf_text(prj.get("stack", "")), new_x="LMARGIN", new_y="NEXT", align="R")

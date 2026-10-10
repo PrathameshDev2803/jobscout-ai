@@ -74,6 +74,7 @@
       "name": "JobScout AI — Tech Job Radar & ATS Tailor",
       "stack": "Python, Streamlit, Gemini API, SQLite",
       "repo_url": "https://github.com/PrathameshDev2803/jobscout-ai",
+      "live_url": "https://jobscout-dev.streamlit.app",
       "bullets": [
         "Autonomous multi-portal job aggregator, heuristic match scoring engine, and Gemini AI ATS resume tailor."
       ]
