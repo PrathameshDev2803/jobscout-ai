@@ -2326,7 +2326,8 @@ def render_job_card(j, col, is_filtered=False, key_prefix=""):
         rej_html = f"<div class='filtered-why'>🚫 {rej_text}</div>"
 
     t_str = job_time(j)
-    is_fresh = any(kw in t_str.lower() for kw in ["just now", "min ago", "h ago", "1d ago"])
+    tl = t_str.lower().strip()  # ponytail: exact/endswith match — "11d ago" contains "1d ago" as substring
+    is_fresh = tl in ("just now", "1d ago") or tl.endswith("min ago") or tl.endswith("h ago")
     fresh_badge = " · <span style='color:#10b981;font-weight:750;font-size:11px;'>● Fresh</span>" if is_fresh and not is_closed and not is_filtered else ""
 
     card_html = (

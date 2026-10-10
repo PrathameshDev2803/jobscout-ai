@@ -1046,12 +1046,21 @@ div[data-testid="stTextInput"] input:focus-visible {
 st.markdown(CSS, unsafe_allow_html=True)
 
 
-def get_major_platforms(p, target_q=""):
+def get_major_platforms(p, target_q="", loc_q="__default__"):
     role = target_q.strip() if target_q.strip() else p.get("base_role", "Full Stack Developer")
-    loc_city = p.get("location", {}).get("city", "Mumbai") if isinstance(p.get("location"), dict) else "Mumbai"
+    if loc_q == "__default__":
+        loc_city = p.get("location", {}).get("city", "Mumbai") if isinstance(p.get("location"), dict) else "Mumbai"
+    else:
+        loc_city = (loc_q or "").strip()  # ponytail: empty = broad / All-India, no location filter
     role_enc = urllib.parse.quote(role)
     city_enc = urllib.parse.quote(loc_city)
     city_slug = re.sub(r'[^a-zA-Z0-9]+', '-', loc_city.lower()).strip('-')
+
+    # ponytail: broad mode drops location params so pool stays wide (Developer, no city)
+    indeed_url = f"https://in.indeed.com/jobs?q={role_enc}&l={city_enc}" if loc_city else f"https://in.indeed.com/jobs?q={role_enc}"
+    linkedin_url = f"https://www.linkedin.com/jobs/search/?keywords={role_enc}&location={city_enc}" if loc_city else f"https://www.linkedin.com/jobs/search/?keywords={role_enc}"
+    naukri_url = f"https://www.naukri.com/jobs-in-{city_slug}?k={role_enc}" if city_slug else f"https://www.naukri.com/jobs?k={role_enc}"
+    foundit_url = f"https://www.foundit.in/srp/results?query={role_enc}&locations={city_enc}" if loc_city else "https://www.foundit.in/srp/results?query=" + role_enc
 
     hc_state = {"searchQuery": role, "sortBy": "date"}
     hc_enc = urllib.parse.quote(json.dumps(hc_state))
@@ -1066,7 +1075,7 @@ def get_major_platforms(p, target_q=""):
             "badge_color": "#60a5fa",
             "badge_border": "rgba(59,130,246,0.3)",
             "desc": "India's highest volume job board. Direct corporate & agency postings.",
-            "url": f"https://in.indeed.com/jobs?q={role_enc}&l={city_enc}",
+            "url": indeed_url,
             "hint": "Search, copy viewjob URL, paste in Tab 2"
         },
         {
@@ -1078,7 +1087,7 @@ def get_major_platforms(p, target_q=""):
             "badge_color": "#38bdf8",
             "badge_border": "rgba(14,165,233,0.3)",
             "desc": "Direct recruiter listings & easy-apply corporate and startup roles.",
-            "url": f"https://www.linkedin.com/jobs/search/?keywords={role_enc}&location={city_enc}",
+            "url": linkedin_url,
             "hint": "Copy LinkedIn job post link and paste in Tab 2"
         },
         {
@@ -1090,7 +1099,7 @@ def get_major_platforms(p, target_q=""):
             "badge_color": "#fb923c",
             "badge_border": "rgba(249,115,22,0.3)",
             "desc": "India's largest IT job portal with verified enterprise recruiters.",
-            "url": f"https://www.naukri.com/jobs-in-{city_slug}?k={role_enc}",
+            "url": naukri_url,
             "hint": "Open, copy job link or JD text into Tab 1/2"
         },
         {
@@ -1162,7 +1171,7 @@ def get_major_platforms(p, target_q=""):
             "badge_color": "#818cf8",
             "badge_border": "rgba(99,102,241,0.3)",
             "desc": "Leading Indian IT MNCs, banking & enterprise technology consultancies.",
-            "url": f"https://www.foundit.in/srp/results?query={role_enc}&locations={city_enc}",
+            "url": foundit_url,
             "hint": "Enterprise Indian tech roles"
         },
         {
@@ -3142,7 +3151,8 @@ def render_job_card(j, col, is_filtered=False, key_prefix=""):
         rej_html = f"<div class='filtered-why'>🚫 {rej_text}</div>"
 
     t_str = job_time(j)
-    is_fresh = any(kw in t_str.lower() for kw in ["just now", "min ago", "h ago", "1d ago"])
+    tl = t_str.lower().strip()  # ponytail: exact/endswith match — "11d ago" contains "1d ago" as substring
+    is_fresh = tl in ("just now", "1d ago") or tl.endswith("min ago") or tl.endswith("h ago")
     fresh_badge = " · <span style='color:#10b981;font-weight:750;font-size:11px;'>● Fresh</span>" if is_fresh and not is_closed and not is_filtered else ""
 
     card_html = (
@@ -3703,8 +3713,24 @@ if active_nav == "Jobs":
                     st.link_button(f"Search {plat['name'].split()[0]} ↗", plat["url"], use_container_width=True, key=f"q_plat_btn_{plat['id']}")
 
         else:
-            platforms = get_major_platforms(p, target_q)
-            st.markdown(f"<p style='font-size:12.5px;color:#94a3b8;margin-bottom:12px;'>One-click direct launchers pre-configured for <b>{html.escape(target_q)}</b> in <b>{html.escape(user_city)}</b>. Open any platform, find any job, copy the URL or description, and switch to <b>Tab 1 or Tab 2</b> above to tailor your resume in 5 seconds!</p>", unsafe_allow_html=True)
+            # ponytail: editable role/city — empty city = broad All-India pool, "Developer" = all dev jobs
+            st.session_state.setdefault("plat_q_override", target_q)
+            st.session_state.setdefault("plat_city_override", user_city)
+            pc1, pc2, pc3 = st.columns([2.2, 1.8, 1.2], vertical_alignment="end")
+            with pc1:
+                plat_q_val = st.text_input("Role keyword", value=st.session_state.get("plat_q_override", target_q), key="plat_q_input", placeholder="e.g. Developer, PHP Developer...")
+            with pc2:
+                plat_city_val = st.text_input("City (khali = All India)", value=st.session_state.get("plat_city_override", user_city), key="plat_city_input", placeholder="Mumbai / khali chhodo")
+            with pc3:
+                if st.button("🌐 Broad: All Developer jobs", key="plat_broad_btn", help="Role=Developer, City=khali → sabse bada pool"):
+                    st.session_state["plat_q_override"] = "Developer"
+                    st.session_state["plat_city_override"] = ""
+                    st.rerun()
+            st.session_state["plat_q_override"] = plat_q_val
+            st.session_state["plat_city_override"] = plat_city_val
+            platforms = get_major_platforms(p, plat_q_val, plat_city_val)
+            plat_loc_label = plat_city_val.strip() if plat_city_val.strip() else "All India (broad)"
+            st.markdown(f"<p style='font-size:12.5px;color:#94a3b8;margin-bottom:12px;'>One-click direct launchers pre-configured for <b>{html.escape(plat_q_val)}</b> in <b>{html.escape(plat_loc_label)}</b>. Open any platform, find any job, copy the URL or description, and switch to <b>Tab 1 or Tab 2</b> above to tailor your resume in 5 seconds!</p>", unsafe_allow_html=True)
 
             row1_cols = st.columns(5)
             for i, plat in enumerate(platforms[:5]):
