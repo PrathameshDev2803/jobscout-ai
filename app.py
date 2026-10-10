@@ -3921,9 +3921,9 @@ if active_nav == "Jobs":
                         except Exception as err:
                             st.error(f"Error fetching URL: {err}")
 
-            # Quick Launch Row for Major Platforms
-            platforms = get_major_platforms(p, target_q)
-            st.markdown("<div style='margin-top:14px;margin-bottom:8px;font-size:12px;font-weight:700;color:#cbd5e1;'>⚡ 1-Click Search on Major Platforms (Opens pre-filtered for your role; copy link & paste above):</div>", unsafe_allow_html=True)
+            # Quick Launch Row for Major Platforms (broad by default: no city lock, remote stays in pool)
+            platforms = get_major_platforms(p, target_q, "")
+            st.markdown("<div style='margin-top:14px;margin-bottom:8px;font-size:12px;font-weight:700;color:#cbd5e1;'>⚡ 1-Click Search on Major Platforms (Opens pre-filtered: 1yr exp · last 3 days, All India; copy link & paste above):</div>", unsafe_allow_html=True)
             p_cols = st.columns(5)
             for i, plat in enumerate(platforms[:5]):
                 with p_cols[i]:
@@ -3938,14 +3938,14 @@ if active_nav == "Jobs":
                     st.link_button(f"Search {plat['name'].split()[0]} ↗", plat["url"], use_container_width=True, key=f"q_plat_btn_{plat['id']}")
 
         else:
-            # ponytail: editable role/city — empty city = broad All-India pool, "Developer" = all dev jobs
+            # ponytail: editable role/city — default broad (empty city = All India + remote in pool)
             st.session_state.setdefault("plat_q_override", target_q)
-            st.session_state.setdefault("plat_city_override", user_city)
+            st.session_state.setdefault("plat_city_override", "")
             pc1, pc2, pc3 = st.columns([2.2, 1.8, 1.2], vertical_alignment="bottom")
             with pc1:
                 plat_q_val = st.text_input("Role keyword", value=st.session_state.get("plat_q_override", target_q), key="plat_q_input", placeholder="e.g. Developer, PHP Developer...")
             with pc2:
-                plat_city_val = st.text_input("City (empty = All India)", value=st.session_state.get("plat_city_override", user_city), key="plat_city_input", placeholder="Mumbai / leave empty")
+                plat_city_val = st.text_input("City (empty = All India)", value=st.session_state.get("plat_city_override", ""), key="plat_city_input", placeholder="Mumbai / leave empty")
             with pc3:
                 if st.button("🌐 Broad: All Developer jobs", key="plat_broad_btn", help="Role=Developer, City=empty → widest pool"):
                     st.session_state["plat_q_override"] = "Developer"
