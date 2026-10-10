@@ -4267,13 +4267,14 @@ if active_nav == "Jobs":
 
                     missing_block = ""
                     if missing_chips_html:
-                        missing_block = f"""
-                        <div class="ai-warning-card">
-                            <div class="ai-warning-title">⚠️ Missing From Your Profile:</div>
-                            <div>{missing_chips_html}</div>
-                            <div class="ai-warning-note">These were <b>NOT added</b> to your resume. <i>(Authenticity Guarantee: zero fabricated experience)</i></div>
-                        </div>
-                        """
+                        # ponytail: flush-left HTML — indented nested markup gets parsed as a markdown code block (raw-text bug)
+                        missing_block = (
+                            '<div class="ai-warning-card">'
+                            '<div class="ai-warning-title">⚠️ Missing From Your Profile:</div>'
+                            f"<div>{missing_chips_html}</div>"
+                            '<div class="ai-warning-note">These were <b>NOT added</b> to your resume. <i>(Authenticity Guarantee: zero fabricated experience)</i></div>'
+                            "</div>"
+                        )
 
                     st.markdown(f"""
                     <div class="ai-audit-card">
