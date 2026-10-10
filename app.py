@@ -1057,10 +1057,17 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
     city_slug = re.sub(r'[^a-zA-Z0-9]+', '-', loc_city.lower()).strip('-')
 
     # ponytail: broad mode drops location params so pool stays wide (Developer, no city)
+    # Auto-filters on every portal that documents them: 1yr exp + posted in last 3 days
     indeed_url = f"https://in.indeed.com/jobs?q={role_enc}&l={city_enc}" if loc_city else f"https://in.indeed.com/jobs?q={role_enc}"
+    indeed_url += "&fromage=3&explvl=entry_level&sort=date"
     linkedin_url = f"https://www.linkedin.com/jobs/search/?keywords={role_enc}&location={city_enc}" if loc_city else f"https://www.linkedin.com/jobs/search/?keywords={role_enc}"
+    linkedin_url += "&f_TPR=r259200&f_E=2&sortBy=DD"
     naukri_url = f"https://www.naukri.com/jobs-in-{city_slug}?k={role_enc}" if city_slug else f"https://www.naukri.com/jobs?k={role_enc}"
+    naukri_url += "&experience=1&jobAge=3"
     foundit_url = f"https://www.foundit.in/srp/results?query={role_enc}&locations={city_enc}" if loc_city else "https://www.foundit.in/srp/results?query=" + role_enc
+    glassdoor_url = f"https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={role_enc}&fromAge=3"
+    # NOTE: Wellfound / HiringCafe / Instahyre / Cutshort / YC expose no documented
+    # exp/date URL params, so their links stay unfiltered (filter in 1 click on-site).
 
     hc_state = {"searchQuery": role, "sortBy": "date"}
     hc_enc = urllib.parse.quote(json.dumps(hc_state))
@@ -1183,7 +1190,7 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
             "badge_color": "#10b981",
             "badge_border": "rgba(5,150,105,0.3)",
             "desc": "Roles with verified salary transparency & employee work culture reviews.",
-            "url": f"https://www.glassdoor.co.in/Job/jobs.htm?sc.keyword={role_enc}",
+            "url": glassdoor_url,
             "hint": "Check salary range before applying"
         }
     ]
@@ -3948,7 +3955,7 @@ if active_nav == "Jobs":
             st.session_state["plat_city_override"] = plat_city_val
             platforms = get_major_platforms(p, plat_q_val, plat_city_val)
             plat_loc_label = plat_city_val.strip() if plat_city_val.strip() else "All India (broad)"
-            st.markdown(f"<p style='font-size:12.5px;color:#94a3b8;margin-bottom:12px;'>One-click direct launchers pre-configured for <b>{html.escape(plat_q_val)}</b> in <b>{html.escape(plat_loc_label)}</b>. Open any platform, find any job, copy the URL or description, and switch to <b>Tab 1 or Tab 2</b> above to tailor your resume in 5 seconds!</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size:12.5px;color:#94a3b8;margin-bottom:12px;'>One-click direct launchers pre-configured for <b>{html.escape(plat_q_val)}</b> in <b>{html.escape(plat_loc_label)}</b> · <b>1yr exp · last 3 days</b> (auto-applied on Indeed, LinkedIn, Naukri, Glassdoor). Open any platform, find any job, copy the URL or description, and switch to <b>Tab 1 or Tab 2</b> above to tailor your resume in 5 seconds!</p>", unsafe_allow_html=True)
 
             row1_cols = st.columns(5)
             for i, plat in enumerate(platforms[:5]):
