@@ -3720,9 +3720,9 @@ if active_nav == "Jobs":
             with pc1:
                 plat_q_val = st.text_input("Role keyword", value=st.session_state.get("plat_q_override", target_q), key="plat_q_input", placeholder="e.g. Developer, PHP Developer...")
             with pc2:
-                plat_city_val = st.text_input("City (khali = All India)", value=st.session_state.get("plat_city_override", user_city), key="plat_city_input", placeholder="Mumbai / khali chhodo")
+                plat_city_val = st.text_input("City (empty = All India)", value=st.session_state.get("plat_city_override", user_city), key="plat_city_input", placeholder="Mumbai / leave empty")
             with pc3:
-                if st.button("🌐 Broad: All Developer jobs", key="plat_broad_btn", help="Role=Developer, City=khali → sabse bada pool"):
+                if st.button("🌐 Broad: All Developer jobs", key="plat_broad_btn", help="Role=Developer, City=empty → widest pool"):
                     st.session_state["plat_q_override"] = "Developer"
                     st.session_state["plat_city_override"] = ""
                     st.rerun()
