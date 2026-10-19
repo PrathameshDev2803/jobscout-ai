@@ -12,8 +12,10 @@
 
 <br/>
 
-**Tired of scrolling 10 job boards and manually tuning your resume for every ATS?**  
-JobScout AI aggregates openings from 7+ platforms in real-time, scores them with deterministic heuristic filters, and uses Google Gemini to tailor your resume & generate ATS-proof PDFs in seconds.
+**Tired of manually tuning your resume for every ATS?**
+JobScout AI takes a job description you found on any portal — via pasted text or a job link — scores it with deterministic heuristic filters, and uses Google Gemini to tailor your resume & generate ATS-proof PDFs in seconds.
+
+> **Product note:** multi-platform job aggregation and background scraping were intentionally removed. You discover jobs on the portals directly (Naukri, Indeed, LinkedIn, company career sites), then use **Paste JD** or **Paste Link** in JobTool to tailor and track. The Jobs page is an application workspace, not a job board.
 
 [Live Demo](https://jobscout-dev.streamlit.app/) • [Features](#-core-capabilities) • [Architecture](#-architecture-flow) • [Quick Start](#-quick-start) • [Configuration](#-configuration) • [Security](#-security--privacy-first)
 
@@ -23,12 +25,12 @@ JobScout AI aggregates openings from 7+ platforms in real-time, scores them with
 
 ## 💥 Core Capabilities
 
-### 1. 🌐 Multi-Engine Job Aggregator
-Scrapes and queries developer openings continuously without manual intervention:
-- **Fast Developer APIs**: Remotive, Arbeitnow, Adzuna, Jobicy.
-- **Startup Ecosystems**: Hasjob (Indian tech startups), Welcome to the Jungle (Algolia search backend).
-- **Aggregator Crawlers**: Indeed & Naukri via headless `python-jobspy`.
-- **Deduplication Engine**: MD5 URL and content-hash tracking prevents duplicate rows in SQLite.
+### 1. 📄 Paste JD / Paste Link Workflow
+Bring a job you found on any portal:
+- **Paste JD**: paste raw job-description text — Gemini extracts title, company, location, experience, and skills.
+- **Paste Link**: import a posting URL (SmartRecruiters, Greenhouse, Lever, Indeed, generic career pages with HTML fallback).
+- **10-platform launcher**: static outbound links to browse portals manually — zero scraping, zero background fetching.
+- If a URL can't be extracted, the app falls back to manual JD paste. No CAPTCHA/proxy bypass, ever.
 
 ### 2. 🎯 Multi-Factor Scoring Engine
 No generic keyword searching. Every job is evaluated against your personalized `profile.json`:
@@ -42,13 +44,9 @@ No generic keyword searching. Every job is evaluated against your personalized `
 - **AI Customization**: Reframes technical summaries and project bullet points with action verbs and target keywords.
 - **1-Click PDF Compilation**: Uses `fpdf2` and `PyMuPDF` to export an ultra-clean, machine-readable ATS-compliant PDF.
 
-### 4. ⏰ Headless Background Worker & Email Alerts
-- Dedicated background worker (`scheduler.py`) continuously updates the database at your chosen interval.
-- Sends **Indeed-style responsive HTML emails** with match scores, requirements breakdown, and direct apply links.
-
-### 5. 🎛️ Dark Glassmorphic Dashboard
-- Built on Streamlit with custom CSS.
-- One-click filters: *Only Remote*, *Strong Matches*, *Applied*, *Shortlisted*.
+### 4. 🗂️ Application Workspace & Tracker
+- Jobs page answers one question: *"Have you found a job? Let's tailor your resume for it."*
+- Quick Actions command bar: **Paste JD** / **Paste Link** / **10 Platforms**.
 - Built-in Application Tracker with status states (`Applied`, `Interview`, `Offer`, `Rejected`).
 
 ---
@@ -57,34 +55,27 @@ No generic keyword searching. Every job is evaluated against your personalized `
 
 ```mermaid
 graph TD
-    subgraph Sources [Job Ingestion Pipeline]
-        S1[Arbeitnow / Remotive / Jobicy]
-        S2[Adzuna API]
-        S3[Hasjob Startups]
-        S4[Indeed & Naukri Jobspy]
-        S5[Welcome To The Jungle Algolia]
+    subgraph Input [Manual Job Input]
+        JD[Paste JD text]
+        Link[Paste Link - ATS APIs + HTML fallback]
+        Portals[10-platform static launcher - outbound only]
     end
 
     subgraph Core [Engine & Matching Core]
-        Ingest[fetch.py - Multi-Threaded Ingester]
-        Dedup[(jobs.db SQLite)]
+        Store[(jobs.db SQLite - tracker store)]
         Matcher[matcher.py - Stack, Location & YOE Scoring]
     end
 
-    subgraph Output [User Interfaces & Workers]
-        UI[app.py - Streamlit Glassmorphic Dashboard]
-        Worker[scheduler.py - Background Runner]
-        Mailer[notifier.py - SMTP Email Dispatcher]
-        AI[Google Gemini 2.5 Flash - ATS Resume Tailor]
+    subgraph Output [User Interfaces]
+        UI[app.py - Streamlit Workspace: Jobs / Applications / Resume / Settings]
+        AI[Google Gemini - ATS Resume Tailor]
+        PDF[fpdf2 + PyMuPDF - ATS PDF + Download]
     end
 
-    S1 & S2 & S3 & S4 & S5 --> Ingest
-    Ingest --> Dedup
-    Dedup --> Matcher
+    JD & Link --> Matcher
     Matcher --> UI
-    Dedup --> Worker
-    Worker --> Mailer
     UI --> AI
+    AI --> PDF
 ```
 
 ---
@@ -118,19 +109,6 @@ Open `.env` and fill in your keys:
 ```env
 # Gemini API Key (Get free at https://aistudio.google.com/app/apikey)
 GEMINI_API_KEY=your_gemini_api_key_here
-
-# (Optional) Adzuna API for local geo-searches
-ADZUNA_APP_ID=
-ADZUNA_APP_KEY=
-
-# (Optional) SMTP Email Alerts
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASSWORD=your_16_char_google_app_password
-ALERT_RECIPIENT_EMAIL=your_email@gmail.com
-EMAIL_ALERTS_ENABLED=true
-ALERT_MIN_SCORE=50
 ```
 
 ### 3. Launch App
@@ -144,11 +122,9 @@ streamlit run app.py
 ## 📂 Repository Structure
 
 ```text
-├── app.py                 # Streamlit UI, Glassmorphic styling, ATS Tailor & Kanban
-├── fetch.py               # Ingestion pipeline & platform scrapers
+├── app.py                 # Streamlit workspace (Jobs / Applications / Resume / Settings), ATS Tailor & Studio
+├── fetch.py               # Tracker store + single-URL job import (Paste Link)
 ├── matcher.py             # Deterministic scoring (Stack, Location, Seniority)
-├── notifier.py            # SMTP HTML email template & dispatch
-├── scheduler.py           # Background threading worker for auto-fetching
 ├── profile.example.json   # Base configuration profile template
 ├── resume.example.txt     # Clean plain-text master resume template
 ├── requirements.txt       # Production dependencies

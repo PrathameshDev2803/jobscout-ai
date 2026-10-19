@@ -15,11 +15,11 @@ resume.txt
 sessions.db
 sessions.db-journal
 
-# Runtime status and background worker logs
-scheduler_status.json
+# Runtime logs
 *.log
 output/
 *.pdf
+generated_resumes/
 
 # Python bytecode & virtual environments
 __pycache__/
