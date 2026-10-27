@@ -6,10 +6,13 @@ fetch_job_from_url(), which powers Paste Link (ATS APIs + generic fallback).
 """
 import hashlib
 import html
+import ipaddress
 import os
 import re
+import socket
 import sqlite3
 from datetime import datetime
+from urllib.parse import urljoin, urlparse
 
 import requests
 from dotenv import load_dotenv
@@ -321,18 +324,104 @@ def delete_generated_resume(resume_id, db_path=DB):
         con.close()
 
 
+_BLOCKED_HOST_SUFFIXES = (".local", ".internal", ".localhost", ".home.arpa")
+_MAX_FETCH_BYTES = 2 * 1024 * 1024
+
+
+def _host_is_public(host):
+    host = (host or "").strip().strip("[]").lower().rstrip(".")
+    if not host or host == "localhost" or host.endswith(_BLOCKED_HOST_SUFFIXES):
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
+                or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
+def _assert_safe_public_url(url):
+    """Reject non-HTTP(S), credential-bearing, and private/internal targets (SSRF guard)."""
+    if not isinstance(url, str) or not url.strip() or len(url) > 2048:
+        raise RuntimeError("Invalid job URL.")
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        raise RuntimeError("Invalid job URL.")
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise RuntimeError("Only http/https job links are supported.")
+    if parsed.username or parsed.password:
+        raise RuntimeError("Job URL must not contain credentials.")
+    if not _host_is_public(parsed.hostname):
+        raise RuntimeError("This URL points to a private or internal address and is blocked.")
+    return url.strip()
+
+
+def _safe_get(url, headers, timeout=15, max_redirects=3):
+    """GET with manual redirect validation, size cap, and content-type check."""
+    current = _assert_safe_public_url(url)
+    for _ in range(max_redirects + 1):
+        resp = requests.get(current, headers=headers, timeout=timeout,
+                            allow_redirects=False, stream=True)
+        if getattr(resp, "is_redirect", False):
+            location = (getattr(resp, "headers", {}) or {}).get("Location", "")
+            if hasattr(resp, "close"):
+                resp.close()
+            if not location:
+                raise RuntimeError("Job link redirect is missing a destination.")
+            current = _assert_safe_public_url(urljoin(current, location))
+            continue
+        resp.raise_for_status()
+        ctype = ((getattr(resp, "headers", {}) or {}).get("Content-Type") or "").lower()
+        if ctype and not any(t in ctype for t in ("text/html", "text/plain",
+                                                  "application/xhtml", "application/json")):
+            if hasattr(resp, "close"):
+                resp.close()
+            raise RuntimeError("Job link did not return a readable HTML/text page.")
+        if not hasattr(resp, "iter_content"):
+            body_text = getattr(resp, "text", "") or ""
+            if len(body_text) > _MAX_FETCH_BYTES:
+                raise RuntimeError("Job page is too large to import.")
+            return resp, body_text
+        chunks = []
+        total = 0
+        for chunk in resp.iter_content(64 * 1024):
+            total += len(chunk)
+            if total > _MAX_FETCH_BYTES:
+                resp.close()
+                raise RuntimeError("Job page is too large to import.")
+            chunks.append(chunk)
+        resp.close()
+        body = b"".join(chunks)
+        return resp, body.decode(getattr(resp, "encoding", None) or "utf-8", errors="ignore")
+    raise RuntimeError("Too many redirects while fetching the job link.")
+
+
 def fetch_job_from_url(url):
     """Manual Indeed/LinkedIn/Any URL import:
-    // ponytail: Indeed blocks plain HTTP with Cloudflare 401; GraphQL jobData endpoint
-    // bypasses Cloudflare cleanly and returns 100% structured title, company, location & JD text.
+    // ponytail: Indeed blocks plain HTTP with Cloudflare 401/403; GraphQL jobData endpoint
+    // returns 100% structured title, company, location & JD text when jobKey (jk or vjk) is present.
     For non-Indeed URLs, falls back to clean HTML extraction.
     """
     url = (url or "").strip()
     if not url:
         return None
+    if "://" in url:
+        url = _assert_safe_public_url(url)
 
-    # 1. Check if Indeed URL or contains jobKey (jk)
-    jk_match = re.search(r'(?:[?&]|%26|/viewjob\?jk=)jk(?:=|%3D)([a-f0-9]+)', url, re.I)
+    is_indeed = bool(re.search(r'indeed\.[a-z.]+', url, re.I))
+
+    # 1. Check if Indeed URL or contains jobKey (jk or vjk)
+    jk_match = re.search(r'(?:[?&]|%26|/viewjob\?jk=)(?:vjk|jk)(?:=|%3D)([a-f0-9]+)', url, re.I)
     if not jk_match and re.fullmatch(r'[a-f0-9]{16}', url, re.I):
         jk_match = re.search(r'([a-f0-9]{16})', url)
 
@@ -365,24 +454,46 @@ def fetch_job_from_url(url):
                 results = r.json().get("data", {}).get("jobData", {}).get("results", [])
                 if results:
                     j = results[0].get("job", {})
-                    title = j.get("title") or "Developer"
-                    co = j.get("employer", {}).get("name") if j.get("employer") else "Company"
-                    loc = "India"
-                    if j.get("location"):
-                        loc = j["location"].get("formatted", {}).get("short") or j["location"].get("formatted", {}).get("long") or "India"
-                    desc = (j.get("description", {}).get("text") or j.get("description", {}).get("html") or "")[:8000]
-                    canonical_url = f"https://in.indeed.com/viewjob?jk={jk}"
-                    return {
-                        "title": title[:300],
-                        "company": co[:200],
-                        "location": loc[:200],
-                        "description": desc,
-                        "url": canonical_url,
-                        "source": "indeed",
-                        "posted_at": datetime.utcnow().isoformat()
-                    }
+                    desc = (j.get("description", {}).get("text") or j.get("description", {}).get("html") or "").strip()
+                    title = (j.get("title") or "Developer").strip()
+                    if desc or title:
+                        co = j.get("employer", {}).get("name") if j.get("employer") else "Company"
+                        loc = "India"
+                        if j.get("location"):
+                            loc = j["location"].get("formatted", {}).get("short") or j["location"].get("formatted", {}).get("long") or "India"
+                        canonical_url = f"https://in.indeed.com/viewjob?jk={jk}"
+                        return {
+                            "title": title[:300],
+                            "company": co[:200],
+                            "location": loc[:200],
+                            "description": desc[:8000],
+                            "url": canonical_url,
+                            "source": "indeed",
+                            "posted_at": datetime.utcnow().isoformat()
+                        }
         except Exception as e:
+            # If GraphQL had an unexpected exception on an Indeed URL, don't silently fall through
+            # to plain requests.get() which is guaranteed to fail with Cloudflare 403.
+            if is_indeed:
+                raise RuntimeError(
+                    "Indeed blocked automated access for this link (access restricted). "
+                    "Please copy the job description directly from the job page and paste it into the 'Paste Job Description' tab."
+                ) from e
             print("Indeed GraphQL fetch error:", e)
+
+        # If it was an Indeed URL and GraphQL returned no job results (e.g. invalid or expired jobKey)
+        if is_indeed:
+            raise RuntimeError(
+                "Could not extract job posting from Indeed (posting may have expired or is unavailable). "
+                "Please copy the job description from the page and paste it into the 'Paste Job Description' tab."
+            )
+
+    # 1b. Indeed URL provided without any job key (search results or category page)
+    if is_indeed:
+        raise ValueError(
+            "This Indeed link is a search or category page, not an individual job posting. "
+            "Please click into an individual job and copy its direct link, or copy and paste the job description text into 'Paste Job Description'."
+        )
 
     # 2. SmartRecruiters direct API lookup
     sr_match = re.search(r'smartrecruiters\.com/([^/]+)/([0-9a-zA-Z]+)', url)
@@ -466,9 +577,19 @@ def fetch_job_from_url(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    r = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
-    r.raise_for_status()
-    raw = r.text
+    try:
+        _resp, raw = _safe_get(url, headers, timeout=15)
+    except requests.exceptions.HTTPError as e:
+        status = getattr(e.response, "status_code", None)
+        if status in (401, 403):
+            raise RuntimeError(
+                f"Access restricted by host (HTTP {status}): This website prevents automated scraping. "
+                "Please copy the job description text and use the 'Paste Job Description' tab."
+            ) from e
+        raise RuntimeError(f"Could not fetch job link (HTTP {status}): {e}") from e
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Network error while connecting to job link: {e}") from e
+
     clean = re.sub(r"<script.*?</script>|<style.*?</style>", " ", raw, flags=re.I | re.S)
     clean = re.sub(r"<[^>]+>", " ", clean)
     clean = html.unescape(re.sub(r"\s+", " ", clean)).strip()

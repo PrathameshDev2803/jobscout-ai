@@ -11,9 +11,13 @@ resume.txt
 *.sqlite3
 *.csv
 *.db
-!jobs.db
+jobs.db
 sessions.db
 sessions.db-journal
+demo.db
+
+# Streamlit server secrets (never commit)
+.streamlit/secrets.toml
 
 # Runtime logs
 *.log

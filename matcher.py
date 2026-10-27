@@ -14,20 +14,23 @@ SKILL_PATTERNS = [
     (".NET", r"\.net\b|dotnet"),
     ("Entity Framework", r"entity framework|\bef core\b"),
     ("MS SQL", r"ms[\s-]?sql|sql server|\bt-?sql\b|stored procedures?|\btriggers\b"),
-    ("MySQL", r"mysql"),
-    ("PostgreSQL", r"postgres"),
-    ("MongoDB", r"mongo"),
-    ("React", r"\breact\b"),
+    ("PostgreSQL", r"postgres(ql)?\b"),
+    ("MongoDB", r"mongo(db)?\b"),
+    ("Redis", r"\bredis\b"),
+    ("Cassandra", r"\bcassandra\b"),
+    ("NoSQL", r"\bnosql\b"),
+    ("SQL", r"\bsql\b"),
+    ("React", r"\breact(\.?js)?\b|reactjs\b"),
     ("Next.js", r"next(\.js)?\b"),
     ("Angular", r"angular"),
-    ("Vue", r"\bvue\b"),
+    ("Vue", r"\bvue(\.?js)?\b|vuejs\b"),
     ("Redux", r"redux"),
-    ("TypeScript", r"typescript"),
-    ("JavaScript", r"javascript"),
+    ("TypeScript", r"typescript|\bts\b"),
+    ("JavaScript", r"javascript|\bjs\b"),
     ("HTML", r"\bhtml\b"),
     ("CSS", r"\bcss\b"),
     ("Tailwind", r"tailwind"),
-    ("Node.js", r"node(\.js)?\b"),
+    ("Node.js", r"node(\.?js)?\b|nodejs\b"),
     ("Express", r"express"),
     ("NestJS", r"nestjs"),
     ("REST API", r"\brest(ful)?\b|web api"),
@@ -353,10 +356,45 @@ def compute_match(profile, job):
     resume = (profile.get("resume_text") or "").lower()
     skills = set(s.lower() for s in profile.get("skills", []))
 
+    # ponytail: incorporate extracted / structured skills from job (from Gemini or ATS)
+    raw_job_skills = job.get("extracted_skills") or job.get("skills") or []
+    if isinstance(raw_job_skills, str):
+        raw_job_skills = [s.strip() for s in raw_job_skills.split(",") if s.strip()]
+
+    def _clean_s(s):
+        return re.sub(r'[\.\-\s]', '', s.lower())
+
+    norm_profile_skills = {_clean_s(s) for s in profile.get("skills", []) if s.strip()}
+
     def has(skill):
-        return skill.lower() in resume or skill.lower() in skills
+        s_low = skill.lower().strip()
+        if not s_low:
+            return False
+        if s_low in resume or s_low in skills:
+            return True
+        s_cl = _clean_s(s_low)
+        if s_cl in norm_profile_skills:
+            return True
+        for sk in skills:
+            if (s_low == "sql" and "nosql" in sk) or (sk == "sql" and "nosql" in s_low):
+                continue
+            if s_low == sk or (len(s_low) >= 3 and len(sk) >= 3 and (s_low in sk or sk in s_low)):
+                if (s_low == "sql" and "nosql" in sk) or (sk == "sql" and "nosql" in s_low):
+                    continue
+                return True
+        return False
 
     tiers = extract_tiers(title, desc)
+    # Merge extracted skills into tiers so all required skills are evaluated in match score
+    if raw_job_skills:
+        existing_norm = {_clean_s(s) for t in tiers.values() for s in t if s}
+        for s in raw_job_skills:
+            if not s or not s.strip():
+                continue
+            sn = _clean_s(s.strip())
+            if sn and sn not in existing_norm:
+                existing_norm.add(sn)
+                tiers["important"].append(s.strip())
     loc_ok, loc_reason = location_match(job.get("location", ""), profile)
     exp_req = extract_experience(jd_text)
     if exp_req is None and SENIOR_TITLE.search(title):
@@ -405,7 +443,7 @@ def compute_match(profile, job):
                 "category": ("Possible" if score >= 35 else "Weak match") if eligible else "Filtered out"}
 
     matched_w = sum(TIER_WEIGHTS[t] for t in tiers for s in tiers[t] if has(s))
-    matched = [s for t in tiers for s in tiers[t] if has(s)]
+    matched = list(dict.fromkeys(s for t in tiers for s in tiers[t] if has(s)))
     missing_core = [s for s in tiers["must_have"] if not has(s)]
     must_recall = (len(tiers["must_have"]) - len(missing_core)) / max(1, len(tiers["must_have"]))
     skill_score = 100 * matched_w / total_w

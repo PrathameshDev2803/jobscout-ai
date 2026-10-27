@@ -101,6 +101,85 @@ class TestFetchJobFromUrl(unittest.TestCase):
             with self.assertRaises(Exception):
                 fetch_job_from_url("https://example.com/nope")
 
+    def test_indeed_vjk_extraction_success(self):
+        # Verifies Issue 3: Indeed vjk= URLs route to GraphQL and return structured job
+        try:
+            import jobspy  # noqa: F401
+        except ImportError:
+            self.skipTest("optional python-jobspy dependency not installed")
+        graphql_resp = {
+            "data": {
+                "jobData": {
+                    "results": [{
+                        "job": {
+                            "key": "713f08235b08fad7",
+                            "title": "Full Stack Developer",
+                            "employer": {"name": "IRIS Business Services Ltd"},
+                            "location": {"formatted": {"short": "Navi Mumbai, Maharashtra"}},
+                            "description": {"text": "Role at IRIS Business Services..."},
+                            "recruit": {"viewJobUrl": "https://in.indeed.com/viewjob?jk=713f08235b08fad7"}
+                        }
+                    }]
+                }
+            }
+        }
+        with patch.object(fetch.requests, "post",
+                          return_value=FakeResp(payload=graphql_resp)):
+            j = fetch_job_from_url("https://in.indeed.com/?from=jobsearch-empty-whatwhere&vjk=713f08235b08fad7")
+        self.assertIsNotNone(j)
+        self.assertEqual(j["title"], "Full Stack Developer")
+        self.assertEqual(j["company"], "IRIS Business Services Ltd")
+        self.assertEqual(j["location"], "Navi Mumbai, Maharashtra")
+        self.assertEqual(j["url"], "https://in.indeed.com/viewjob?jk=713f08235b08fad7")
+        self.assertEqual(j["source"], "indeed")
+
+    def test_indeed_search_url_raises_validation_error(self):
+        # Verifies Issue 3: Indeed search/results page without job key is rejected with clear message
+        with self.assertRaises(ValueError) as ctx:
+            fetch_job_from_url("https://in.indeed.com/jobs?q=developer&l=mumbai")
+        self.assertIn("search or category page", str(ctx.exception).lower())
+
+    def test_indeed_blocked_or_expired_raises_runtime_error(self):
+        # Verifies Issue 3: Indeed GraphQL failure never falls through to requests.get()
+        with patch.object(fetch.requests, "post", side_effect=Exception("API limit")):
+            with self.assertRaises(RuntimeError) as ctx:
+                fetch_job_from_url("https://in.indeed.com/viewjob?jk=713f08235b08fad7")
+            self.assertIn("paste job description", str(ctx.exception).lower())
+
+    def test_generic_url_http_403_raises_actionable_error(self):
+        # Verifies Issue 3: HTTP 403 produces clean actionable error message
+        mock_resp = FakeResp(status=403)
+        with patch.object(fetch.requests, "get",
+                          side_effect=fetch.requests.exceptions.HTTPError(response=mock_resp)):
+            with self.assertRaises(RuntimeError) as ctx:
+                fetch_job_from_url("https://example.com/job/123")
+            self.assertIn("403", str(ctx.exception))
+            self.assertIn("paste job description", str(ctx.exception).lower())
+
+
+class TestDetectedJobFlowArchitecture(unittest.TestCase):
+    def setUp(self):
+        with open(os.path.join(os.path.dirname(__file__), "app.py"), "r", encoding="utf-8") as f:
+            self.app_src = f.read()
+
+    def test_detected_job_not_inside_platforms_tab_branch(self):
+        # Verifies Issue 1: Detected Job & Tailoring Output Area is NOT indented under if _ft_idx == 2:
+        self.assertIn('    if _ft_idx == 2:\n', self.app_src)
+        self.assertIn('    # Detected Job & Tailoring Output Area\n    qj = st.session_state.get("quick_job")', self.app_src)
+
+    def test_analysis_loader_implementation_present(self):
+        # Verifies Issue 2: Polished emerald loading experience function and CSS are wired
+        self.assertIn('def render_analysis_loader(', self.app_src)
+        self.assertIn('.analysis-loader-box', self.app_src)
+        self.assertIn('.emerald-ring-spinner', self.app_src)
+        self.assertIn('@media (prefers-reduced-motion: reduce)', self.app_src)
+
+    def test_duplicate_submission_protection_wired(self):
+        # Verifies Issue 2: Button disables during processing and resets in finally block
+        self.assertIn('is_analyzing_jd', self.app_src)
+        self.assertIn('is_fetching_link', self.app_src)
+        self.assertIn('finally:\n                        st.session_state["is_analyzing_jd"] = False', self.app_src)
+
 
 class TestStandaloneMatching(unittest.TestCase):
     def test_manual_jd_matches_without_db_record(self):

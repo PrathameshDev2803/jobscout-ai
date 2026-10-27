@@ -1,5 +1,6 @@
 """Personal job tool: Top navigation + clean job workspace. Find -> Tailor -> Apply."""
 import copy
+import hmac
 import html
 import json
 import os
@@ -14,24 +15,29 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from fpdf import FPDF
-try:
-    import pymupdf as fitz
-except ImportError:
-    import fitz
+
+def _get_fitz():
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        import fitz
+    return fitz
 
 from matcher import compute_match, get_location_label
-from dotenv import dotenv_values, load_dotenv
+from dotenv import load_dotenv
 from fetch import (APP_STATUSES, days_since, delete_generated_resume,
                    fetch_job_from_url, get_applications,
                    list_generated_resumes, remove_application, save,
                    save_generated_resume, set_application_status,
                    shortlist_job, upsert_application)
-from session_store import (clear_onboard_marker, create_user_session,
-                           delete_user_session, get_user_session,
-                           has_onboard_marker, set_onboard_marker)
+from session_store import (clear_onboard_marker, delete_user_session,
+                           get_user_session, has_onboard_marker,
+                           set_onboard_marker)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE = os.path.join(BASE, ".env")
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_PDF_PAGES = 25
 load_dotenv(ENV_FILE, override=True)
 
 # Sync Streamlit Community Cloud secrets to os.environ
@@ -49,85 +55,114 @@ RESUME_TXT = os.path.join(BASE, "resume.txt")
 ACCENT = "#10b981"
 
 
+def _server_secret(name):
+    """Read a server-side secret from Streamlit secrets first, then the environment."""
+    try:
+        if hasattr(st, "secrets"):
+            v = st.secrets.get(name, "")
+            if v:
+                return str(v).strip()
+    except Exception:
+        pass
+    return (os.getenv(name) or "").strip()
+
+
 def get_gemini_api_key():
-    """Bulletproof loader for GEMINI_API_KEY from session, Streamlit Cloud secrets, disk .env, or os.environ."""
-    # 0. Check st.secrets if running on Streamlit Community Cloud
-    try:
-        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
-            k = str(st.secrets["GEMINI_API_KEY"]).strip()
-            if k:
-                os.environ["GEMINI_API_KEY"] = k
-                return k
-    except Exception:
-        pass
-
-    # 1. Check session state if running inside Streamlit
-    try:
-        if "gemini_api_key" in st.session_state and st.session_state.gemini_api_key:
-            k = str(st.session_state.gemini_api_key).strip()
-            if k:
-                os.environ["GEMINI_API_KEY"] = k
-                return k
-    except Exception:
-        pass
-
-    # 2. Check disk .env file directly (captures real-time edits without server reboot)
-    if os.path.exists(ENV_FILE):
-        try:
-            vals = dotenv_values(ENV_FILE)
-            k = (vals.get("GEMINI_API_KEY") or "").strip()
-            if k:
-                os.environ["GEMINI_API_KEY"] = k
-                try:
-                    st.session_state.gemini_api_key = k
-                except Exception:
-                    pass
-                return k
-        except Exception:
-            pass
-
-    # 3. Check os.environ fallback
-    k = (os.getenv("GEMINI_API_KEY") or "").strip()
-    if k:
-        try:
-            st.session_state.gemini_api_key = k
-        except Exception:
-            pass
-        return k
-
-    return ""
-
-
-def set_gemini_api_key(new_key):
-    """Persist GEMINI_API_KEY to session state, os.environ, and disk .env."""
-    k = (new_key or "").strip()
-    try:
-        st.session_state.gemini_api_key = k
-    except Exception:
-        pass
-    os.environ["GEMINI_API_KEY"] = k
-    try:
-        lines = []
-        found = False
-        if os.path.exists(ENV_FILE):
-            with open(ENV_FILE, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip().startswith("GEMINI_API_KEY="):
-                        lines.append(f"GEMINI_API_KEY={k}\n")
-                        found = True
-                    else:
-                        lines.append(line)
-        if not found:
-            lines.insert(0, f"GEMINI_API_KEY={k}\n")
-        with open(ENV_FILE, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-    except Exception:
-        pass
-    return k
+    """Server-side Gemini key only. Demo visitors never receive or spend the owner key."""
+    if _is_demo():
+        return ""
+    return _server_secret("GEMINI_API_KEY")
 
 
 # ponytail: Top navigation layout replaces permanent sidebar for a distraction-free, full-width workspace
-st.set_page_config(page_title="JobTool", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="JobScout", layout="wide", initial_sidebar_state="collapsed")
+
+
+def _is_demo():
+    """Fail closed in a live Streamlit session: non-owners are always sandboxed."""
+    try:
+        from streamlit.runtime import exists as _st_exists
+        if not _st_exists():
+            return False  # bare import (unit tests / CLI) — no browser sandbox
+    except Exception:
+        return False
+    try:
+        return not bool(st.session_state.get("owner_ok"))
+    except Exception:
+        return True
+
+
+def _owner_logged_in():
+    try:
+        return bool(st.session_state.get("owner_ok"))
+    except Exception:
+        return False
+
+
+def _owner_configured():
+    return bool(_server_secret("OWNER_PASSWORD"))
+
+
+def _owner_login_blocked():
+    try:
+        fails = int(st.session_state.get("owner_fails", 0))
+        last = float(st.session_state.get("owner_last_fail", 0))
+    except Exception:
+        return False
+    return fails >= 5 and (time.time() - last) < 300
+
+
+def _load_demo_profile():
+    """Sanitized example profile + resume. Never reads the owner's on-disk PII."""
+    p = {"name": "Demo Developer", "base_role": "Full-Stack Developer"}
+    try:
+        with open(os.path.join(BASE, "profile.example.json"), encoding="utf-8") as f:
+            p = json.load(f)
+    except Exception:
+        pass
+    try:
+        with open(os.path.join(BASE, "resume.example.txt"), encoding="utf-8") as f:
+            p["resume_text"] = f.read()
+    except Exception:
+        p.setdefault("resume_text", "")
+    return p
+
+
+def _start_demo():
+    """Public read/write sandbox: example data only, no disk persistence, no owner key."""
+    st.session_state["demo_mode"] = True
+    st.session_state["owner_ok"] = False
+    st.session_state["user_profile"] = _load_demo_profile()
+    st.session_state["onboarded"] = True
+    st.session_state["active_sid"] = None
+    st.session_state["settings_open"] = False
+    st.session_state["nav_tab"] = "Jobs"
+    st.rerun()
+
+
+def _render_owner_login():
+    if not _owner_configured():
+        st.caption("Owner access is not configured on this deployment.")
+        return
+    with st.expander("🔒 Owner access", expanded=False):
+        if _owner_login_blocked():
+            st.caption("Too many failed attempts. Try again in 5 minutes.")
+            return
+        pw = st.text_input("Owner password", type="password", label_visibility="collapsed",
+                           placeholder="Owner password", key="owner_login_pw")
+        if st.button("Log in", key="btn_owner_login", use_container_width=True):
+            if pw and hmac.compare_digest(pw.strip(), _server_secret("OWNER_PASSWORD")):
+                st.session_state["owner_ok"] = True
+                st.session_state["demo_mode"] = False
+                st.session_state["onboarded"] = True
+                st.session_state["user_profile"] = load_profile()
+                st.session_state.pop("owner_fails", None)
+                st.session_state.pop("owner_last_fail", None)
+                st.rerun()
+            else:
+                st.session_state["owner_fails"] = int(st.session_state.get("owner_fails", 0)) + 1
+                st.session_state["owner_last_fail"] = time.time()
+                st.error("Incorrect password.")
 
 CSS = """
 <style>
@@ -138,6 +173,22 @@ CSS = """
     padding-bottom: 3.5rem !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
+}
+@media (max-width: 768px) {
+    .block-container {
+        padding-top: 0.5rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100vw !important;
+        box-sizing: border-box !important;
+    }
+}
+@media (max-width: 360px) {
+    .block-container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
 }
 
 /* Hide permanent sidebar and native collapse controls */
@@ -172,107 +223,905 @@ header[data-testid="stHeader"] {
     background: transparent !important;
     height: 1.2rem !important;
 }
+.stDeployButton,
+[data-testid="stAppDeployButton"],
+header[data-testid="stHeader"] .stDeployButton {
+    display: none !important;
+}
 
-/* Top Navbar Styling */
+/* Top Navbar Styling — Polished Premium SaaS Header */
+.st-key-top_navbar {
+    width: 100% !important;
+    min-height: 60px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    margin-bottom: 1.25rem !important;
+    background: #0b111e !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    padding: 0 16px !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+.st-key-top_navbar > div[data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 58px !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Desktop navbar 3-region grid layout:
+   minmax(0, 1fr) for both outer regions guarantees that Left width == Right width,
+   so the middle 'auto' region is ALWAYS mathematically centered relative to the desktop viewport. */
+@media (min-width: 769px) {
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+        align-items: center !important;
+        align-content: center !important;
+        width: 100% !important;
+        height: 52px !important;
+        min-height: 52px !important;
+        max-height: 52px !important;
+        margin: auto 0 !important;
+        gap: 0 !important;
+    }
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: 100% !important;
+        height: 52px !important;
+        min-height: 52px !important;
+        max-height: 52px !important;
+        display: flex !important;
+        align-items: center !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    /* Region 1: Brand (left-aligned) */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        height: 52px !important;
+    }
+    /* Region 2: Segmented Nav (centered) */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        height: 52px !important;
+        width: auto !important;
+    }
+    /* Region 3: Profile + Settings (right-aligned) */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        height: 52px !important;
+    }
+}
+
+/* Zone 1: Brand */
+.nav-brand-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 18px;
+    height: 44px;
+}
 .nav-brand {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
     padding: 2px 0;
     user-select: none;
+    white-space: nowrap;
 }
 .brand-icon {
-    font-size: 22px;
-    filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.45));
+    font-size: 20px;
+    flex-shrink: 0;
+    line-height: 1;
+    color: #fb923c;
+    filter: drop-shadow(0 0 6px rgba(251, 146, 60, 0.4));
 }
 .brand-title {
-    font-size: 21px;
-    font-weight: 850;
-    letter-spacing: -0.03em;
-    color: #ffffff;
-}
-.brand-pro {
-    font-size: 9.5px;
+    font-size: 19px;
     font-weight: 800;
-    letter-spacing: 0.06em;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    padding: 1px 6px;
-    border-radius: 999px;
-    margin-left: 2px;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    line-height: 1;
+}
+.nav-v-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) div[data-testid="stElementContainer"],
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) .stMarkdown,
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) div[data-testid="stMarkdownContainer"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 44px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) div[data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(2) div[data-testid="stElementContainer"] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 44px !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
-/* Modern Segmented Control / Navbar tabs.
-   Streamlit >=1.65 dropped the stSegmentedControl testid — segmented controls
-   now render as stButtonGroup (scoped here via the widget key class so the
-   modeswitch / onboarding controls keep their own styling). */
+/* Zone 2: Navbar Segmented Navigation */
 .st-key-main_nav_selector {
-    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
-div[data-testid="stSegmentedControl"],
+.st-key-main_nav_selector label[data-testid="stWidgetLabel"] {
+    display: none !important;
+}
 .st-key-main_nav_selector div[data-testid="stButtonGroup"] {
-    background: #0d111a !important;
-    border: 1px solid #273449 !important;
-    border-radius: 10px !important;
-    padding: 3px !important;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
-    width: 100% !important;
-}
-div[data-testid="stSegmentedControl"] button,
-.st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
-    font-size: 14.5px !important;
-    font-weight: 600 !important;
-    line-height: 1.4 !important;
-    border-radius: 7px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    background: transparent !important;
     border: none !important;
-    padding: 10px 18px !important;
-    min-height: 44px !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    gap: 8px !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] > div,
+.st-key-main_nav_selector div[role="radiogroup"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    border-radius: 999px !important;
+    border: 1px solid transparent !important;
+    padding: 7px 16px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    background: transparent !important;
+    position: relative !important;
     transition: all 0.15s ease !important;
 }
-div[data-testid="stSegmentedControl"] button[aria-checked="true"],
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button p {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+/* Tab 1 Icon: Find & Tailor (Search outline) */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:nth-child(1) p::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* Tab 2 Icon: Applications (Folder/Document outline) */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:nth-child(2) p::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='16' y1='13' x2='8' y2='13'%3E%3C/line%3E%3Cline x1='16' y1='17' x2='8' y2='17'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='16' y1='13' x2='8' y2='13'%3E%3C/line%3E%3Cline x1='16' y1='17' x2='8' y2='17'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* Tab 3 Icon: My Resumes (Resume File outline) */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:nth-child(3) p::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='12' y1='18' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='9' y1='15' x2='15' y2='15'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='12' y1='18' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='9' y1='15' x2='15' y2='15'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* Active Navigation State: Elegant subtle dark-teal pill background with thin emerald bottom underline */
 .st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="true"] {
-    background: #10b981 !important;
-    color: #04130d !important;
-    font-weight: 700 !important;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important;
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    border-color: rgba(16, 185, 129, 0.25) !important;
+    border-bottom: 2px solid #10b981 !important;
+    box-shadow: inset 0 -2px 0 #10b981 !important;
+    padding: 7px 18px !important;
 }
-div[data-testid="stSegmentedControl"] button[aria-checked="false"],
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="true"] p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+/* Inactive Navigation State */
 .st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"] {
-    color: #cbd5e1 !important;
+    color: #94a3b8 !important;
     background: transparent !important;
+    font-weight: 500 !important;
+    border-color: transparent !important;
 }
-div[data-testid="stSegmentedControl"] button[aria-checked="false"]:hover,
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"] p {
+    color: #94a3b8 !important;
+}
 .st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"]:hover {
     color: #ffffff !important;
-    background: rgba(255, 255, 255, 0.06) !important;
+    background: rgba(255, 255, 255, 0.04) !important;
 }
-div[data-testid="stSegmentedControl"] button:focus-visible,
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"]:hover p {
+    color: #ffffff !important;
+}
 .st-key-main_nav_selector div[data-testid="stButtonGroup"] button:focus-visible {
     outline: 2px solid #10b981 !important;
     outline-offset: 2px !important;
 }
 
-/* User pill on navbar right */
+/* Zone 3: User Cluster (Profile Pill + Settings Button) */
+.st-key-nav_user_cluster,
+.st-key-nav_user_cluster > div[data-testid="stVerticalBlock"] {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    width: auto !important;
+    margin-left: auto !important;
+    height: 52px !important;
+}
+.st-key-nav_user_cluster div[data-testid="stElementContainer"] {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 52px !important;
+}
+.st-key-nav_user_cluster .stMarkdown,
+.st-key-nav_user_cluster div[data-testid="stMarkdownContainer"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 52px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 12px;
+}
+.st-key-nav_user_cluster div[data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* User pill styling: 44px height, balanced padding, clean avatar, readable name, location text */
 .user-pill {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    background: #10141f;
-    border: 1px solid #273449;
+    gap: 10px;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 999px;
-    padding: 7px 14px;
-    font-size: 13.5px;
-    line-height: 1.4;
+    padding: 4px 14px 4px 6px;
+    height: 44px;
+    max-height: 44px;
+    box-sizing: border-box;
+    margin: 0 !important;
+    line-height: 1.2;
     color: #cbd5e1;
-    white-space: nowrap;
-    float: right;
-    max-width: 100%;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    min-width: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
-.user-avatar { font-size: 14px; }
-.user-name { font-weight: 600; color: #f1f5f9; }
-.user-dot { color: #475569; }
-.user-loc { color: #94a3b8; font-size: 12.5px; }
+.user-pill:hover {
+    background: #131d35;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.user-avatar-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #4f46e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.user-avatar { font-size: 14px; line-height: 1; color: #ffffff; }
+.user-info-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.2;
+}
+.user-name { font-weight: 600; color: #ffffff; font-size: 13px; white-space: nowrap !important; }
+.user-dot { color: #475569; flex-shrink: 0; }
+.user-loc {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.user-loc svg {
+    color: #64748b;
+    flex-shrink: 0;
+}
+.user-chevron { color: #94a3b8; display: flex; align-items: center; margin-left: 2px; }
+
+/* Account / hamburger popover button — premium dark tool button */
+.st-key-top_settings_popover {
+    --menu-btn-size: 52px;
+    --menu-radius: 15px;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    width: var(--menu-btn-size) !important;
+    height: var(--menu-btn-size) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: var(--menu-btn-size) !important;
+    height: var(--menu-btn-size) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: var(--menu-btn-size) !important;
+    height: var(--menu-btn-size) !important;
+    min-width: var(--menu-btn-size) !important;
+    min-height: var(--menu-btn-size) !important;
+    max-width: var(--menu-btn-size) !important;
+    max-height: var(--menu-btn-size) !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: var(--menu-radius) !important;
+    background: rgba(15, 23, 42, 0.72) !important;
+    border: 1px solid #2a3a55 !important;
+    color: #e7edf7 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+    transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                transform 160ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer !important;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button:hover,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button:hover {
+    background: #162033 !important;
+    border-color: #4f5f8a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12),
+                0 0 18px rgba(79, 70, 229, 0.18),
+                0 4px 14px rgba(0, 0, 0, 0.28) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"],
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] {
+    background: #141d30 !important;
+    border-color: rgba(129, 140, 248, 0.55) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.16),
+                0 0 20px rgba(79, 70, 229, 0.20),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button:active,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button:active {
+    transform: scale(0.96) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button:focus-visible,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button:focus-visible {
+    outline: 2px solid #a5b4fc !important;
+    outline-offset: 3px !important;
+}
+/* Hide Streamlit's auto-injected chevron; keep the label node for the accessible name */
+.st-key-top_settings_popover div[data-testid="stPopover"] button span[data-testid="stIconMaterial"],
+.st-key-top_settings_popover div[data-testid="stPopover"] button div[aria-hidden="true"] {
+    display: none !important;
+}
+/* Icon: three 2px lines drawn on the label node, morphing to an X when open */
+.st-key-top_settings_popover div[data-testid="stPopover"] button p,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p {
+    font-size: 0 !important;
+    line-height: 0 !important;
+    color: inherit !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 22px !important;
+    height: 16px !important;
+    position: relative !important;
+    display: block !important;
+    overflow: visible !important;
+    background-image: linear-gradient(currentColor, currentColor) !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 100% 2px !important;
+    transition: background-size 180ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::after,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::after {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 2px !important;
+    background: currentColor !important;
+    border-radius: 2px !important;
+    transform-origin: center !important;
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::before {
+    top: 0 !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::after,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::after {
+    bottom: 0 !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"] p,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] p {
+    background-size: 0 2px !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"] p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] p::before {
+    transform: translateY(7px) rotate(45deg) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"] p::after,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] p::after {
+    transform: translateY(-7px) rotate(-45deg) !important;
+}
+
+/* Popover dropdown container */
+div[data-testid="stPopoverBody"] {
+    background: #0f141f !important;
+    border: 1px solid #273449 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Responsive Adaptations */
+/* Tablet: 769px to 1024px: first reduce padding and gaps gracefully */
+@media (max-width: 1024px) {
+    .nav-v-divider {
+        display: none !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
+        padding: 0 12px !important;
+        font-size: 13.5px !important;
+    }
+    .user-pill {
+        padding: 5px 10px;
+        gap: 6px;
+        font-size: 13px;
+    }
+    .user-loc {
+        font-size: 12px;
+    }
+}
+
+/* Medium screens: 769px to 880px: hide secondary city label before mobile breakpoint */
+@media (max-width: 880px) and (min-width: 769px) {
+    .user-dot { display: none !important; }
+    .user-loc { display: none !important; }
+}
+
+/* Mobile: <= 768px: deliberate 2-row layout */
+@media (max-width: 768px) {
+    /* Keep the tablet row at its established 44px height; 52px is desktop-only */
+    .st-key-top_settings_popover {
+        --menu-btn-size: 44px;
+        --menu-radius: 13px;
+    }
+    .st-key-nav_user_cluster,
+    .st-key-nav_user_cluster > div[data-testid="stVerticalBlock"] {
+        height: 44px !important;
+    }
+    .st-key-nav_user_cluster div[data-testid="stElementContainer"] {
+        height: 44px !important;
+    }
+    .st-key-nav_user_cluster .stMarkdown,
+    .st-key-nav_user_cluster div[data-testid="stMarkdownContainer"] {
+        height: 44px !important;
+    }
+    .nav-v-divider {
+        display: none !important;
+    }
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        row-gap: 10px !important;
+        column-gap: 0 !important;
+    }
+    /* Brand: row 1 left */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) {
+        order: 1 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    /* User cluster: row 1 right */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) {
+        order: 2 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin-left: auto !important;
+    }
+    /* Navigation: row 2 full-width centered */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {
+        order: 3 !important;
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    .brand-title { font-size: 17px; }
+    .brand-icon { font-size: 17px; }
+    .user-dot { display: none !important; }
+    .user-loc { display: none !important; }
+    .user-pill { padding: 5px 9px; font-size: 12.5px; height: 38px; }
+    .st-key-main_nav_selector {
+        width: 100% !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] {
+        width: 100% !important;
+        display: flex !important;
+        padding: 4px !important;
+        border-radius: 12px !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] > div,
+    .st-key-main_nav_selector div[role="radiogroup"] {
+        width: 100% !important;
+        display: flex !important;
+        gap: 4px !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
+        flex: 1 1 0px !important;
+        font-size: 13px !important;
+        padding: 0 4px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        border-radius: 8px !important;
+    }
+}
+
+/* Mobile: <= 700px (Standard, Compact & Narrow Mobile) */
+@media (max-width: 700px) {
+    /* 1. Navbar Container: 64-72px height, 16px padding, subtle border */
+    .st-key-top_navbar {
+        height: 68px !important;
+        min-height: 68px !important;
+        border-radius: 16px !important;
+        padding: 0 16px !important;
+        margin-bottom: 1.25rem !important;
+        background: #0b111e !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    }
+    .st-key-top_navbar > div[data-testid="stVerticalBlock"] {
+        height: 100% !important;
+        min-height: 68px !important;
+        justify-content: center !important;
+    }
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        height: 68px !important;
+        min-height: 68px !important;
+        row-gap: 0 !important;
+    }
+    /* Hide desktop center segmented control */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {
+        display: none !important;
+    }
+    /* Brand on left */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) {
+        order: 1 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        height: 68px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    .nav-brand-wrap {
+        height: 68px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0 !important;
+    }
+    .nav-brand {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    .brand-icon {
+        font-size: 20px !important;
+        line-height: 1 !important;
+        color: #f59e0b !important;
+    }
+    .brand-title {
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        letter-spacing: -0.01em !important;
+    }
+    .nav-v-divider {
+        display: none !important;
+    }
+
+    /* Right cluster: Avatar + Hamburger Button */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) {
+        order: 2 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        margin-left: auto !important;
+        height: 68px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+    }
+    .st-key-nav_user_cluster,
+    .st-key-nav_user_cluster > div[data-testid="stVerticalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 12px !important;
+        height: 68px !important;
+        width: auto !important;
+        margin: 0 !important;
+    }
+    /* Circular user avatar (38px) */
+    .user-pill {
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        height: 38px !important;
+        width: 38px !important;
+        min-width: 38px !important;
+        max-width: 38px !important;
+        margin: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: none !important;
+    }
+    .user-avatar-badge {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .user-avatar {
+        font-size: 15px !important;
+        line-height: 1 !important;
+        color: #ffffff !important;
+    }
+    .user-info-stack,
+    .user-chevron,
+    .user-dot {
+        display: none !important;
+    }
+
+    /* Hamburger menu button — 44×44 touch target, same dark tool language */
+    .st-key-top_settings_popover {
+        --menu-btn-size: 44px;
+        --menu-radius: 13px;
+        width: 44px !important;
+        height: 44px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-top_settings_popover div[data-testid="stPopover"] {
+        width: 44px !important;
+        height: 44px !important;
+    }
+}
+
+/* Popover mobile navigation menu styling */
+@media (min-width: 701px) {
+    .menu-user-card,
+    .mobile-nav-menu-box,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.st-key-m_nav_jobs),
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.st-key-m_nav_apps),
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.st-key-m_nav_resumes) {
+        display: none !important;
+    }
+}
+@media (max-width: 700px) {
+    div[data-testid="stPopoverBody"] {
+        background: #0b111e !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 16px !important;
+        padding: 14px !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6) !important;
+        min-width: 290px !important;
+        max-width: calc(100vw - 32px) !important;
+    }
+    .menu-user-card {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 10px 12px !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+    }
+    .menu-user-avatar {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
+        border: 2px solid rgba(167, 139, 250, 0.4) !important;
+        box-shadow: 0 0 10px rgba(99, 102, 241, 0.3) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 18px !important;
+        color: #ffffff !important;
+        flex-shrink: 0 !important;
+    }
+    .menu-user-details {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+    }
+    .menu-user-name {
+        font-size: 14.5px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        letter-spacing: -0.01em !important;
+    }
+    .menu-user-loc {
+        font-size: 11.5px !important;
+        color: #94a3b8 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+    }
+    .mobile-nav-menu-box {
+        display: block !important;
+        margin-bottom: 2px !important;
+    }
+    .mobile-nav-menu-divider {
+        height: 1px !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        margin: 10px 0 !important;
+    }
+    div[data-testid="stPopoverBody"] button {
+        height: 44px !important;
+        min-height: 44px !important;
+        border-radius: 10px !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #cbd5e1 !important;
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        padding: 0 14px !important;
+        transition: all 0.15s ease !important;
+        margin-bottom: 6px !important;
+    }
+    div[data-testid="stPopoverBody"] button:hover {
+        background: #1e293b !important;
+        color: #ffffff !important;
+        border-color: rgba(255, 255, 255, 0.18) !important;
+    }
+    div[data-testid="stPopoverBody"] button::after {
+        content: "›" !important;
+        font-size: 20px !important;
+        line-height: 1 !important;
+        color: #64748b !important;
+        margin-left: auto !important;
+        font-weight: 400 !important;
+    }
+    div[data-testid="stPopoverBody"] .active-nav-btn button,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.active-nav-btn) button {
+        background: rgba(16, 185, 129, 0.12) !important;
+        border: 1px solid #10b981 !important;
+        color: #10b981 !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stPopoverBody"] .active-nav-btn button p,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.active-nav-btn) button p {
+        color: #10b981 !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stPopoverBody"] .active-nav-btn button::after,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.active-nav-btn) button::after {
+        color: #10b981 !important;
+    }
+}
+
+/* Ultra-narrow mobile: <= 340px */
+@media (max-width: 340px) {
+    .brand-title {
+        font-size: 16px !important;
+    }
+    .st-key-top_navbar {
+        padding: 0 12px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] button,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button,
+    .st-key-top_settings_popover div[data-testid="stPopover"] > button,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button p,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button p::before,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button p::after {
+        transition: none !important;
+    }
+}
 
 /* Filter Pills styling (Concept 1: [ All 112 ] [ New 112 ] [ Strong 60 ] ...) */
 div[data-testid="stPills"] {
@@ -300,158 +1149,650 @@ div[data-testid="stPills"] button[aria-checked="true"] {
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3) !important;
 }
 
-/* Slim status bar below header */
-.workspace-header {
-    margin-top: 10px;
-    margin-bottom: 14px;
-    max-width: 880px;
+/* Hero 2-Column Section */
+.hero-header-wrap {
+    margin: 8px 0 16px 0;
 }
-.workspace-title {
-    font-size: 30px;
-    font-weight: 700;
-    line-height: 1.2;
-    color: #f1f5f9;
-    letter-spacing: -0.02em;
-    margin-bottom: 6px;
-}
-.statusbar {
-    color: #cbd5e1;
-    font-size: 15px;
-    line-height: 1.6;
-    padding: 0 0 4px 0;
-    max-width: 72ch;
-}
-.statusbar b { color: #f1f5f9; }
-
-/* Standalone mode switch: centered primary interaction, no outer card */
-.st-key-modeswitch {
-    max-width: 700px !important;
-    margin: 8px auto 8px auto !important;
-}
-/* ponytail: vertical-block is flex-column; stretch direct children so the
-   control fills the 700px box instead of shrink-wrapping its content. */
-.st-key-modeswitch > div {
-    width: 100% !important;
-}
-.mode-eyebrow {
-    font-size: 12px;
+.hero-eyebrow {
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.12em;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+.hero-title {
+    font-size: clamp(24px, 4vw, 38px);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    margin: 0 0 14px 0;
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+.hero-title-accent {
+    color: #34d399;
+}
+.hero-subtitle {
     color: #94a3b8;
+    font-size: 14.5px;
+    line-height: 1.6;
+    max-width: 520px;
+    margin: 0;
+}
+
+/* Process card on the right of hero */
+.hero-process-card {
+    background: #0c1322;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 22px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 8px 0 16px 0;
+    box-sizing: border-box;
+}
+.hero-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    margin: 0 0 10px 0;
+    flex: 1;
 }
-/* Single unified segmented control: equal-width segments, emerald active */
-/* ponytail: rendered root is div[data-testid="stButtonGroup"] > flex row div. */
-.st-key-modeswitch div[data-testid="stButtonGroup"] {
-    background: #0d111a !important;
-    border: 1px solid #223047 !important;
-    border-radius: 12px !important;
-    padding: 4px !important;
-    width: 100% !important;
+.step-icon-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
 }
-.st-key-modeswitch div[data-testid="stButtonGroup"] > div {
+.icon-green {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.12);
+}
+.icon-blue {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.12);
+}
+.icon-purple {
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.12);
+}
+.step-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+.step-subtitle {
+    font-size: 11.5px;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+.step-arrow-divider {
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Hero Section Responsive Layout */
+@media (min-width: 769px) {
+    .st-key-hero_section div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 24px !important;
+    }
+}
+@media (max-width: 768px) {
+    .st-key-hero_section div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 14px !important;
+        width: 100% !important;
+    }
+    .st-key-hero_section div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .hero-header-wrap {
+        margin: 4px 0 8px 0 !important;
+    }
+    .hero-title {
+        font-size: clamp(24px, 6.5vw, 34px) !important;
+        line-height: 1.18 !important;
+        word-break: normal !important;
+        overflow-wrap: break-word !important;
+        hyphens: none !important;
+        margin-bottom: 10px !important;
+    }
+    .hero-subtitle {
+        font-size: 13.5px !important;
+        line-height: 1.5 !important;
+        max-width: 100% !important;
+    }
+    .hero-process-card {
+        margin: 6px 0 10px 0 !important;
+        padding: 16px 14px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        border-radius: 14px !important;
+        gap: 6px !important;
+    }
+    .step-icon-circle {
+        width: 38px !important;
+        height: 38px !important;
+        margin-bottom: 6px !important;
+    }
+    .step-icon-circle svg {
+        width: 18px !important;
+        height: 18px !important;
+    }
+    .step-title {
+        font-size: 12px !important;
+        margin-bottom: 2px !important;
+    }
+    .step-subtitle {
+        font-size: 10.5px !important;
+        line-height: 1.25 !important;
+    }
+    .step-arrow-divider svg {
+        width: 14px !important;
+        height: 14px !important;
+    }
+}
+@media (max-width: 360px) {
+    .hero-process-card {
+        padding: 12px 8px !important;
+    }
+    .hero-title {
+        font-size: 22px !important;
+    }
+}
+
+/* Unified Action Card */
+.st-key-modecard {
+    background: #0b111e !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    padding: 16px 20px 20px 20px !important;
+    margin: 14px 0 20px 0 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Mode switcher tabs inside the card */
+.st-key-workspace_mode_seg {
+    margin-bottom: 0 !important;
     width: 100% !important;
-    max-width: none !important;
-    position: relative !important;
     display: flex !important;
-    gap: 4px !important;
 }
-/* LIQUID-PILL-START: single sliding active indicator (revert-safe block).
-   ponytail: pure CSS on the native segmented control — no JS, no dep,
-   state/a11y untouched. One ::before thumb glides via transform; position
-   derives from native aria-checked. translateX % is relative to the thumb's
-   own width; +4px/+8px compensates the declared 4px inter-segment gaps so the
-   thumb lands exactly on each segment at any control width. Delete this block
-   (through LIQUID-PILL-END) to restore static active styling. */
-.st-key-modeswitch div[data-testid="stButtonGroup"] > div::before {
-    content: "" !important;
-    position: absolute !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    width: calc((100% - 8px) / 3) !important;
-    background: rgba(16, 185, 129, 0.16) !important;
+.st-key-workspace_mode_seg label[data-testid="stWidgetLabel"] {
+    display: none !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 0 2px 0 !important;
+    box-shadow: none !important;
+    gap: 8px !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"]::-webkit-scrollbar {
+    display: none !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] > div,
+.st-key-workspace_mode_seg div[role="radiogroup"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    width: auto !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    color: #94a3b8 !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    padding: 8px 16px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button[aria-checked="true"] {
+    background: rgba(16, 185, 129, 0.08) !important;
     border: 1px solid #10b981 !important;
-    border-radius: 9px !important;
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 2px 10px rgba(16, 185, 129, 0.12) !important;
-    transform: translateX(0) !important;
-    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1) !important;
-    will-change: transform !important;
-    pointer-events: none !important;
-    z-index: 0 !important;
-}
-.st-key-modeswitch div[data-testid="stButtonGroup"] > div:has(> button:nth-child(1)[aria-checked="true"])::before {
-    transform: translateX(0) !important;
-}
-.st-key-modeswitch div[data-testid="stButtonGroup"] > div:has(> button:nth-child(2)[aria-checked="true"])::before {
-    transform: translateX(calc(100% + 4px)) !important;
-}
-.st-key-modeswitch div[data-testid="stButtonGroup"] > div:has(> button:nth-child(3)[aria-checked="true"])::before {
-    transform: translateX(calc(200% + 8px)) !important;
-}
-/* LIQUID-PILL-END */
-.st-key-modeswitch div[data-testid="stButtonGroup"] button {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    min-height: 44px !important;
-    font-size: 15px !important;
+    color: #ffffff !important;
     font-weight: 600 !important;
-    line-height: 1.4 !important;
-    color: #cbd5e1 !important;
-    border-radius: 9px !important;
-    padding: 12px 8px !important;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.12) !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button[aria-checked="true"] p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button[aria-checked="false"] p {
+    color: #94a3b8 !important;
+}
+.st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button[aria-checked="false"]:hover p {
+    color: #ffffff !important;
+}
+@media (max-width: 700px) {
+    .st-key-modecard {
+        padding: 14px 14px 16px 14px !important;
+        margin: 10px 0 16px 0 !important;
+        border-radius: 12px !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] {
+        gap: 6px !important;
+        width: 100% !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] > div,
+    .st-key-workspace_mode_seg div[role="radiogroup"] {
+        gap: 6px !important;
+        width: auto !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button {
+        padding: 6px 9px !important;
+        font-size: 12px !important;
+        height: 36px !important;
+        min-height: 36px !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button p {
+        font-size: 12px !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:nth-child(2) p {
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:nth-child(2) p::after {
+        content: "Paste JD" !important;
+        font-size: 12px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:nth-child(3) p {
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:nth-child(3) p::after {
+        content: "Paste Link" !important;
+        font-size: 12px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+    }
+}
+@media (max-width: 360px) {
+    .st-key-modecard {
+        padding: 12px 10px 14px 10px !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:nth-child(1) p {
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button:nth-child(1) p::after {
+        content: "Platforms" !important;
+        font-size: 11.5px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+    }
+    .st-key-workspace_mode_seg div[data-testid="stButtonGroup"] button {
+        padding: 5px 7px !important;
+        font-size: 11.5px !important;
+    }
+}
+.mode-tabs-divider {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 12px 0 16px 0;
+    width: 100%;
+}
+
+/* Form Inputs inside modecard */
+.st-key-modecard div[data-testid="stTextInput"] div[data-testid="stTextInputRootElement"],
+.st-key-modecard div[data-testid="stTextInput"] div[data-baseweb="base-input"],
+.st-key-modecard div[data-testid="stTextInput"] input,
+.st-key-modecard div[data-testid="stSelectbox"] div[role="group"],
+.st-key-modecard div[data-testid="stSelectbox"] div[role="combobox"],
+.st-key-modecard div[data-testid="stSelectbox"] div[data-baseweb="select"],
+.st-key-modecard div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+    background: #070b14 !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 8px !important;
+    color: #f8fafc !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    box-sizing: border-box !important;
+    font-size: 13.5px !important;
+}
+.st-key-modecard div[data-testid="stSelectbox"] div[role="group"] input {
+    height: 100% !important;
+}
+.st-key-modecard div[data-testid="stTextInput"] input:focus,
+.st-key-modecard div[data-testid="stSelectbox"] div[role="group"]:focus-within,
+.st-key-modecard div[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+}
+.st-key-modecard label[data-testid="stWidgetLabel"] p {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #94a3b8 !important;
+    margin-bottom: 4px !important;
+}
+
+/* Action Search Button & Search Row Layout */
+@media (min-width: 769px) {
+    .st-key-modecard div[data-testid="stHorizontalBlock"]:has(.st-key-plat_search_jobs_btn) {
+        display: flex !important;
+        align-items: flex-end !important;
+        gap: 12px !important;
+    }
+    .st-key-modecard div[data-testid="stHorizontalBlock"]:has(.st-key-plat_search_jobs_btn) > div[data-testid="stColumn"]:has(.st-key-plat_search_jobs_btn) {
+        flex: 0 0 160px !important;
+        width: 160px !important;
+        max-width: 160px !important;
+        min-width: 160px !important;
+    }
+    .st-key-plat_search_jobs_btn {
+        margin-top: 4px !important;
+    }
+}
+.st-key-plat_search_jobs_btn {
+    margin-bottom: 0 !important;
+    display: flex !important;
+    align-items: flex-end !important;
+}
+.st-key-plat_search_jobs_btn button {
+    background: #10b981 !important;
+    color: #032014 !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    box-sizing: border-box !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 7px !important;
-    position: relative !important;
-    z-index: 1 !important;
-    background: transparent !important;
-    border: 1px solid transparent !important;
-    transition: color 300ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+    gap: 8px !important;
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3) !important;
+    transition: all 0.15s ease !important;
+    width: 160px !important;
+    max-width: 160px !important;
+    min-width: 160px !important;
+    padding: 0 16px !important;
+    white-space: nowrap !important;
 }
-.st-key-modeswitch div[data-testid="stButtonGroup"] button:hover {
-    color: #e2e8f0 !important;
-    background: rgba(255, 255, 255, 0.04) !important;
+.st-key-plat_search_jobs_btn button > div {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
-.st-key-modeswitch div[data-testid="stButtonGroup"] button[aria-checked="true"] {
-    background: transparent !important;
-    border-color: transparent !important;
-    color: #ffffff !important;
-    box-shadow: none !important;
+.st-key-plat_search_jobs_btn button > div > span,
+.st-key-plat_search_jobs_btn button span:has(> .material-symbols-rounded),
+.st-key-plat_search_jobs_btn button span:has(> svg) {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
 }
-.st-key-modeswitch div[data-testid="stButtonGroup"] button:focus-visible {
-    outline: 2px solid #10b981 !important;
-    outline-offset: 2px !important;
+.st-key-plat_search_jobs_btn button div[data-testid="stIconMaterial"],
+.st-key-plat_search_jobs_btn button .material-symbols-rounded,
+.st-key-plat_search_jobs_btn button svg {
+    display: block !important;
+    flex-shrink: 0 !important;
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 18px !important;
+    line-height: 18px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #032014 !important;
+    vertical-align: middle !important;
 }
-@media (prefers-reduced-motion: reduce) {
-    .st-key-modeswitch div[data-testid="stButtonGroup"] button {
-        transition: none !important;
-    }
-    .st-key-modeswitch div[data-testid="stButtonGroup"] > div::before {
-        transition: none !important;
-    }
+.st-key-plat_search_jobs_btn button div[data-testid="stMarkdownContainer"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    height: auto !important;
 }
-/* Shared mode card: single bordered surface below the toggle */
-.st-key-modecard {
-    background: #0d111a !important;
-    border: 1px solid #273449 !important;
-    border-radius: 12px !important;
-    padding: 20px 22px 20px 22px !important;
-    margin: 12px 0 18px 0 !important;
-}
-/* Readability-first semantic text inside the shared card */
-.ats-banner {
-    font-size: 14.5px !important;
-    line-height: 1.6 !important;
-    color: #cbd5e1 !important;
-    margin: 0 0 10px 0 !important;
-    max-width: none !important;
-}
-.ats-banner b, .ats-banner strong {
-    color: #10b981 !important;
+.st-key-plat_search_jobs_btn button p {
+    color: #032014 !important;
     font-weight: 700 !important;
+    font-size: 14px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+.st-key-plat_search_jobs_btn button:hover {
+    background: #059669 !important;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35) !important;
+    transform: translateY(-1px) !important;
+    color: #000000 !important;
+}
+.st-key-plat_search_jobs_btn button:hover p,
+.st-key-plat_search_jobs_btn button:hover .material-symbols-rounded,
+.st-key-plat_search_jobs_btn button:hover svg {
+    color: #000000 !important;
+}
+@media (max-width: 768px) {
+    .st-key-modecard {
+        padding: 16px !important;
+        border-radius: 12px !important;
+        margin: 12px 0 16px 0 !important;
+    }
+    .st-key-modecard div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+        width: 100% !important;
+    }
+    .st-key-modecard div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-modecard div[data-testid="stTextInput"],
+    .st-key-modecard div[data-testid="stSelectbox"],
+    .st-key-plat_search_jobs_btn {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+    .st-key-plat_search_jobs_btn {
+        width: 100% !important;
+        margin-top: 4px !important;
+    }
+    .st-key-plat_search_jobs_btn button {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        height: 48px !important;
+    }
+}
+
+/* Job Platforms Section */
+.platforms-section-wrap {
+    margin-top: 24px;
+    padding-top: 4px;
+}
+.platforms-heading-box {
+    margin-bottom: 12px;
+}
+.platforms-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+}
+.platforms-subtitle {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+.platforms-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+@media (max-width: 1100px) {
+    .platforms-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+@media (max-width: 768px) {
+    .platforms-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+}
+@media (max-width: 700px) {
+    .platforms-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+    .platform-card-link {
+        padding: 10px 14px !important;
+        min-height: 52px !important;
+        border-radius: 10px !important;
+    }
+    .platform-icon-box {
+        width: 34px !important;
+        height: 34px !important;
+        flex-shrink: 0 !important;
+    }
+    .platform-text-wrap {
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+    .platform-name {
+        font-size: 13.5px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .platform-desc {
+        font-size: 11.5px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .platform-arrow {
+        flex-shrink: 0 !important;
+    }
+}
+.platform-card-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #0b111f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-decoration: none !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    min-height: 60px;
+    box-sizing: border-box;
+}
+.platform-card-link:hover {
+    background: #0f182e;
+    border-color: rgba(56, 189, 248, 0.35);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.platform-icon-box {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.platform-icon-letter {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 800;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1;
+}
+.platform-text-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.2;
+}
+.platform-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+.platform-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    margin-top: 2px;
+}
+.platform-arrow {
+    color: #475569;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+.platform-card-link:hover .platform-arrow {
+    transform: translateX(3px);
+    color: #38bdf8;
 }
 .panel-title {
     font-size: 18px !important;
@@ -479,7 +1820,7 @@ div[data-testid="stPills"] button[aria-checked="true"] {
     }
 }
 @media (max-width: 430px) {
-    .st-key-modeswitch { margin: 4px auto 2px auto !important; }
+    .st-key-modeswitch { margin: 2px 0 6px 0 !important; }
     .mode-eyebrow { font-size: 11.5px; letter-spacing: 0.1em; }
     .workspace-title { font-size: 24px !important; }
     .st-key-modeswitch div[data-testid="stButtonGroup"] button {
@@ -717,66 +2058,459 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     padding: 12px 16px;
     text-align: center;
 }
-/* Detected Job Card (Fast Tailor parsed card) */
+/* Detected Job Card (Top Overview Card) */
 .detected-card {
     background: #0d121c;
-    border: 1px solid rgba(16, 185, 129, 0.45);
-    border-radius: 12px;
-    padding: 16px 18px;
-    margin: 10px 0 14px 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin: 10px 0 16px 0;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 .detected-pill {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    font-size: 11px;
+    gap: 6px;
+    font-size: 11.5px;
     font-weight: 750;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.15);
-    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #00c875;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.3);
     border-radius: 999px;
-    padding: 2px 9px;
-    margin-bottom: 8px;
+    padding: 3px 11px;
+    margin-bottom: 10px;
 }
 .detected-title {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 800;
-    color: #f8fafc;
-    line-height: 1.3;
+    color: #ffffff;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
 }
 .detected-company {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: #94a3b8;
-    margin-top: 3px;
+    margin-top: 4px;
 }
 .detected-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 13px;
+    color: #8892b0;
+    margin-top: 10px;
+    margin-bottom: 14px;
+}
+.req-skills-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.req-skill-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    padding: 5px 12px;
     font-size: 12.5px;
-    color: #7d8590;
-    margin-top: 6px;
-    margin-bottom: 8px;
+    font-weight: 600;
+    color: #cbd5e1;
 }
-.detected-divider {
-    border: 0;
-    border-top: 1px solid #1e2638;
-    margin: 12px 0 10px 0;
+
+/* Stepper Navigation Buttons (3-Step Workflow) */
+/* Stepper Navigation Buttons (3-Step Workflow) */
+div[data-testid="stButton"].st-key-step_nav_1 button,
+div[data-testid="stButton"].st-key-step_nav_2 button,
+div[data-testid="stButton"].st-key-step_nav_3 button {
+    min-height: 48px !important;
+    text-align: center !important;
+    padding: 8px 18px !important;
+    border-radius: 10px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 8px !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-.detected-match-row {
+div[data-testid="stButton"].st-key-step_nav_1 button div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stButton"].st-key-step_nav_2 button div[data-testid="stMarkdownContainer"] p,
+div[data-testid="stButton"].st-key-step_nav_3 button div[data-testid="stMarkdownContainer"] p {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="primary"],
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="primary"],
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="primary"] {
+    background: #00c875 !important;
+    border: 1px solid #00c875 !important;
+    color: #042318 !important;
+    box-shadow: 0 4px 16px rgba(0, 200, 117, 0.28) !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="primary"] strong,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="primary"] strong,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="primary"] strong,
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="primary"] p,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="primary"] p,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="primary"] p {
+    color: #042318 !important;
+    font-weight: 800 !important;
+    font-size: 13.5px !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="primary"] span,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="primary"] span,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="primary"] span,
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="primary"] span.stMarkdownColoredText,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="primary"] span.stMarkdownColoredText,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="primary"] span.stMarkdownColoredText {
+    color: #053b27 !important;
+    font-weight: 500 !important;
+    font-size: 12.5px !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="secondary"],
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="secondary"],
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="secondary"] {
+    background: #0c121e !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="secondary"] strong,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="secondary"] strong,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="secondary"] strong {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 13.5px !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="secondary"] span,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="secondary"] span,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="secondary"] span,
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="secondary"] span.stMarkdownColoredText,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="secondary"] span.stMarkdownColoredText,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="secondary"] span.stMarkdownColoredText {
+    color: #8da0b6 !important;
+    font-weight: 400 !important;
+    font-size: 12.5px !important;
+}
+div[data-testid="stButton"].st-key-step_nav_1 button[kind="secondary"]:hover,
+div[data-testid="stButton"].st-key-step_nav_2 button[kind="secondary"]:hover,
+div[data-testid="stButton"].st-key-step_nav_3 button[kind="secondary"]:hover {
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    background: #141c2e !important;
+}
+
+/* Job & Fit Analysis Section (Step 1 Main Container) */
+.fit-analysis-card {
+    background: #0d121c;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin: 14px 0 18px 0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+.fit-top-cluster {
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 22px;
+}
+.fit-heading-box {
+    flex: 1 1 320px;
+}
+.fit-main-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+.fit-main-desc {
+    font-size: 13px;
+    color: #8892b0;
+    margin-top: 6px;
+    line-height: 1.45;
+    max-width: 520px;
+}
+.fit-gauge-assessment {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex: 1 1 320px;
+    justify-content: flex-end;
+}
+.fit-gauge-circle {
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+}
+.fit-assessment-text {
+    max-width: 270px;
+}
+.fit-assessment-badge {
+    font-size: 16px;
+    font-weight: 800;
+    color: #00c875;
+    margin-bottom: 4px;
+}
+.fit-assessment-sub {
+    font-size: 12.5px;
+    color: #94a3b8;
+    line-height: 1.4;
+}
+
+/* Matching and Missing Skills Panels */
+.fit-skills-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+.fit-panel {
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.fit-panel.matching {
+    background: rgba(0, 200, 117, 0.04);
+    border: 1px solid rgba(0, 200, 117, 0.22);
+}
+.fit-panel.missing {
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.22);
+}
+.panel-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.panel-header-left {
+    display: flex;
+    align-items: center;
     gap: 8px;
-}
-.detected-score {
-    font-size: 14.5px;
+    font-size: 15px;
     font-weight: 750;
-    color: #10b981;
+    color: #ffffff;
 }
-.detected-missing {
+.panel-icon-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 12px;
+    font-weight: 800;
+}
+.panel-icon-circle.green {
+    background: #00c875;
+    color: #061a12;
+}
+.panel-icon-circle.red {
+    background: #ef4444;
+    color: #ffffff;
+}
+.panel-count-pill {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+}
+.panel-count-pill.green {
+    color: #00c875;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.3);
+}
+.panel-count-pill.red {
     color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.panel-chips-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.fit-skill-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 5px 13px;
+    color: #ffffff;
+}
+.fit-skill-pill.matching {
+    background: rgba(0, 200, 117, 0.08);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+}
+.fit-skill-pill.missing {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.fit-missing-advice {
+    font-size: 12px;
+    color: #8892b0;
+    margin-top: 10px;
+    line-height: 1.4;
+}
+
+/* Responsive Overrides for Job & Fit */
+@media (max-width: 960px) {
+    .fit-top-cluster {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .fit-gauge-assessment {
+        justify-content: flex-start !important;
+        width: 100% !important;
+    }
+    .fit-skills-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+@media (max-width: 768px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-step_nav_1) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-step_nav_1) div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-step_nav_1) div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_go_step2),
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_re_tailor),
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_mark_applied) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_go_step2) div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_go_step2) div[data-testid="stLayoutWrapper"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_re_tailor) div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_re_tailor) div[data-testid="stLayoutWrapper"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_mark_applied) div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_q_mark_applied) div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+}
+@media (max-width: 640px) {
+    .detected-card, .fit-analysis-card {
+        padding: 16px !important;
+    }
+    .detected-title {
+        font-size: 19px !important;
+    }
+    .fit-gauge-assessment {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+}
+
+/* --- Emerald Analysis Loading Experience --- */
+.analysis-loader-box {
+    background: #0d121c;
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 12px 0 16px 0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+.analysis-loader-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.emerald-ring-spinner {
+    width: 22px;
+    height: 22px;
+    border: 2.5px solid rgba(16, 185, 129, 0.2);
+    border-top-color: #00c875;
+    border-radius: 50%;
+    animation: emeraldSpin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes emeraldSpin {
+    to { transform: rotate(360deg); }
+}
+.analysis-loader-title {
+    font-size: 15px;
+    font-weight: 750;
+    color: #f8fafc;
+    letter-spacing: 0.01em;
+}
+.analysis-loader-msg {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 12px;
+    padding-left: 34px;
+}
+.analysis-stages-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 34px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 12px;
+}
+.analysis-stage-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    color: #64748b;
+    transition: all 0.2s ease;
+}
+.analysis-stage-item.completed {
+    color: #10b981;
+    font-weight: 600;
+}
+.analysis-stage-item.active {
+    color: #f8fafc;
+    font-weight: 700;
+}
+.stage-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    font-size: 11px;
+}
+.stage-icon.pulse {
+    color: #00c875;
+    animation: emeraldPulse 1.2s ease-in-out infinite;
+}
+@keyframes emeraldPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .emerald-ring-spinner {
+        animation: none !important;
+        border-top-color: #00c875 !important;
+    }
+    .stage-icon.pulse {
+        animation: none !important;
+    }
 }
 
 /* --- Visual Template Gallery & Live Studio Styles --- */
@@ -829,47 +2563,48 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     border-color: rgba(16, 185, 129, 0.3);
 }
 
-/* AI Changes Audit & Missing Skills Card */
+/* AI Changes Audit & Missing Skills Card (Legacy + Modern) */
 .ai-audit-card {
-    background: #0c111a;
-    border: 1px solid #1e2638;
-    border-radius: 10px;
-    padding: 12px 14px;
+    background: #0d121c;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 18px;
     margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
 }
 .ai-audit-title {
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 750;
     color: #10b981;
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 7px;
+    margin-bottom: 8px;
 }
 .ai-audit-item {
-    font-size: 12px;
+    font-size: 12.5px;
     color: #cbd5e1;
-    margin-bottom: 3px;
-    line-height: 1.35;
+    margin-bottom: 4px;
+    line-height: 1.4;
 }
 .ai-warning-card {
-    background: rgba(239, 68, 68, 0.07);
+    background: rgba(239, 68, 68, 0.05);
     border: 1px solid rgba(239, 68, 68, 0.28);
-    border-radius: 8px;
-    padding: 9px 12px;
+    border-radius: 12px;
+    padding: 14px 16px;
     margin-top: 10px;
 }
 .ai-warning-title {
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 750;
     color: #f87171;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 .ai-warning-note {
-    font-size: 11px;
+    font-size: 11.5px;
     color: #94a3b8;
-    margin-top: 4px;
-    line-height: 1.3;
+    margin-top: 6px;
+    line-height: 1.35;
 }
 .live-preview-box {
     background: #0a0d15;
@@ -880,90 +2615,690 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
 
-/* --- Product Proposition & Split Onboarding Screen Styles (Intentional Hierarchy) --- */
-.app-topbar {
+/* =========================================================================
+   AI RESUME STUDIO REDESIGN - HIGH-FIDELITY DESIGN SYSTEM
+   ========================================================================= */
+.studio-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+.studio-heading {
+    font-size: 26px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+.studio-subtext {
+    font-size: 13.5px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+.studio-meta-line {
+    font-size: 13px;
+    color: #cbd5e1;
+    margin-top: 5px;
+    font-weight: 500;
+}
+.studio-match-badge {
+    background: rgba(0, 200, 117, 0.1);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    border-radius: 999px;
+    padding: 6px 16px;
+    color: #00c875;
+    font-weight: 750;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    box-shadow: 0 0 14px rgba(0, 200, 117, 0.12);
+}
+.studio-sub-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.3rem 0 1.6rem 0;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    gap: 12px;
+    margin: 8px 0 16px 0;
+}
+.template-mini-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #0d1424;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: default;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.mini-doc-thumbnail {
+    width: 14px;
+    height: 18px;
+    background: #ffffff;
+    border-radius: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    position: relative;
+    padding: 2px 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 2px;
+    box-sizing: border-box;
+}
+.mini-doc-thumbnail::before {
+    content: "";
+    display: block;
+    height: 2px;
+    width: 70%;
+    background: #0284c7;
+    border-radius: 1px;
+}
+.mini-doc-thumbnail::after {
+    content: "";
+    display: block;
+    height: 2px;
+    width: 90%;
+    background: #94a3b8;
+    border-radius: 1px;
+    box-shadow: 0 3px 0 #94a3b8;
+}
+
+/* Studio Left Column Cards */
+.studio-card {
+    background: #0a0f1d;
+    border: 1px solid rgba(0, 200, 117, 0.28);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+.studio-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.studio-card-title {
+    font-size: 15px;
+    font-weight: 750;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.badge-gemini {
+    background: rgba(0, 200, 117, 0.14);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    border-radius: 999px;
+    padding: 3px 12px;
+    color: #00c875;
+    font-size: 11.5px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Highlights Card Body */
+.highlights-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.highlights-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+.highlight-bullet {
+    font-size: 12.5px;
+    color: #cbd5e1;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.4;
+}
+.highlight-check {
+    color: #00c875;
+    font-weight: 800;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.highlights-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-left: 20px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 140px;
+}
+.stat-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.stat-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: #00c875;
+    line-height: 1;
+}
+.stat-lbl {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.2;
+}
+
+/* Missing Profile Warning Card */
+.studio-warning-card {
+    background: rgba(239, 68, 68, 0.04);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+.warning-icon-pill {
+    background: #ef4444;
+    color: #ffffff;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+    margin-right: 4px;
+}
+.badge-missing-count {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 999px;
+    padding: 3px 12px;
+    color: #f87171;
+    font-size: 11.5px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.missing-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 8px 0;
+}
+.missing-chip-pill {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 999px;
+    padding: 4px 14px;
+    color: #fca5a5;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+}
+.missing-warning-text {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.45;
+    margin-top: 6px;
+}
+
+/* ATS Readiness Card */
+.ats-readiness-card {
+    background: #0a0f1d;
+    border: 1px solid rgba(0, 200, 117, 0.25);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+.ats-readiness-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.ats-checks-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ats-check-item {
+    font-size: 12.5px;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ats-gauge-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 90px;
+}
+.ats-gauge-lbl {
+    font-size: 12px;
+    font-weight: 700;
+    color: #00c875;
+    margin-top: 3px;
+}
+
+/* Resume Document Container (Right Column) */
+.resume-doc-sheet {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Edit Resume Content Card */
+.edit-content-card {
+    background: #0a0f1d;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* Edit Resume Tabs */
+div[data-testid="stTabs"] [role="tablist"] {
+    gap: 10px;
+    background: transparent;
+    border-bottom: none !important;
+    padding: 4px 0 14px 0;
+}
+div[data-testid="stTabs"] .react-aria-SelectionIndicator {
+    display: none !important;
+}
+div[data-testid="stTabs"] [role="tab"],
+div[data-testid="stTabs"] div[data-testid="stTab"],
+div[data-testid="stTabs"] button[role="tab"] {
+    background: #111827 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 999px !important;
+    color: #94a3b8 !important;
+    padding: 7px 18px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+div[data-testid="stTabs"] [role="tab"] p,
+div[data-testid="stTabs"] div[data-testid="stTab"] p {
+    margin: 0 !important;
+    color: inherit !important;
+    font-size: inherit !important;
+    font-weight: inherit !important;
+}
+div[data-testid="stTabs"] [role="tab"]:hover,
+div[data-testid="stTabs"] div[data-testid="stTab"]:hover,
+div[data-testid="stTabs"] button[role="tab"]:hover {
+    color: #f8fafc !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    background: #172238 !important;
+}
+div[data-testid="stTabs"] [role="tab"][aria-selected="true"],
+div[data-testid="stTabs"] div[data-testid="stTab"][aria-selected="true"],
+div[data-testid="stTabs"] div[data-testid="stTab"][data-selected="true"],
+div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+    background: rgba(0, 200, 117, 0.15) !important;
+    border: 1.5px solid #00c875 !important;
+    color: #00c875 !important;
+    font-weight: 700 !important;
+}
+div[data-testid="stTabs"] [role="tab"] > div,
+div[data-testid="stTabs"] button[role="tab"] > div {
+    color: inherit !important;
+}
+
+/* Zoom controls styling */
+div[data-testid="stButton"].st-key-btn_zoom_out button,
+div[data-testid="stButton"].st-key-btn_zoom_in button,
+.st-key-btn_zoom_pop button,
+div[data-testid="stPopover"].st-key-btn_zoom_pop button {
+    background: #111827 !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #cbd5e1 !important;
+    padding: 2px 6px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+}
+div[data-testid="stButton"].st-key-btn_zoom_out button:hover,
+div[data-testid="stButton"].st-key-btn_zoom_in button:hover,
+.st-key-btn_zoom_pop button:hover,
+div[data-testid="stPopover"].st-key-btn_zoom_pop button:hover {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    background: #172238 !important;
+    color: #ffffff !important;
+}
+.st-key-btn_zoom_pop [data-testid="stIconMaterial"],
+.st-key-btn_zoom_pop [aria-hidden="true"],
+.st-key-btn_zoom_pop svg,
+div[data-testid="stPopover"].st-key-btn_zoom_pop [data-testid="stIconMaterial"],
+div[data-testid="stPopover"].st-key-btn_zoom_pop [aria-hidden="true"],
+div[data-testid="stPopover"].st-key-btn_zoom_pop svg {
+    display: none !important;
+}
+
+/* Action buttons row */
+div[data-testid="stButton"].st-key-btn_quick_pdf_download button,
+div[data-testid="stDownloadButton"].st-key-btn_quick_pdf_download button {
+    background: #00c875 !important;
+    border: 1px solid #00c875 !important;
+    color: #042f20 !important;
+    font-weight: 750 !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    box-shadow: 0 4px 14px rgba(0, 200, 117, 0.25) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+div[data-testid="stButton"].st-key-btn_quick_pdf_download button:hover,
+div[data-testid="stDownloadButton"].st-key-btn_quick_pdf_download button:hover {
+    background: #00b368 !important;
+    color: #ffffff !important;
+    box-shadow: 0 6px 18px rgba(0, 200, 117, 0.35) !important;
+}
+div[data-testid="stLinkButton"].st-key-btn_quick_email a,
+div[data-testid="stLinkButton"].st-key-btn_quick_email button,
+div[data-testid="stButton"].st-key-btn_quick_pdf_library button {
+    background: #111827 !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #f8fafc !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    border-radius: 8px !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+div[data-testid="stLinkButton"].st-key-btn_quick_email a:hover,
+div[data-testid="stButton"].st-key-btn_quick_pdf_library button:hover {
+    background: #172238 !important;
+    border-color: rgba(255, 255, 255, 0.28) !important;
+    color: #ffffff !important;
+}
+
+/* Change template button */
+div[data-testid="stButton"].st-key-btn_s3_change_tpl {
+    width: auto !important;
+    display: inline-block !important;
+}
+div[data-testid="stButton"].st-key-btn_s3_change_tpl button {
+    background: #0d1424 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #e2e8f0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    padding: 7px 18px !important;
+    min-height: 38px !important;
+    height: 38px !important;
+    width: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+}
+div[data-testid="stButton"].st-key-btn_s3_change_tpl button:hover {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #ffffff !important;
+    background: #142038 !important;
+}
+
+/* Regenerate AI button */
+div[data-testid="stButton"].st-key-btn_regen_ai_summary button {
+    background: #111827 !important;
+    border: 1px solid rgba(0, 200, 117, 0.3) !important;
+    color: #00c875 !important;
+    font-size: 11.5px !important;
+    font-weight: 650 !important;
+    border-radius: 6px !important;
+    padding: 2px 10px !important;
+    min-height: 28px !important;
+}
+div[data-testid="stButton"].st-key-btn_regen_ai_summary button:hover {
+    background: rgba(0, 200, 117, 0.12) !important;
+    border-color: #00c875 !important;
+    color: #ffffff !important;
+}
+
+@media (max-width: 960px) {
+    div[data-testid="stButton"].st-key-step_nav_1 button div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stButton"].st-key-step_nav_2 button div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stButton"].st-key-step_nav_3 button div[data-testid="stMarkdownContainer"] p {
+        flex-direction: column !important;
+        gap: 2px !important;
+        white-space: normal !important;
+        text-align: center !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-studio_col_left) {
+        flex-direction: column !important;
+        gap: 18px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-studio_col_left) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-studio_col_left) > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        max-width: 100% !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_quick_pdf_download) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_quick_pdf_download) > div[data-testid="stColumn"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .highlights-body {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .highlights-stats {
+        padding-left: 0 !important;
+        border-left: none !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+        padding-top: 10px !important;
+        width: 100% !important;
+        flex-direction: row !important;
+        gap: 24px !important;
+    }
+    .ats-readiness-body {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .ats-gauge-box {
+        margin-top: 10px !important;
+        align-self: center !important;
+    }
+}
+@media (max-width: 640px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-step_nav_1) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-step_nav_1) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-step_nav_1) > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .studio-title-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    .studio-sub-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_s3_change_tpl) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-btn_s3_change_tpl) > div[data-testid="stColumn"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+}
+
+/* --- Product Proposition & Split Onboarding Screen Styles (Intentional Hierarchy) --- */
+.st-key-onb_top_bar {
+    padding: 0.2rem 0 0.8rem 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    margin-bottom: 1.5rem !important;
 }
 .app-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 22px;
+    gap: 8px;
+    font-size: 20px;
     font-weight: 850;
     color: #ffffff;
-    letter-spacing: -0.025em;
+    letter-spacing: 0.02em;
+}
+.brand-bolt {
+    color: #f59e0b;
+    font-size: 19px;
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+}
+.brand-name {
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 850;
+    letter-spacing: 0.02em;
 }
 .app-brand-badge {
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 800;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    padding: 2.5px 8px;
+    color: #00c875;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    padding: 2px 7px;
     border-radius: 999px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.05em;
+    margin-left: 2px;
+}
+.st-key-btn_top_demo_action button {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    padding: 6px 14px !important;
+    height: 38px !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-btn_top_demo_action button:hover {
+    border-color: #00c875 !important;
+    color: #00c875 !important;
+    background: rgba(0, 200, 117, 0.06) !important;
 }
 
 /* Left Proposition Column - Minimal & Clean */
 .prop-container {
-    padding-right: 2.2rem;
-    padding-top: 1rem;
+    padding-right: 1.5rem;
+    padding-top: 0.2rem;
+}
+.prop-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 200, 117, 0.08);
+    border: 1px solid rgba(0, 200, 117, 0.22);
+    color: #00c875;
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 1.1rem;
+}
+.prop-eyebrow .eyebrow-dot {
+    font-size: 8px;
+    color: #00c875;
 }
 .prop-headline {
-    font-size: 3.4rem;
-    font-weight: 900;
-    letter-spacing: -0.04em;
-    color: #f8fafc !important;
-    line-height: 1.12;
-    margin: 0 0 1.1rem 0;
+    font-size: 3.25rem;
+    font-weight: 850;
+    letter-spacing: -0.035em;
+    color: #ffffff !important;
+    line-height: 1.15;
+    margin: 0 0 1rem 0;
 }
 .prop-headline .prop-highlight {
-    color: #10b981 !important;
+    color: #00c875 !important;
 }
 .prop-desc {
-    font-size: 1.08rem;
+    font-size: 14.5px;
     color: #94a3b8;
-    line-height: 1.65;
-    margin-bottom: 2rem;
-    max-width: 540px;
+    line-height: 1.6;
+    margin-bottom: 1.6rem;
+    max-width: 490px;
 }
 
 /* Minimal Spotlight Preview Card */
 .preview-card-wrap {
-    background: #090d16;
+    background: #0d131f;
     border: 1px solid #1e293b;
-    border-radius: 14px;
-    padding: 1.3rem 1.45rem;
+    border-radius: 12px;
+    padding: 1.15rem 1.3rem;
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
-    max-width: 520px;
+    max-width: 490px;
 }
 .preview-title-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.75rem;
 }
 .preview-job-title {
-    font-size: 17.5px;
+    font-size: 17px;
     font-weight: 750;
-    color: #f8fafc;
-    margin-bottom: 3px;
+    color: #ffffff;
+    margin-bottom: 4px;
 }
 .preview-job-meta {
     font-size: 12px;
-    color: #64748b;
+    color: #8892b0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+.preview-job-meta .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
 }
 .preview-score-badge {
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: #34d399;
-    font-size: 12.5px;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    color: #00c875;
+    font-size: 11.5px;
     font-weight: 800;
     padding: 3px 9px;
     border-radius: 6px;
@@ -973,83 +3308,119 @@ div[data-testid="stColumn"]:has(.filtered-card):hover {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 1.1rem;
+    margin-bottom: 1rem;
 }
 .pchip {
-    font-size: 11.5px;
-    padding: 3px 9px;
+    font-size: 11px;
+    padding: 3px 8px;
     border-radius: 5px;
     font-weight: 600;
 }
 .pchip.hit {
-    background: rgba(16, 185, 129, 0.1);
-    color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.22);
+    background: rgba(0, 200, 117, 0.12);
+    color: #00c875;
+    border: 1px solid rgba(0, 200, 117, 0.28);
 }
 .pchip.gap {
-    background: rgba(245, 158, 11, 0.1);
+    background: rgba(245, 158, 11, 0.12);
     color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.22);
+    border: 1px solid rgba(245, 158, 11, 0.28);
 }
 .preview-bar-track {
-    height: 6px;
-    background: rgba(255, 255, 255, 0.06);
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 999px;
     overflow: hidden;
 }
 .preview-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #10b981, #06b6d4);
+    background: #00c875;
     border-radius: 999px;
+    box-shadow: 0 0 10px rgba(0, 200, 117, 0.5);
 }
 
 /* Hero benefit points under the sample card */
-.prop-benefits { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; max-width: 520px; }
-.prop-benefit { font-size: 12.5px; color: #cbd5e1; display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
-.prop-benefit .tick { color: #10b981; font-weight: 800; }
-
-/* Right Column: Clean Action Panel (legacy column selector kept for compat;
-   .st-key-onboard_panel below is the stable hook — same visual identity) */
-div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderWrapper"] {
-    background: #0b0f19 !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 16px !important;
-    padding: 1.8rem 1.9rem !important;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+.prop-benefits {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 1.3rem;
+    max-width: 490px;
 }
-/* Stable outer onboarding panel — same width/position/border/background on every
-   step. Uses the documented container key class (stable API), not column order. */
-.st-key-onboard_panel {
-    background: #0b0f19 !important;
+.prop-benefit {
+    font-size: 12.5px;
+    color: #cbd5e1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    line-height: 1.5;
+}
+.prop-benefit .tick-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 200, 117, 0.16);
+    color: #00c875;
+    font-size: 10px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+/* Right Column: Clean Action Panel (legacy column selector kept for compat) */
+div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #0d131f !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 16px !important;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+}
+/* Stable outer onboarding panel */
+.st-key-onboard_panel {
+    background: #0d131f !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+    padding: 1.25rem 1.4rem !important;
+}
+.onboard-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.25rem;
+}
+.onboard-user-icon {
+    font-size: 18px;
+    color: #00c875;
 }
 .onboard-header-title {
-    font-size: 1.55rem;
+    font-size: 1.45rem;
     font-weight: 800;
     color: #ffffff;
-    margin: 0 0 0.35rem 0;
+    margin: 0;
 }
 .onboard-header-sub {
-    font-size: 13px;
-    color: #94a3b8;
+    font-size: 12px;
+    color: #8892b0;
     line-height: 1.5;
-    margin-bottom: 1.15rem;
+    margin-bottom: 0.95rem;
 }
 
 /* Recruiter Tour Card inside Action Panel */
-.recruiter-tour-card {
-    background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 182, 212, 0.04) 100%);
-    border: 1px solid rgba(16, 185, 129, 0.28);
-    border-radius: 12px;
-    padding: 1rem 1.15rem;
-    margin-bottom: 0.85rem;
-    transition: all 0.2s ease;
+.st-key-onboard_demo {
+    background: #0d131f !important;
+    border: 1px solid rgba(0, 200, 117, 0.25) !important;
+    border-radius: 12px !important;
+    padding: 0.95rem 1.15rem !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+    margin-bottom: 0.5rem !important;
 }
-.recruiter-tour-card:hover {
-    border-color: rgba(16, 185, 129, 0.45);
-    background: linear-gradient(145deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.06) 100%);
+.recruiter-tour-card {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
 }
 .tour-badge-row {
     display: flex;
@@ -1060,10 +3431,10 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 .tour-badge {
     font-size: 9.5px;
     font-weight: 800;
-    letter-spacing: 0.06em;
-    color: #10b981;
-    background: rgba(16, 185, 129, 0.16);
-    border: 1px solid rgba(16, 185, 129, 0.35);
+    letter-spacing: 0.05em;
+    color: #00c875;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.35);
     padding: 2px 7px;
     border-radius: 4px;
 }
@@ -1073,15 +3444,43 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     font-weight: 500;
 }
 .tour-title {
-    font-size: 15px;
+    font-size: 15.5px;
     font-weight: 750;
-    color: #f8fafc;
+    color: #ffffff;
     margin-bottom: 0.25rem;
 }
 .tour-desc {
     font-size: 12px;
-    color: #94a3b8;
+    color: #8892b0;
     line-height: 1.45;
+}
+.st-key-btn_recruiter_tour {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.st-key-btn_recruiter_tour button {
+    border-radius: 50% !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    max-width: 44px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #0d281e !important;
+    border: 1px solid rgba(0, 200, 117, 0.4) !important;
+    color: #00c875 !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-btn_recruiter_tour button:hover {
+    background: #00c875 !important;
+    color: #000000 !important;
+    border-color: #00c875 !important;
+    box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
 }
 
 /* Subtle divider between Tour and Upload */
@@ -1089,7 +3488,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     display: flex;
     align-items: center;
     text-align: center;
-    margin: 1.15rem 0 1.05rem 0;
+    margin: 0.95rem 0 0.85rem 0;
 }
 .or-separator::before,
 .or-separator::after {
@@ -1099,11 +3498,191 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 }
 .or-separator span {
     padding: 0 12px;
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 700;
     letter-spacing: 0.08em;
     color: #64748b;
     text-transform: uppercase;
+}
+
+/* Step 1 Dual Option Cards */
+.st-key-onb_card_upload {
+    background: #090e17 !important;
+    border: 1.5px solid #00c875 !important;
+    border-radius: 10px !important;
+    padding: 0.95rem !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-onb_card_upload .onb-path-header,
+.st-key-onb_card_manual .onb-path-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0.35rem;
+}
+.onb-path-icon {
+    font-size: 14px;
+}
+.onb-path-title {
+    font-size: 14px;
+    font-weight: 750;
+    color: #ffffff;
+}
+.onb-path-desc {
+    font-size: 11px;
+    color: #8892b0;
+    line-height: 1.45;
+    margin-bottom: 0.8rem;
+    min-height: 32px;
+}
+.st-key-btn_onb_goto_upload button {
+    background: #00c875 !important;
+    color: #000000 !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+    border-radius: 8px !important;
+    border: none !important;
+    height: 38px !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_onb_goto_upload button:hover {
+    background: #00df82 !important;
+    box-shadow: 0 4px 14px rgba(0, 200, 117, 0.4) !important;
+}
+.st-key-onb_card_manual {
+    background: #090e17 !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 10px !important;
+    padding: 0.95rem !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-onb_card_manual:hover {
+    border-color: rgba(0, 200, 117, 0.4) !important;
+}
+.st-key-btn_onb_goto_manual button {
+    background: #121824 !important;
+    border: 1px solid #2a384c !important;
+    color: #cbd5e1 !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+    border-radius: 8px !important;
+    height: 38px !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_onb_goto_manual button:hover {
+    border-color: #00c875 !important;
+    color: #ffffff !important;
+    background: #182232 !important;
+}
+/* Step 1 clean end: hide disabled bottom footer on step 1 */
+.st-key-onboard_panel:has(.onb-step-1) .st-key-onboard_step_foot {
+    display: none !important;
+}
+.st-key-onboard_panel:has(.onb-step-1) {
+    height: auto !important;
+    max-height: none !important;
+}
+
+/* Row preservation for Topbar and Demo Card */
+.st-key-onb_top_bar div[data-testid="stHorizontalBlock"] {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+.st-key-onb_top_bar div[data-testid="stColumn"]:first-child {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+.st-key-onb_top_bar div[data-testid="stColumn"]:last-child {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+.st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+.st-key-onboard_demo div[data-testid="stColumn"]:first-child {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+.st-key-onboard_demo div[data-testid="stColumn"]:last-child {
+    flex: 0 0 auto !important;
+    min-width: 44px !important;
+}
+
+/* Tablet & Mobile Stacking for Landing Page */
+@media (max-width: 960px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
+        flex-direction: column !important;
+        gap: 1.5rem !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) div[data-testid="stColumn"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .prop-container {
+        padding-right: 0 !important;
+        margin-bottom: 1.5rem !important;
+    }
+    .prop-headline {
+        font-size: 2.6rem !important;
+    }
+}
+@media (max-width: 640px) {
+    .st-key-onboard_panel div[data-testid="stHorizontalBlock"] {
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+    }
+    .st-key-onboard_panel div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-onboard_panel div[data-testid="stColumn"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .prop-headline {
+        font-size: 2.1rem !important;
+        line-height: 1.2 !important;
+    }
+    .prop-desc {
+        font-size: 13.5px !important;
+    }
+    .preview-card-wrap {
+        padding: 1rem !important;
+    }
+    .app-brand {
+        font-size: 16px !important;
+        gap: 6px !important;
+    }
+    .brand-bolt {
+        font-size: 16px !important;
+    }
+    .brand-name {
+        font-size: 16px !important;
+    }
+    .app-brand-badge {
+        font-size: 9px !important;
+        padding: 1px 5px !important;
+    }
+    .st-key-btn_top_demo_action button {
+        padding: 4px 10px !important;
+        font-size: 12px !important;
+        height: 32px !important;
+        white-space: nowrap !important;
+    }
 }
 
 /* Form Input Scale & Styling */
@@ -1339,7 +3918,7 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
 }
 
 /* Launch CTA button */
-div[data-testid="stButton"] button[kind="primary"] {
+.st-key-onboard_panel div[data-testid="stButton"] button[kind="primary"] {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
     color: #ffffff !important;
     font-size: 15.5px !important;
@@ -1351,7 +3930,7 @@ div[data-testid="stButton"] button[kind="primary"] {
     letter-spacing: -0.01em !important;
     transition: all 0.15s ease !important;
 }
-div[data-testid="stButton"] button[kind="primary"]:hover {
+.st-key-onboard_panel div[data-testid="stButton"] button[kind="primary"]:hover {
     transform: translateY(-1px) !important;
     box-shadow: 0 8px 28px rgba(16, 185, 129, 0.5) !important;
 }
@@ -1490,6 +4069,389 @@ div[data-testid="stColumn"] {
 @media (prefers-reduced-motion: reduce) {
     .tw-active .tw-text::after { display: none; }
 }
+
+/* =========================================================================
+   RESUME & ATS PROFILE WORKSPACE REDESIGN (Minimal Dark Reference Architecture)
+   ========================================================================= */
+
+/* Main Header */
+.rw-header {
+    margin-top: 2px;
+    margin-bottom: 22px;
+}
+.rw-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px 0;
+}
+.rw-subtitle {
+    font-size: 13.5px;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Card Container Styling for Resume Workspace */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-rw_base_card),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-rw_profile_card),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-rw_skills_card),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-rw_editor_card) {
+    background: #0f141c !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    padding: 18px 20px !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28) !important;
+    margin-bottom: 14px !important;
+}
+
+/* Card Header */
+.rw-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    gap: 12px;
+}
+.rw-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.rw-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+.rw-card-titles {
+    display: flex;
+    flex-direction: column;
+}
+.rw-card-title {
+    font-size: 15.5px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+.rw-card-sub {
+    font-size: 12px;
+    color: #8896a6;
+    margin: 3px 0 0 0;
+}
+
+/* Custom Uploader in Base Resume Card */
+div.st-key-res_tab_uploader div[data-testid="stFileUploader"] > label {
+    display: none !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"] {
+    background: rgba(0, 0, 0, 0.28) !important;
+    border: 1.5px dashed rgba(255, 255, 255, 0.12) !important;
+    border-radius: 10px !important;
+    padding: 14px 18px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    transition: all 0.2s ease !important;
+    min-height: 76px !important;
+    box-shadow: none !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(0, 200, 117, 0.45) !important;
+    background: rgba(0, 200, 117, 0.03) !important;
+    box-shadow: 0 0 15px rgba(0, 200, 117, 0.1) !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploaderDropzoneInstructions"] {
+    text-align: left !important;
+    order: 1 !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploaderDropzoneInstructions"] span {
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    color: #e2e8f0 !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploaderDropzoneInstructions"] small {
+    display: block !important;
+    font-size: 11px !important;
+    color: #64748b !important;
+    margin-top: 2px !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploader"] button[data-testid="baseButton-secondary"] {
+    order: 2 !important;
+    background: #00c875 !important;
+    color: #042314 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    padding: 8px 18px !important;
+    box-shadow: 0 2px 8px rgba(0, 200, 117, 0.22) !important;
+    transition: all 0.15s ease !important;
+    flex-shrink: 0 !important;
+}
+div.st-key-res_tab_uploader div[data-testid="stFileUploader"] button[data-testid="baseButton-secondary"]:hover {
+    background: #00df82 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Active Profile Rows */
+.rw-profile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding-top: 2px;
+}
+.rw-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+.rw-row-icon {
+    width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.rw-row-label {
+    width: 130px;
+    color: #8896a6;
+    flex-shrink: 0;
+}
+.rw-row-value {
+    color: #f1f5f9;
+    font-weight: 500;
+    word-break: break-word;
+}
+
+/* Skills Chips */
+.rw-skills-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 4px;
+}
+.rw-skill-pill {
+    background: #141a24;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #cbd5e1;
+    line-height: 1.35;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.rw-skill-pill:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: #18202d;
+    color: #ffffff;
+}
+
+/* Editor Toolbar */
+.rw-editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0d121b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    padding: 7px 12px;
+    margin-top: 6px;
+    gap: 8px;
+}
+.rw-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.rw-tool-select {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+    font-size: 11.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: default;
+}
+.rw-toolbar-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 0 4px;
+}
+.rw-tool-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: #8896a6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+.rw-tool-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Editor Meta & Count */
+.rw-editor-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 6px 4px 0 4px;
+    font-size: 11px;
+    color: #64748b;
+    letter-spacing: 0.01em;
+}
+
+/* Streamlit Text Area Scope within Resume Workspace */
+.st-key-res_text_editor textarea {
+    background: #090d16 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+    color: #cbd5e1 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+    font-size: 12.5px !important;
+    line-height: 1.6 !important;
+    padding: 14px 16px !important;
+}
+.st-key-res_text_editor textarea:focus {
+    border-color: rgba(0, 200, 117, 0.4) !important;
+    box-shadow: 0 0 0 1px rgba(0, 200, 117, 0.2) !important;
+}
+
+/* Save Resume Button (Emerald Teal Green Accent) */
+.st-key-btn_save_resume button {
+    background: #00c875 !important;
+    color: #042314 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    padding: 0.65rem 1.2rem !important;
+    transition: all 0.15s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    box-shadow: 0 2px 10px rgba(0, 200, 117, 0.2) !important;
+}
+.st-key-btn_save_resume button:hover {
+    background: #00df82 !important;
+    color: #021a0e !important;
+    box-shadow: 0 4px 14px rgba(0, 200, 117, 0.35) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Generate Master PDF Button (Subdued Dark Card Button) */
+.st-key-btn_gen_master_pdf button {
+    background: #141a24 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #f1f5f9 !important;
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    padding: 0.65rem 1.2rem !important;
+    transition: all 0.15s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+}
+.st-key-btn_gen_master_pdf button:hover {
+    background: #1a2230 !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #ffffff !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Subtle Action Buttons (Edit, Reset, Clear) */
+.st-key-rw_edit_profile_btn button,
+.st-key-rw_edit_skills_btn button,
+.st-key-rw_reset_btn button,
+.st-key-rw_clear_btn button {
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #94a3b8 !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 3px 10px !important;
+    min-height: 28px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-rw_edit_profile_btn button:hover,
+.st-key-rw_edit_skills_btn button:hover,
+.st-key-rw_reset_btn button:hover,
+.st-key-rw_clear_btn button:hover {
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Responsive Overrides */
+@media (max-width: 960px) {
+    .rw-header { margin-bottom: 16px; }
+    .rw-title { font-size: 20px; }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-rw_base_card) {
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        gap: 0 !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-rw_base_card) > div[data-testid="stColumn"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+    div.st-key-res_tab_uploader div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"] {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+    div.st-key-res_tab_uploader div[data-testid="stFileUploader"] button[data-testid="baseButton-secondary"] {
+        width: 100% !important;
+    }
+}
+@media (max-width: 640px) {
+    .rw-profile-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 3px !important;
+    }
+    .rw-row-label {
+        width: auto !important;
+        font-size: 11.5px !important;
+    }
+    .rw-editor-toolbar {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -1535,13 +4497,6 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
     _nk_params = ([f"k={role_enc}"] if role else []) + ["jobAge=3"]
     naukri_url = (f"https://www.naukri.com/jobs-in-{city_slug}?" if city_slug
                   else "https://www.naukri.com/jobs?") + "&".join(_nk_params)
-    _fo_params = (([f"query={role_enc}"] if role else [])
-                  + ([f"locations={city_enc}"] if loc_city else []))
-    foundit_url = ("https://www.foundit.in/srp/results" + ("?" + "&".join(_fo_params) if _fo_params else ""))
-    _gd_params = ([f"sc.keyword={role_enc}"] if role else []) + ["fromAge=3"]
-    glassdoor_url = "https://www.glassdoor.co.in/Job/jobs.htm?" + "&".join(_gd_params)
-    # NOTE: Wellfound / HiringCafe / Instahyre / Cutshort / YC expose no documented
-    # exp/date URL params, so their links stay unfiltered (filter in 1 click on-site).
 
     hc_state = _hiringcafe_state(role)
     hc_enc = urllib.parse.quote(json.dumps(hc_state))
@@ -1551,11 +4506,13 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
             "id": "indeed",
             "name": "Indeed India",
             "icon": "💼",
+            "icon_bg": "#2164f3",
+            "icon_text": "i",
             "badge": "Top Volume",
             "badge_bg": "rgba(37,99,235,0.18)",
             "badge_color": "#60a5fa",
             "badge_border": "rgba(59,130,246,0.3)",
-            "desc": "India's highest volume job board. Direct corporate & agency postings.",
+            "desc": "High volume job board",
             "url": indeed_url,
             "hint": "Search, copy viewjob URL, paste in Tab 2"
         },
@@ -1563,11 +4520,13 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
             "id": "linkedin",
             "name": "LinkedIn Jobs",
             "icon": "🔷",
+            "icon_bg": "#0a66c2",
+            "icon_text": "in",
             "badge": "High Response",
             "badge_bg": "rgba(14,165,233,0.18)",
             "badge_color": "#38bdf8",
             "badge_border": "rgba(14,165,233,0.3)",
-            "desc": "Direct recruiter listings & easy-apply corporate and startup roles.",
+            "desc": "Corporate & startup roles",
             "url": linkedin_url,
             "hint": "Copy LinkedIn job post link and paste in Tab 2"
         },
@@ -1575,11 +4534,13 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
             "id": "naukri",
             "name": "Naukri.com",
             "icon": "🎯",
+            "icon_bg": "#1976d2",
+            "icon_text": "N",
             "badge": "India #1",
             "badge_bg": "rgba(249,115,22,0.18)",
             "badge_color": "#fb923c",
             "badge_border": "rgba(249,115,22,0.3)",
-            "desc": "India's largest IT job portal with verified enterprise recruiters.",
+            "desc": "India's largest job portal",
             "url": naukri_url,
             "hint": "Open, copy job link or JD text into Tab 1/2"
         },
@@ -1587,11 +4548,13 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
             "id": "wellfound",
             "name": "Wellfound (AngelList)",
             "icon": "✌️",
+            "icon_bg": "#18181b",
+            "icon_text": "W",
             "badge": "VC Startups",
             "badge_bg": "rgba(244,63,94,0.18)",
             "badge_color": "#fb7185",
             "badge_border": "rgba(244,63,94,0.3)",
-            "desc": "Top-tier Silicon Valley & Indian VC-backed seed/series A startups.",
+            "desc": "Startup & VC backed roles",
             "url": f"https://wellfound.com/jobs?role={role_enc}" if role else "https://wellfound.com/jobs",
             "hint": "Direct founder & engineering lead contact"
         },
@@ -1599,73 +4562,85 @@ def get_major_platforms(p, target_q="", loc_q="__default__"):
             "id": "hiringcafe",
             "name": "HiringCafe",
             "icon": "☕",
+            "icon_bg": "#059669",
+            "icon_text": "O",
             "badge": "No-Spam ATS",
             "badge_bg": "rgba(245,158,11,0.18)",
             "badge_color": "#fbbf24",
             "badge_border": "rgba(245,158,11,0.3)",
-            "desc": "Stealth company crawler: Direct Greenhouse, Lever & Ashby listings.",
+            "desc": "Direct company listings",
             "url": f"https://hiring.cafe/?searchState={hc_enc}",
             "hint": "Direct company career page links"
         },
         {
-            "id": "instahyre",
-            "name": "Instahyre",
+            "id": "arbeitnow",
+            "name": "Arbeitnow",
             "icon": "⚡",
-            "badge": "AI Match",
-            "badge_bg": "rgba(16,185,129,0.18)",
-            "badge_color": "#34d399",
-            "badge_border": "rgba(16,185,129,0.3)",
-            "desc": "Curated tech engineering jobs with salary bands and verified HR.",
-            "url": "https://www.instahyre.com/jobs/",
-            "hint": "Premium Indian product companies"
+            "icon_bg": "#06b6d4",
+            "icon_text": "a",
+            "badge": "Remote Tech",
+            "badge_bg": "rgba(6,182,212,0.18)",
+            "badge_color": "#22d3ee",
+            "badge_border": "rgba(6,182,212,0.3)",
+            "desc": "Remote tech jobs",
+            "url": f"https://www.arbeitnow.com/jobs?search={role_enc}" if role else "https://www.arbeitnow.com/",
+            "hint": "Remote engineering and tech roles"
         },
         {
-            "id": "cutshort",
-            "name": "Cutshort",
+            "id": "remoteok",
+            "name": "RemoteOK",
             "icon": "🚀",
-            "badge": "Fast Track",
+            "icon_bg": "#ea580c",
+            "icon_text": "R",
+            "badge": "Global Remote",
+            "badge_bg": "rgba(234,88,12,0.18)",
+            "badge_color": "#fb923c",
+            "badge_border": "rgba(234,88,12,0.3)",
+            "desc": "Global remote roles",
+            "url": f"https://remoteok.com/remote-{role_enc}-jobs" if role else "https://remoteok.com/",
+            "hint": "Worldwide remote tech opportunities"
+        },
+        {
+            "id": "himalayas",
+            "name": "Himalayas",
+            "icon": "🏔️",
+            "icon_bg": "#8b5cf6",
+            "icon_text": "H",
+            "badge": "Tech Cos",
             "badge_bg": "rgba(139,92,246,0.18)",
             "badge_color": "#a78bfa",
             "badge_border": "rgba(139,92,246,0.3)",
-            "desc": "Direct connection with hiring managers & CTOs without agency spam.",
-            "url": "https://cutshort.io/",
-            "hint": "Match directly with engineering leads"
+            "desc": "Startup & tech companies",
+            "url": f"https://himalayas.app/jobs?q={role_enc}" if role else "https://himalayas.app/jobs",
+            "hint": "Curated remote startup jobs"
+        },
+        {
+            "id": "adzuna",
+            "name": "Adzuna",
+            "icon": "🌀",
+            "icon_bg": "#10b981",
+            "icon_text": "@",
+            "badge": "Aggregated",
+            "badge_bg": "rgba(16,185,129,0.18)",
+            "badge_color": "#34d399",
+            "badge_border": "rgba(16,185,129,0.3)",
+            "desc": "Aggregated job listings",
+            "url": (f"https://www.adzuna.in/search?q={role_enc}" + (f"&w={city_enc}" if loc_city else "")) if (role or loc_city) else "https://www.adzuna.in/jobs",
+            "hint": "Aggregated tech listings across India"
         },
         {
             "id": "yc",
-            "name": "Y Combinator Startups",
+            "name": "YC / Hacker News",
             "icon": "🟧",
-            "badge": "Top 1%",
-            "badge_bg": "rgba(249,115,22,0.18)",
+            "icon_bg": "#ff6600",
+            "icon_text": "Y",
+            "badge": "Top Startups",
+            "badge_bg": "rgba(255,102,0,0.18)",
             "badge_color": "#fb923c",
-            "badge_border": "rgba(249,115,22,0.3)",
-            "desc": "Work at YC-funded startups. High equity, cutting-edge AI & modern stacks.",
+            "badge_border": "rgba(255,102,0,0.3)",
+            "desc": "Startup roles & discussions",
             "url": f"https://www.workatastartup.com/jobs?query={role_enc}" if role else "https://www.workatastartup.com/jobs",
             "hint": "High-growth YC startup opportunities"
-        },
-        {
-            "id": "foundit",
-            "name": "Foundit (Monster)",
-            "icon": "🟣",
-            "badge": "Enterprise",
-            "badge_bg": "rgba(99,102,241,0.18)",
-            "badge_color": "#818cf8",
-            "badge_border": "rgba(99,102,241,0.3)",
-            "desc": "Leading Indian IT MNCs, banking & enterprise technology consultancies.",
-            "url": foundit_url,
-            "hint": "Enterprise Indian tech roles"
-        },
-        {
-            "id": "glassdoor",
-            "name": "Glassdoor India",
-            "icon": "🟢",
-            "badge": "Verified Reviews",
-            "badge_bg": "rgba(5,150,105,0.18)",
-            "badge_color": "#10b981",
-            "badge_border": "rgba(5,150,105,0.3)",
-            "desc": "Roles with verified salary transparency & employee work culture reviews.",
-            "url": glassdoor_url,
-            "hint": "Check salary range before applying"
         }
     ]
 
@@ -1727,20 +4702,6 @@ def ensure_db():
       file_path TEXT, pdf_hash TEXT UNIQUE, application_url TEXT DEFAULT '')""")
     con.commit()
     return con
-
-
-# ponytail: session CRUD moved to session_store.py (sessions.db, gitignored)
-def get_jobs(q=""):
-    if not os.path.exists(DB):
-        return []
-    con = ensure_db()
-    con.row_factory = sqlite3.Row
-    rows = [dict(r) for r in con.execute("SELECT * FROM jobs ORDER BY created_at DESC")]
-    con.close()
-    if q:
-        q = q.lower()
-        rows = [r for r in rows if q in ((r["title"] or "") + (r["company"] or "") + (r["description"] or "")).lower()]
-    return rows
 
 
 EXCLUDED_PORTFOLIO_DOMAINS = {
@@ -1935,6 +4896,7 @@ def ocr_pdf_pages(file_bytes, max_pages=3, dpi=300):
     except Exception:
         return ""
     try:
+        fitz = _get_fitz()
         doc = fitz.open(stream=file_bytes, filetype="pdf")
     except Exception:
         return ""
@@ -1982,9 +4944,21 @@ def extract_pdf_rich(file):
     except Exception as e:
         return {"text": "", "links": [], "classified_links": {}, "is_scanned": False, "error": f"Read failure: {e}"}
 
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        return {"text": "", "links": [], "classified_links": {}, "is_scanned": False,
+                "error": "File is larger than 10 MB. Please upload a smaller PDF."}
+    if not file_bytes.startswith(b"%PDF"):
+        return {"text": "", "links": [], "classified_links": {}, "is_scanned": False,
+                "error": "This is not a valid PDF file."}
+
     # 1. Primary: PyMuPDF (fitz)
     try:
+        fitz = _get_fitz()
         doc = fitz.open(stream=file_bytes, filetype="pdf")
+        if doc.page_count > MAX_PDF_PAGES:
+            doc.close()
+            return {"text": "", "links": [], "classified_links": {}, "is_scanned": False,
+                    "error": f"PDF has too many pages (limit {MAX_PDF_PAGES})."}
         for page in doc:
             t = page.get_text() or ""
             if t.strip():
@@ -2004,6 +4978,9 @@ def extract_pdf_rich(file):
             from pypdf import PdfReader
             import io
             reader = PdfReader(io.BytesIO(file_bytes))
+            if len(reader.pages) > MAX_PDF_PAGES:
+                return {"text": "", "links": [], "classified_links": {}, "is_scanned": False,
+                        "error": f"PDF has too many pages (limit {MAX_PDF_PAGES})."}
             for page in reader.pages:
                 txt = page.extract_text() or ""
                 if txt.strip():
@@ -2077,9 +5054,11 @@ def call_gemini_api(prompt, api_key):
     candidate_models = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash"]
     for model_name in candidate_models:
         m_path = model_name if model_name.startswith("models/") else f"models/{model_name}"
-        url = f"https://generativelanguage.googleapis.com/v1beta/{m_path}:generateContent?key={api_key}"
+        # Key travels in a header, never a URL query string (avoids proxy/log leaks).
+        url = f"https://generativelanguage.googleapis.com/v1beta/{m_path}:generateContent"
         try:
-            resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=6)
+            resp = requests.post(url, headers={"x-goog-api-key": api_key},
+                                 json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=6)
             if resp.status_code == 200:
                 data = resp.json()
                 cands = data.get("candidates", [])
@@ -2332,6 +5311,10 @@ def merge_profiles(existing, incoming):
 
 
 def save_active_profile(p, merge=False):
+    # Demo sessions are sandboxed: session-state only, never the owner's files.
+    if _is_demo():
+        st.session_state["user_profile"] = p if isinstance(p, dict) else {}
+        return
     # ponytail: merge=True is ONLY for fresh extraction output (upload path) whose
     # lists/scalars may be empty. All settings/session/demo callers keep replace.
     to_save = p
@@ -3406,6 +6389,7 @@ def onb_path_cards_script():
 
 
 WELCOME_PROP_HTML = """<div class="prop-container">
+<div class="prop-eyebrow"><span class="eyebrow-dot">●</span><span>AI-POWERED JOB SEARCH</span></div>
 <h1 class="prop-headline">Your job search,<br/><span class="prop-highlight">automated.</span></h1>
 <p class="prop-desc">
 JobScout scores your exact stack fit against 1,160+ active roles, surfaces high-signal matches, and tailors ATS applications around your profile.
@@ -3414,7 +6398,11 @@ JobScout scores your exact stack fit against 1,160+ active roles, surfaces high-
 <div class="preview-title-row">
 <div>
 <div class="preview-job-title">Senior Full Stack Developer</div>
-<div class="preview-job-meta">TechNova · Mumbai (Hybrid) · ₹18–24 LPA</div>
+<div class="preview-job-meta">
+<span class="meta-item"><span class="meta-icon">🏢</span> TechNova</span>
+<span class="meta-item"><span class="meta-icon">📍</span> Mumbai (Hybrid)</span>
+<span class="meta-item"><span class="meta-icon">💼</span> ₹18–24 LPA</span>
+</div>
 </div>
 <span class="preview-score-badge">87% FIT</span>
 </div>
@@ -3430,9 +6418,9 @@ JobScout scores your exact stack fit against 1,160+ active roles, surfaces high-
 </div>
 </div>
 <div class="prop-benefits">
-<div class="prop-benefit"><span class="tick">✓</span><span>Exact stack-fit scoring against live roles</span></div>
-<div class="prop-benefit"><span class="tick">✓</span><span>Project GitHub &amp; live links extracted with each role</span></div>
-<div class="prop-benefit"><span class="tick">✓</span><span>ATS resume tailor, verified before you apply</span></div>
+<div class="prop-benefit"><span class="tick-circle">✔</span><span>Exact stack-fit scoring against live roles</span></div>
+<div class="prop-benefit"><span class="tick-circle">✔</span><span>Project GitHub &amp; live links extracted with each role</span></div>
+<div class="prop-benefit"><span class="tick-circle">✔</span><span>ATS resume tailor, verified before you apply</span></div>
 </div>
 </div>"""
 
@@ -3490,61 +6478,54 @@ def _confirm_reveal_lines(p):
 def render_welcome_screen():
     # ponytail: review (pending_profile) renders INSIDE the same fixed wizard
     # card below (body/footer switch to step 3) — the page never takes over.
-    p_disk = load_profile()
-    if p_disk.get("name", "").lower() in ["alex developer", "", "developer", "guest"]:
-        p_disk["name"] = "Prathamesh Jadhav"
-        p_disk["base_role"] = "PHP Developer • Full-Stack Developer"
-        save_active_profile(p_disk)
+    # Unauthenticated visitors always get the sanitized example profile.
+    p_disk = _load_demo_profile()
 
     # 1. Subtle, understated top bar
-    tb_l, tb_r = st.columns([3.8, 1.0], vertical_alignment="center")
-    with tb_l:
-        st.markdown("""
-        <div class="app-brand">
-            <span style="font-size:22px; filter:drop-shadow(0 0 10px rgba(16,185,129,0.4));">⚡</span>
-            <span>JOBSCOUT</span>
-            <span class="app-brand-badge">PRO</span>
-        </div>
-        """, unsafe_allow_html=True)
-    with tb_r:
-        if st.button("Try Demo", key="btn_top_demo_action", use_container_width=True, help="Explore workspace with pre-populated demo profile"):
-            save_active_profile(p_disk)
-            st.session_state["onboarded"] = True
-            st.toast("Loaded Demo Workspace!", icon="🚀")
-            st.rerun()
+    with st.container(border=False, key="onb_top_bar"):
+        tb_l, tb_r = st.columns([4.2, 0.8], vertical_alignment="center")
+        with tb_l:
+            st.markdown("""
+            <div class="app-brand">
+                <span class="brand-bolt">⚡</span>
+                <span class="brand-name">JOBSCOUT</span>
+                <span class="app-brand-badge">PRO</span>
+            </div>
+            """, unsafe_allow_html=True)
+        with tb_r:
+            if st.button("▶ Try Demo", key="btn_top_demo_action", use_container_width=True, help="Explore workspace with the safe example profile"):
+                _start_demo()
 
     st.write("")
 
     # 2. Split Screen: Left ~56% (Clean Showcase) vs Right ~44% (Dual-Action Action Panel)
-    col_prop, col_onboard = st.columns([1.3, 1.0], gap="large")
+    col_prop, col_onboard = st.columns([1.25, 1.0], gap="large")
 
     with col_prop:
         st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
     with col_onboard:
+        _render_owner_login()
         # ponytail: recruiter/demo card lives OUTSIDE the fixed wizard in its own
         # card (same visuals) so it can never affect the wizard's height (req 10).
         with st.container(border=True, key="onboard_demo"):
-            st.markdown("""
-            <div class="recruiter-tour-card">
-                <div class="tour-badge-row">
-                    <span class="tour-badge">⚡ 1-CLICK DEMO TOUR</span>
-                    <span class="tour-meta-tag">For Recruiters & Evaluators</span>
+            dt_col_text, dt_col_btn = st.columns([5.2, 0.9], vertical_alignment="center")
+            with dt_col_text:
+                st.markdown("""
+                <div class="recruiter-tour-card">
+                    <div class="tour-badge-row">
+                        <span class="tour-badge">⚡ 1-CLICK DEMO TOUR</span>
+                        <span class="tour-meta-tag">For Recruiters & Evaluators</span>
+                    </div>
+                    <div class="tour-title">Interactive Developer Workspace</div>
+                    <div class="tour-desc">Instantly test 1,160+ live jobs, deterministic 0–100 stack scoring, radar filters, and ATS auto-tailor with a verified developer profile.</div>
                 </div>
-                <div class="tour-title">Interactive Developer Workspace</div>
-                <div class="tour-desc">Instantly test 1,160+ live jobs, deterministic 0–100 stack scoring, radar filters, and ATS auto-tailor with a verified developer profile.</div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+            with dt_col_btn:
+                tour_clicked = st.button("❯", key="btn_recruiter_tour", type="secondary", use_container_width=True, help="Explore Live Demo Workspace")
 
-            if st.button("Explore Live Demo Workspace →", key="btn_recruiter_tour", type="secondary", use_container_width=True):
-                save_active_profile(p_disk)
-                st.session_state["onboarded"] = True
-                sid, exp_at = create_user_session(p_disk, duration_months=1)
-                st.query_params["sid"] = sid
-                st.session_state["active_sid"] = sid
-                st.session_state["persist_sid_to_localstorage"] = (sid, exp_at)
-                st.toast("⚡ Welcome to JobScout Demo Workspace!", icon="🚀")
-                st.rerun()
+            if tour_clicked:
+                _start_demo()
 
         st.markdown("""
         <div class="or-separator">
@@ -3571,16 +6552,14 @@ def render_welcome_screen():
         # so the outer card never grows and the page never expands from the form.
         with st.container(border=True, key="onboard_panel"):
             with st.container(border=False, key="onboard_head"):
-                st.markdown("""
-                <div class="onboard-header-title">Launch Workspace</div>
-                <div class="onboard-header-sub">Personalize with your resume.</div>
+                _sub_text = onb_step_label(3) if _is_review else (onb_step_label(1) if _step == 1 else onb_step_label(2, _path))
+                st.markdown(f"""
+                <div class="onboard-header-row">
+                    <span class="onboard-user-icon">👤</span>
+                    <span class="onboard-header-title">Launch Workspace</span>
+                </div>
+                <div class="onboard-header-sub">Personalize with your resume. {_sub_text}</div>
                 """, unsafe_allow_html=True)
-                if _is_review:
-                    st.caption(onb_step_label(3))
-                elif _step == 1:
-                    st.caption(onb_step_label(1))
-                else:
-                    st.caption(onb_step_label(2, _path))
                 remember_me = True
                 dur_label = "1 Month"
                 dur_months = 1
@@ -3794,13 +6773,19 @@ def render_welcome_screen():
                     body_msg = st.empty()
                 elif _step == 1:
                     # --- Step 1: Choose your path (no form fields here) ---
+                    st.markdown('<div class="onb-step-1"></div>', unsafe_allow_html=True)
                     _cur = st.session_state.get("onb_path", "")
                     _pc1, _pc2 = st.columns(2)
                     with _pc1:
-                        with st.container(border=True):
-                            st.markdown("**📄 I have a resume**")
-                            st.caption("Upload your PDF — skills, experience and links auto-extract.")
-                            if st.button(onb_card_label(_cur, ONB_PATHS[0], "Upload Resume →"),
+                        with st.container(border=True, key="onb_card_upload"):
+                            st.markdown("""
+                            <div class="onb-path-header">
+                                <span class="onb-path-icon">📄</span>
+                                <span class="onb-path-title">I have a resume</span>
+                            </div>
+                            <div class="onb-path-desc">Upload your PDF — skills, experience and links auto-extract.</div>
+                            """, unsafe_allow_html=True)
+                            if st.button("Upload Resume →", type="primary",
                                          key="btn_onb_goto_upload", use_container_width=True):
                                 st.session_state["onb_path"] = ONB_PATHS[0]
                                 onb_go_step(st.session_state, 2)
@@ -3808,10 +6793,15 @@ def render_welcome_screen():
                             # ponytail: marker for the click-bridge script (st.markdown keeps data-* attrs)
                             st.markdown('<span data-onb-card="upload"></span>', unsafe_allow_html=True)
                     with _pc2:
-                        with st.container(border=True):
-                            st.markdown("**✍️ I'll build my profile**")
-                            st.caption("Answer 5 quick questions — no resume needed.")
-                            if st.button(onb_card_label(_cur, ONB_PATHS[1], "Answer Questions →"),
+                        with st.container(border=True, key="onb_card_manual"):
+                            st.markdown("""
+                            <div class="onb-path-header">
+                                <span class="onb-path-icon bolt">⚡</span>
+                                <span class="onb-path-title">I'll build my profile</span>
+                            </div>
+                            <div class="onb-path-desc">Answer 5 quick questions — no resume needed.</div>
+                            """, unsafe_allow_html=True)
+                            if st.button("Answer Questions →",
                                          key="btn_onb_goto_manual", use_container_width=True):
                                 st.session_state["onb_path"] = ONB_PATHS[1]
                                 onb_go_step(st.session_state, 2)
@@ -3865,7 +6855,7 @@ def render_welcome_screen():
                         "Upload Resume (PDF, DOCX, TXT)",
                         type=["pdf", "txt", "docx"],
                         key="onb_file_input",
-                        help="Drop your resume to automatically extract your skills, experience and target keywords. Max 20MB."
+                        help="Drop your resume to automatically extract your skills, experience and target keywords. Max 10MB."
                     )
 
                     if onb_file is not None:
@@ -3995,6 +6985,10 @@ def render_welcome_screen():
                 classified_links = {}
 
                 if onb_file is not None:
+                    if onb_file.size > MAX_UPLOAD_BYTES:
+                        _onb_say("error", "⚠️ **File too large.** Upload a resume under 10 MB.")
+                        st.toast("File too large (10 MB limit).", icon="⚠️")
+                        return
                     fname = onb_file.name.lower()
                     if fname.endswith(".pdf"):
                         pdf_meta = extract_pdf_rich(onb_file)
@@ -4031,7 +7025,8 @@ def render_welcome_screen():
                 with _status_ctx as status:
                     status.write("Reading your resume")
                     if not resume_content:
-                        sample_r = os.path.join(BASE, "resume.txt") if os.path.exists(os.path.join(BASE, "resume.txt")) else os.path.join(BASE, "resume.example.txt")
+                        _real_resume = os.path.join(BASE, "resume.txt")
+                        sample_r = os.path.join(BASE, "resume.example.txt") if _is_demo() or not os.path.exists(_real_resume) else _real_resume
                         if os.path.exists(sample_r):
                             with open(sample_r, encoding="utf-8") as rf:
                                 resume_content = rf.read()
@@ -4076,20 +7071,11 @@ def render_welcome_screen():
                     _onb_say("error", "We need at least your name — add it via Edit details.")
                     st.toast("Add your name via Edit details first.", icon="⚠️")
                 else:
-                    # ponytail: parse output may omit projects/education/URLs — merge, never wipe stored data
+                    # Demo wizard: keep edits in the browser session only. Real
+                    # persistence requires owner login, so no disk/session writes.
                     save_active_profile(p, merge=True)
                     st.session_state["onboarded"] = True
-                    if st.session_state.get("pending_remember", True):
-                        sid, exp_at = create_user_session(p, duration_months=st.session_state.get("pending_dur_months", 1))
-                        st.query_params["sid"] = sid
-                        st.session_state["active_sid"] = sid
-                        st.session_state["persist_sid_to_localstorage"] = (sid, exp_at)
-                    else:
-                        cur = st.query_params.get("sid") or st.session_state.get("active_sid")
-                        if cur:
-                            delete_user_session(cur)
-                            st.query_params.pop("sid", None)
-                        st.session_state["purge_sid_from_localstorage"] = True
+                    st.session_state["demo_mode"] = True
                     for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated"):
                         st.session_state.pop(k, None)
                     st.toast(f"Welcome, {p.get('name', 'Developer')}!", icon="🚀")
@@ -4172,6 +7158,52 @@ def heuristic_tailor(resume_text, job, skills):
         "cover_line": f"Excited to bring my PHP and full-stack web engineering experience, problem-solving mindset, and dedication to clean code to the {title} role at {company}.",
         "is_smart_fallback": True
     }
+
+
+
+def render_analysis_loader(container, stage=1, stage_msg="Analyzing..."):
+    """Render a polished, purpose-designed emerald loading card with real workflow stages."""
+    stages = [
+        (1, "Extracting role metadata, skills & experience"),
+        (2, "Evaluating match fit score & skill gaps"),
+        (3, "Generating tailored summary & ATS bullet points"),
+        (4, "Finalizing resume studio & template gallery")
+    ]
+    items_html = []
+    for s_idx, s_label in stages:
+        if s_idx < stage:
+            items_html.append(
+                f'<div class="analysis-stage-item completed">'
+                f'<span class="stage-icon">✓</span>'
+                f'<span>{s_label}</span>'
+                f'</div>'
+            )
+        elif s_idx == stage:
+            items_html.append(
+                f'<div class="analysis-stage-item active">'
+                f'<span class="stage-icon pulse">●</span>'
+                f'<span>{s_label}</span>'
+                f'</div>'
+            )
+        else:
+            items_html.append(
+                f'<div class="analysis-stage-item">'
+                f'<span class="stage-icon">○</span>'
+                f'<span>{s_label}</span>'
+                f'</div>'
+            )
+
+    loader_html = (
+        f'<div class="analysis-loader-box">'
+        f'<div class="analysis-loader-header">'
+        f'<div class="emerald-ring-spinner"></div>'
+        f'<div class="analysis-loader-title">AI Analysis & ATS Resume Tailoring</div>'
+        f'</div>'
+        f'<div class="analysis-loader-msg">{html.escape(stage_msg)}</div>'
+        f'<div class="analysis-stages-list">{"".join(items_html)}</div>'
+        f'</div>'
+    )
+    container.markdown(loader_html, unsafe_allow_html=True)
 
 
 
@@ -4543,6 +7575,7 @@ def render_pdf_page_to_png(pdf_bytes: bytes, dpi: int = 110) -> bytes:
     if not pdf_bytes:
         return b""
     try:
+        fitz = _get_fitz()
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         page = doc.load_page(0)
         pix = page.get_pixmap(dpi=dpi)
@@ -4889,877 +7922,1462 @@ st.session_state.setdefault("fast_tailor_tab_idx", 2)
 # Check session & onboarding state
 st.session_state.setdefault("onboarded", False)
 
-# Flush queued LocalStorage writes FIRST — never stranded behind st.stop() below
-if "persist_sid_to_localstorage" in st.session_state:
-    p_sid, p_exp = st.session_state.pop("persist_sid_to_localstorage")
-    st.html(f"<script>try{{localStorage.setItem('jobscout_sid','{p_sid}');localStorage.setItem('jobscout_exp','{p_exp}');sessionStorage.removeItem('jobscout_redirected');}}catch(e){{}}</script>", unsafe_allow_javascript=True)
-if st.session_state.pop("purge_sid_from_localstorage", False):
-    st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');sessionStorage.removeItem('jobscout_redirected');}catch(e){}</script>", unsafe_allow_javascript=True)
-
-current_sid = st.query_params.get("sid")
-if current_sid and not st.session_state.get("onboarded", False):
-    sess_prof = get_user_session(current_sid)
-    if sess_prof:
-        save_active_profile(sess_prof)
-        st.session_state["onboarded"] = True
-        st.session_state["active_sid"] = current_sid
-    else:
-        # ponytail: stale sid (fresh deploy wipes sessions.db). Purge localStorage
-        # in THIS run — a full-page location.replace reload kills session_state,
-        # so a deferred purge flag alone never executes and the auto-login
-        # script below redirect-loops forever (load → flash → reload).
-        st.query_params.pop("sid", None)
-        st.session_state["purge_sid_from_localstorage"] = True
-        st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');sessionStorage.removeItem('jobscout_redirected');}catch(e){}</script>", unsafe_allow_javascript=True)
-        st.rerun()
-
-# Disk fallback: resume already saved on this machine → skip re-upload entirely
-if not st.session_state.get("onboarded", False) and has_onboard_marker(PROFILE):
-    st.session_state["user_profile"] = load_profile()
-    st.session_state["onboarded"] = True
-if not st.session_state.get("onboarded", False):
-    # Auto-reconnect via LocalStorage on clean browser revisits (safe same-frame DOM execution)
-    # ponytail: sessionStorage loop-breaker — if we redirected with sid X and came
-    # back un-logged-in, the server rejected X: drop it, never redirect with X again.
-    st.html(
-        """
-        <script>
-        (function() {
-            try {
-                const sid = localStorage.getItem("jobscout_sid");
-                const exp = localStorage.getItem("jobscout_exp");
-                if (sid && exp && new Date(exp) > new Date()) {
-                    const url = new URL(window.location.href);
-                    if (!url.searchParams.get("sid")) {
-                        if (sessionStorage.getItem("jobscout_redirected") === sid) {
-                            localStorage.removeItem("jobscout_sid");
-                            localStorage.removeItem("jobscout_exp");
-                            sessionStorage.removeItem("jobscout_redirected");
-                        } else {
-                            sessionStorage.setItem("jobscout_redirected", sid);
-                            url.searchParams.set("sid", sid);
-                            window.location.replace(url.toString());
-                        }
-                    }
-                } else if (sid) {
-                    localStorage.removeItem("jobscout_sid");
-                    localStorage.removeItem("jobscout_exp");
-                    sessionStorage.removeItem("jobscout_redirected");
-                }
-            } catch (e) {}
-        })();
-        </script>
-        """,
-        unsafe_allow_javascript=True
-    )
+# =========================================================================
+# ACCESS CONTROL: owner password → real data; everyone else → isolated demo
+# =========================================================================
+if not _owner_logged_in() and not st.session_state.get("demo_mode"):
     render_welcome_screen()
     st.stop()
 
+if _owner_logged_in():
+    # Flush queued LocalStorage writes FIRST — never stranded behind st.stop()
+    if "persist_sid_to_localstorage" in st.session_state:
+        p_sid, p_exp = st.session_state.pop("persist_sid_to_localstorage")
+        st.html(f"<script>try{{localStorage.setItem('jobscout_sid','{p_sid}');localStorage.setItem('jobscout_exp','{p_exp}');sessionStorage.removeItem('jobscout_redirected');}}catch(e){{}}</script>", unsafe_allow_javascript=True)
+    if st.session_state.pop("purge_sid_from_localstorage", False):
+        st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');sessionStorage.removeItem('jobscout_redirected');}catch(e){}</script>", unsafe_allow_javascript=True)
+
+    current_sid = st.query_params.get("sid")
+    if current_sid and not st.session_state.get("onboarded", False):
+        sess_prof = get_user_session(current_sid)
+        if sess_prof:
+            save_active_profile(sess_prof)
+            st.session_state["onboarded"] = True
+            st.session_state["active_sid"] = current_sid
+        else:
+            # ponytail: stale sid (fresh deploy wipes sessions.db). Purge localStorage
+            # in THIS run — a full-page location.replace reload kills session_state,
+            # so a deferred purge flag alone never executes and the auto-login
+            # script below redirect-loops forever (load → flash → reload).
+            st.query_params.pop("sid", None)
+            st.session_state["purge_sid_from_localstorage"] = True
+            st.html("<script>try{localStorage.removeItem('jobscout_sid');localStorage.removeItem('jobscout_exp');sessionStorage.removeItem('jobscout_redirected');}catch(e){}</script>", unsafe_allow_javascript=True)
+            st.rerun()
+
+    # Disk fallback: resume already saved on this machine → skip re-upload entirely
+    if not st.session_state.get("onboarded", False) and has_onboard_marker(PROFILE):
+        st.session_state["user_profile"] = load_profile()
+        st.session_state["onboarded"] = True
+    if not st.session_state.get("onboarded", False):
+        # First owner visit: create/load the local profile instead of the public wizard.
+        st.session_state["user_profile"] = load_profile()
+        st.session_state["onboarded"] = True
+    DB = os.path.join(BASE, "jobs.db")
+else:
+    # Demo: example profile only, isolated scratch DB, no owner key, no disk writes.
+    if not st.session_state.get("user_profile"):
+        st.session_state["user_profile"] = _load_demo_profile()
+    st.session_state["onboarded"] = True
+    DB = os.path.join(BASE, "demo.db")
+    ensure_db().close()
+
 p = get_active_profile()
 
-# ponytail: scoring ~1257 jobs cost ~2s local / ~10s on Cloud on EVERY click (no cache).
-# Cache load+score 120s; db_sig + profile_sig args auto-invalidate on any DB/profile change.
-def _profile_sig(pp):
-    try:
-        return json.dumps({"b": pp.get("base_role"), "s": pp.get("skills"), "l": pp.get("location"),
-                           "t": pp.get("search_terms"), "e": pp.get("experience_years")}, sort_keys=True)
-    except Exception:
-        return str(int(time.time() // 120))
-
-
-def _db_sig():
-    try:
-        c = sqlite3.connect(DB, timeout=5.0)
-        n = c.execute("SELECT COUNT(*), MAX(created_at) FROM jobs").fetchone()
-        try:
-            extra = c.execute("SELECT COALESCE(SUM(closed),0), COALESCE(SUM(applied),0) FROM jobs").fetchone()
-        except Exception:
-            extra = (0, 0)
-        c.close()
-        return f"{n[0]}|{n[1]}|{extra[0]}|{extra[1]}|{os.path.getmtime(DB)}"
-    except Exception:
-        return str(int(time.time() // 120))
-
-
+# ponytail: Blazing fast tracker loader. Only loads tracked rows (applied/shortlisted)
+# for the Applications pipeline and Recent Activity. Eliminates 4.5s of wasteful
+# full-table scoring across thousands of untracked legacy DB jobs on initial load.
 @st.cache_data(ttl=120, show_spinner=False)
-def _cached_scored_jobs(q, psig, dsig, prof_json):
-    pp = json.loads(prof_json)
+def _cached_tracked_applications(prof_json, db_path):
+    pp = json.loads(prof_json) if prof_json else {}
+    apps = get_applications(db_path)
     out = []
-    for jj in get_jobs(q):
+    for jj in apps:
         m = compute_match(pp, jj)
         jj["_score"] = m["match_score"]
         jj["_cat"] = m["category"]
         jj["_eligible"] = m["eligible"]
-        jj["_loc_ok"] = m["location_match"]
-        jj["_loc_reason"] = m["location_reason"]
-        jj["_rej"] = m["rejection_reasons"]
-        jj["_tiers"] = m["tiers"]
-        jj["_matched"] = m["matched_skills"]
-        jj["_missing_core"] = m["missing_core_skills"]
-        jj["_exp"] = m["experience_detail"]
-        jj["_core"] = m["jd_primary_stack"]
         out.append(jj)
     return out
 
-# Load raw jobs (scored, cached)
-q_search = st.session_state.get("q_search", "")
 try:
     _prof_json = json.dumps({"base_role": p.get("base_role"), "skills": p.get("skills"),
                              "location": p.get("location"), "search_terms": p.get("search_terms"),
                              "experience_years": p.get("experience_years")}, sort_keys=True)
 except Exception:
     _prof_json = "{}"
-raw_jobs = _cached_scored_jobs(q_search, _profile_sig(p), _db_sig(), _prof_json)
-unique_sources = ["All Sources"] + sorted(list(set(j.get("source", "other") for j in raw_jobs if j.get("source"))))
-sel_source = st.session_state.get("source_flt", "All Sources")
-if sel_source not in unique_sources:
-    sel_source = "All Sources"
 
-# ---------- data: discovery (eligible) + match score (already scored in cached loader) ----------
-all_jobs = raw_jobs if sel_source == "All Sources" else [j for j in raw_jobs if j.get("source") == sel_source]
-scored = list(all_jobs)  # ponytail: copy — never sort-mutate the cached list in place
-
-sort_mode = st.session_state.get("sort_mode", "Highest Match %")
-if sort_mode == "Newest":
-    scored.sort(key=lambda x: str(x.get("posted_at") or x.get("created_at") or ""), reverse=True)
-elif sort_mode == "Company":
-    scored.sort(key=lambda x: str(x.get("company", "")).lower())
-else:  # Highest Match %
-    # Sort primarily by match %, secondarily by posting/creation recency so fresh postings rank at the top
-    scored.sort(key=lambda x: (x["_eligible"], x["_score"], str(x.get("posted_at") or x.get("created_at") or "")), reverse=True)
+scored = _cached_tracked_applications(_prof_json, DB)
+raw_jobs = scored
+unique_sources = ["All Sources"]
+sel_source = "All Sources"
+all_jobs = scored
 
 # =========================================================================
-# TOP NAVIGATION BAR (Concept 1: JobTool | Jobs | Applications | Resume | Settings | 👤)
+# TOP NAVIGATION BAR (⚡ JobScout | Find & Tailor | Applications | My Resumes | ⚙)
+# ponytail: widget values stay "Jobs"/"Applications"/"Resume" — only display
+# labels are remapped via format_func, so every active_nav branch, pending_nav
+# shortcut and test keeps working without a state migration.
 # =========================================================================
-top_brand_col, top_nav_col, top_user_col = st.columns([1.8, 3.8, 2.0], vertical_alignment="center")
+with st.container(key="top_navbar"):
+    # ponytail: balanced 1:1:1 columns with CSS grid minmax(0, 1fr) auto minmax(0, 1fr)
+    # ensures the center navigation is genuinely centered relative to the full viewport.
+    top_brand_col, top_nav_col, top_user_col = st.columns([1, 1, 1], vertical_alignment="center")
 
-with top_brand_col:
-    st.markdown("""
-    <div class="nav-brand">
-        <span class="brand-icon">⚡</span>
-        <span class="brand-title">JobTool</span>
-        <span class="brand-pro">PRO</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with top_nav_col:
-    nav_options = ["Jobs", "Applications", "Resume", "Settings"]
-
-    # One-shot programmatic navigation. Shortcut buttons (gear, "Open
-    # Applications →", back-to-Jobs) stash the target here + st.rerun();
-    # we apply it BEFORE the widget is instantiated (writing a widget key
-    # after its instantiation raises a StreamlitAPIException).
-    _pending_nav = st.session_state.pop("pending_nav", None)
-    if _pending_nav in nav_options:
-        st.session_state["main_nav_selector"] = _pending_nav
-
-    # Widget state is the single source of truth. Re-seed only when unset or
-    # invalid (fresh session / user deselected the active segment) so a user
-    # click is never clobbered by a stale mirrored value.
-    if st.session_state.get("main_nav_selector") not in nav_options:
-        st.session_state["main_nav_selector"] = st.session_state.get("nav_tab", "Jobs")
-
-    selected_nav = st.segmented_control(
-        "Main Navigation",
-        options=nav_options,
-        key="main_nav_selector",
-        label_visibility="collapsed"
-    )
-    # ponytail: handle deselect gracefully so user is never stranded on a blank view
-    if selected_nav is None:
-        selected_nav = st.session_state.get("main_nav_selector") or st.session_state.get("nav_tab", "Jobs")
-    st.session_state["nav_tab"] = selected_nav
-    # ponytail: NO st.rerun() — the widget already triggers one; an explicit
-    # rerun doubles navigation latency (same fix as mode switch).
-
-with top_user_col:
-    user_name = p.get("name", "User")
-    user_city = p.get("location", {}).get("city", "Mumbai") if isinstance(p.get("location"), dict) else "Mumbai"
-    u_c1, u_c2, u_c3 = st.columns([1.8, 1.2, 0.8], vertical_alignment="center")
-    with u_c1:
-        st.markdown(f"""
-        <div class="user-pill" title="Target: {p.get('base_role','Developer')} · {p.get('experience_years',2)}y">
-            <span class="user-avatar">👤</span>
-            <span class="user-name">{html.escape(user_name)}</span>
-            <span class="user-dot">·</span>
-            <span class="user-loc">{html.escape(user_city)}</span>
+    with top_brand_col:
+        st.markdown("""
+        <div class="nav-brand-wrap">
+            <div class="nav-brand">
+                <span class="brand-icon">⚡</span>
+                <span class="brand-title">JobScout</span>
+            </div>
+            <div class="nav-v-divider"></div>
         </div>
         """, unsafe_allow_html=True)
-    with u_c2:
-        if st.button("↺ Switch", key="btn_switch_resume_top", help="Upload a new resume or switch profile"):
-            current_sid = st.query_params.get("sid") or st.session_state.get("active_sid")
-            if current_sid:
-                delete_user_session(current_sid)
-                st.query_params.pop("sid", None)
-            st.session_state["onboarded"] = False
-            st.session_state["active_sid"] = None
-            st.session_state["purge_sid_from_localstorage"] = True
-            clear_onboard_marker(PROFILE)  # ponytail: allow fresh upload, else disk auto-login loops back
-            st.rerun()
-    with u_c3:
-        if st.button("⚙️", key="btn_quick_settings_top", help="Open Settings"):
-            st.session_state["pending_nav"] = "Settings"
-            st.rerun()
+
+    with top_nav_col:
+        nav_options = ["Jobs", "Applications", "Resume"]
+        _NAV_LABELS = {"Jobs": "Find & Tailor", "Applications": "Applications", "Resume": "My Resumes"}
+
+        # One-shot programmatic navigation. Shortcut buttons ("Open
+        # Applications →", back-to-Jobs) stash the target here + st.rerun();
+        # we apply it BEFORE the widget is instantiated (writing a widget key
+        # after its instantiation raises a StreamlitAPIException).
+        # Settings is an overlay page (no dedicated tab) — it flips settings_open
+        # instead of touching the widget.
+        _pending_nav = st.session_state.pop("pending_nav", None)
+        if _pending_nav in nav_options:
+            st.session_state["main_nav_selector"] = _pending_nav
+            st.session_state["settings_open"] = False
+        elif _pending_nav == "Settings":
+            st.session_state["settings_open"] = True
+        st.session_state.setdefault("settings_open", False)
+
+        # Widget state is the single source of truth. Re-seed only when unset or
+        # invalid (fresh session / user deselected the active segment) so a user
+        # click is never clobbered by a stale mirrored value.
+        if st.session_state.get("main_nav_selector") not in nav_options:
+            st.session_state["main_nav_selector"] = st.session_state.get("nav_tab", "Jobs")
+
+        selected_nav = st.segmented_control(
+            "Main Navigation",
+            options=nav_options,
+            format_func=lambda key: _NAV_LABELS[key],
+            key="main_nav_selector",
+            label_visibility="collapsed"
+        )
+        # ponytail: handle deselect gracefully so user is never stranded on a blank view
+        if selected_nav is None:
+            selected_nav = st.session_state.get("main_nav_selector") or st.session_state.get("nav_tab", "Jobs")
+        # A real tab click (widget value changed since the last render) closes the
+        # Settings overlay; opening Settings itself never touches the widget, so
+        # this comparison stays false on that rerun.
+        if selected_nav != st.session_state.get("_last_nav_widget_val"):
+            st.session_state["settings_open"] = False
+        st.session_state["_last_nav_widget_val"] = selected_nav
+        st.session_state["nav_tab"] = selected_nav
+        # ponytail: NO st.rerun() — the widget already triggers one; an explicit
+        # rerun doubles navigation latency (same fix as mode switch).
+
+    with top_user_col:
+        user_name = p.get("name", "User")
+        user_city = p.get("location", {}).get("city", "Mumbai") if isinstance(p.get("location"), dict) else "Mumbai"
+        with st.container(key="nav_user_cluster"):
+            st.markdown(f"""
+            <div class="nav-v-divider"></div>
+            <div class="user-pill" title="Target: {html.escape(str(p.get('base_role','Developer')))} · {html.escape(str(p.get('experience_years',2)))}y">
+                <span class="user-avatar-badge"><span class="user-avatar">👤</span></span>
+                <div class="user-info-stack">
+                    <span class="user-name">{html.escape(user_name)}</span>
+                    <span class="user-loc"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> {html.escape(user_city)}</span>
+                </div>
+                <span class="user-chevron">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </span>
+                <span class="user-dot" style="display:none;">·</span>
+            </div>
+            """, unsafe_allow_html=True)
+            _account_pop = st.popover("Menu", key="top_settings_popover")
+            with _account_pop:
+                st.markdown(f"""
+                <div class="menu-user-card">
+                    <div class="menu-user-avatar">👤</div>
+                    <div class="menu-user-details">
+                        <div class="menu-user-name">{html.escape(user_name)}</div>
+                        <div class="menu-user-loc"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> {html.escape(user_city)}</div>
+                    </div>
+                </div>
+                <div class='mobile-nav-menu-box'>
+                """, unsafe_allow_html=True)
+                _cur_nav = st.session_state.get("nav_tab", "Jobs")
+
+                if _cur_nav == "Jobs":
+                    st.markdown("<div class='active-nav-btn'>", unsafe_allow_html=True)
+                if st.button("🔍 Find & Tailor", use_container_width=True, key="m_nav_jobs"):
+                    st.session_state["pending_nav"] = "Jobs"
+                    st.rerun()
+                if _cur_nav == "Jobs":
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                if _cur_nav == "Applications":
+                    st.markdown("<div class='active-nav-btn'>", unsafe_allow_html=True)
+                if st.button("📁 Applications", use_container_width=True, key="m_nav_apps"):
+                    st.session_state["pending_nav"] = "Applications"
+                    st.rerun()
+                if _cur_nav == "Applications":
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                if _cur_nav == "Resume":
+                    st.markdown("<div class='active-nav-btn'>", unsafe_allow_html=True)
+                if st.button("📄 My Resumes", use_container_width=True, key="m_nav_resumes"):
+                    st.session_state["pending_nav"] = "Resume"
+                    st.rerun()
+                if _cur_nav == "Resume":
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                st.markdown("<div class='mobile-nav-menu-divider'></div></div>", unsafe_allow_html=True)
+                if st.button("⚙ Settings", use_container_width=True, key="btn_open_settings_pop"):
+                    st.session_state["pending_nav"] = "Settings"
+                    st.rerun()
+                if _owner_logged_in():
+                    if st.button("↺ Switch profile", use_container_width=True, key="btn_switch_resume_pop"):
+                        current_sid = st.query_params.get("sid") or st.session_state.get("active_sid")
+                        if current_sid:
+                            delete_user_session(current_sid)
+                            st.query_params.pop("sid", None)
+                        st.session_state["onboarded"] = False
+                        st.session_state["active_sid"] = None
+                        st.session_state["purge_sid_from_localstorage"] = True
+                        clear_onboard_marker(PROFILE)  # ponytail: allow fresh upload, else disk auto-login loops back
+                        st.rerun()
+                    if st.button("🚪 Log out", use_container_width=True, key="btn_owner_logout"):
+                        current_sid = st.query_params.get("sid") or st.session_state.get("active_sid")
+                        if current_sid:
+                            delete_user_session(current_sid)
+                        for _k in ("owner_ok", "demo_mode", "onboarded", "user_profile", "active_sid", "settings_open"):
+                            st.session_state.pop(_k, None)
+                        st.session_state["purge_sid_from_localstorage"] = True
+                        st.query_params.pop("sid", None)
+                        st.rerun()
+                else:
+                    if st.button("← Exit demo", use_container_width=True, key="btn_exit_demo"):
+                        for _k in ("demo_mode", "onboarded", "user_profile", "settings_open"):
+                            st.session_state.pop(_k, None)
+                        st.rerun()
+
+# ponytail: Streamlit's popover button ships without type/aria-label and its
+# dialog has no id. Progressive enhancement only — the menu works if this never runs.
+st.html(
+    """
+    <script>
+    (function () {
+      try {
+        var doc = window.parent.document;
+        function patchMenuButton() {
+          var btn = doc.querySelector('.st-key-top_settings_popover button');
+          if (!btn) return;
+          if (btn.getAttribute('type') !== 'button') btn.setAttribute('type', 'button');
+          var expanded = btn.getAttribute('aria-expanded') === 'true';
+          var label = expanded ? 'Close menu' : 'Open menu';
+          if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
+          var body = expanded ? doc.querySelector('div[data-testid="stPopoverBody"][aria-label="Menu"]') : null;
+          if (body) {
+            if (!body.id) body.id = 'jobscout-account-menu';
+            if (btn.getAttribute('aria-controls') !== body.id) btn.setAttribute('aria-controls', body.id);
+          } else if (btn.hasAttribute('aria-controls')) {
+            btn.removeAttribute('aria-controls');
+          }
+        }
+        if (window.parent.__jobscoutMenuA11y) {
+          window.parent.__jobscoutMenuA11y();
+          return;
+        }
+        window.parent.__jobscoutMenuA11y = patchMenuButton;
+        patchMenuButton();
+        new MutationObserver(patchMenuButton).observe(doc.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['aria-expanded']
+        });
+      } catch (e) {}
+    })();
+    </script>
+    """,
+    unsafe_allow_javascript=True,
+)
 
 st.write("")
 
+if _is_demo():
+    st.info("Demo mode: example profile only. Nothing is saved to this deployment and AI is disabled.")
+
 # Pools
-eligible_pool = [j for j in scored if j["_eligible"] and not j.get("closed")]
-ineligible_pool = [j for j in scored if not j["_eligible"] and not j.get("closed")]
+eligible_pool = [j for j in scored if j.get("_eligible", True) and not j.get("closed")]
+ineligible_pool = [j for j in scored if not j.get("_eligible", True) and not j.get("closed")]
 closed_pool = [j for j in scored if j.get("closed")]
-ineligible_pool.sort(key=lambda x: x["_score"], reverse=True)
+ineligible_pool.sort(key=lambda x: x.get("_score", 0), reverse=True)
 
 n_eligible = len(eligible_pool)
 n_new = len([j for j in eligible_pool if not j.get("applied")])
-n_strong = len([j for j in eligible_pool if j["_score"] >= 60 and not j.get("applied")])
+n_strong = len([j for j in eligible_pool if j.get("_score", 0) >= 60 and not j.get("applied")])
 n_applied = len([j for j in scored if j.get("applied") and not j.get("closed")])
 n_shortlisted = len([j for j in scored if j.get("shortlisted") and not j.get("closed")])
 n_hidden = len(ineligible_pool)
 n_closed = len(closed_pool)
 
-active_nav = st.session_state.get("nav_tab", "Jobs")
+# ponytail: Settings is an overlay state on top of the active tab (via the ⚙ menu)
+active_nav = "Settings" if st.session_state.get("settings_open") else st.session_state.get("nav_tab", "Jobs")
 
 # =========================================================================
 # WORKSPACE 1: JOBS (Clean Job Matches, Concept 1 Filter Pills & Utility Bar)
 # =========================================================================
 if active_nav == "Jobs":
-    # Application workspace: no aggregated feed — Paste JD / Paste Link are the entry points.
-    st.markdown("""
-    <div class="workspace-header">
-        <div class="workspace-title">Ready to apply?</div>
-        <div class="statusbar">Bring a job description. Leave with a tailored resume.</div>
-    </div>
-    """, unsafe_allow_html=True)
+    # 1. Hero Section (Responsive 2-column desktop, stacked single-column on mobile)
+    with st.container(key="hero_section"):
+        hero_c1, hero_c2 = st.columns([1.18, 1], vertical_alignment="center")
+        with hero_c1:
+            st.markdown("""
+            <div class="hero-header-wrap">
+                <div class="hero-eyebrow">YOUR AI JOB SEARCH ASSISTANT</div>
+                <h1 class="hero-title">
+                    Find the right opportunities.<br class="hero-title-br"/>
+                    <span class="hero-title-accent">Get a tailored resume.</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Search across top job platforms, or paste a job description or link to instantly create a tailored, ATS-friendly resume.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        with hero_c2:
+            st.markdown("""
+            <div class="hero-process-card">
+                <div class="hero-step">
+                    <div class="step-icon-circle icon-green">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <div class="step-title">1. Find</div>
+                    <div class="step-subtitle">Search jobs or<br/>paste JD/link</div>
+                </div>
+                <div class="step-arrow-divider">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </div>
+                <div class="hero-step">
+                    <div class="step-icon-circle icon-blue">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                    </div>
+                    <div class="step-title">2. Analyze</div>
+                    <div class="step-subtitle">AI extracts key<br/>requirements</div>
+                </div>
+                <div class="step-arrow-divider">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </div>
+                <div class="hero-step">
+                    <div class="step-icon-circle icon-purple">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                    </div>
+                    <div class="step-title">3. Tailor</div>
+                    <div class="step-subtitle">Get a tailored<br/>resume in seconds</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    # Standalone mode switch: centered toggle between the intro and the
-    # shared content card. ponytail: margin-auto container (max 700px) instead
-    # of spacer columns, so narrow screens keep full control width.
-    with st.container(key="modeswitch"):
+    # 2. Unified Action Card (Mode Tabs + Form Inputs)
+    st.session_state["instant_tailor_expanded"] = True
+    with st.container(key="modecard"):
         try:
             _cmd_idx = int(st.session_state.get("fast_tailor_tab_idx", 2) or 0)
         except (TypeError, ValueError):
             _cmd_idx = 2
         _cmd_idx = max(0, min(_cmd_idx, 2))
 
-        st.markdown("<div class='mode-eyebrow'>CHOOSE YOUR STARTING POINT</div>", unsafe_allow_html=True)
+        _SEG_LABELS = ["🌐 Search Platforms", "📄 Paste Job Description", "🔗 Paste Job Link"]
+        _IDX_BY_LABEL = {"🌐 Search Platforms": 2, "📄 Paste Job Description": 0, "🔗 Paste Job Link": 1}
+        _default_lbl = [lbl for lbl, idx in _IDX_BY_LABEL.items() if idx == _cmd_idx][0]
 
-        # ponytail: one segmented toggle drives the shared card below through the
-        # existing fast_tailor_tab_idx state (0=Paste JD, 1=Paste Link, 2=Platforms).
-        # Default selection + state default = Platforms (index 2).
-        _SEG_LABELS = ["🌐 10 Platforms", "📄 Paste JD", "🔗 Paste Link"]
-        _IDX_BY_LABEL = {"🌐 10 Platforms": 2, "📄 Paste JD": 0, "🔗 Paste Link": 1}
         _seg_sel = st.segmented_control(
             "Workspace mode",
             options=_SEG_LABELS,
-            default=[lbl for lbl, idx in _IDX_BY_LABEL.items() if idx == _cmd_idx][0],
+            default=_default_lbl,
             key="workspace_mode_seg",
             label_visibility="collapsed",
         )
         if _seg_sel is not None and _seg_sel in _IDX_BY_LABEL:
             _new_idx = _IDX_BY_LABEL[_seg_sel]
             if _new_idx != _cmd_idx:
-                # ponytail: stash un-submitted drafts before the switch unmounts
-                # the form widgets, so text survives mode changes. Only truthy
-                # values overwrite (a blur/commit race can deliver a stale "").
                 if st.session_state.get("giant_jd_textarea"):
                     st.session_state["raw_jd_cache"] = st.session_state["giant_jd_textarea"]
                 if st.session_state.get("quick_link_val"):
                     st.session_state["link_url_cache"] = st.session_state["quick_link_val"]
                 st.session_state.fast_tailor_tab_idx = _new_idx
                 st.session_state.instant_tailor_expanded = True
-                # ponytail: NO st.rerun() here — segmented_control already
-                # triggers a rerun on click, and the modecard below reads the
-                # updated state in this same pass. An explicit rerun would force
-                # a second full script execution and delay visible content
-                # behind the pill animation. Revert-safe: re-add st.rerun().
 
-    # Fast Tailor inline panels: one of 3 tabs always active, panel always open.
-    # ponytail: Hide removed per UX — no collapse state, modecard always renders.
-    st.session_state["instant_tailor_expanded"] = True
-    if True:
-        # ponytail: one shared card hosts exactly one mode — branches below render
-        # exclusively by _ft_idx (0=Paste JD, 1=Paste Link, 2=Platforms).
-        with st.container(key="modecard"):
-            try:
-                _ft_idx = int(st.session_state.get("fast_tailor_tab_idx", 2) or 0)
-            except (TypeError, ValueError):
-                _ft_idx = 2
-            _ft_idx = max(0, min(_ft_idx, 2))
-            st.markdown("<p class='ats-banner'><b>⚡ Instant ATS Tailoring:</b> Paste raw JD text or any job link. Gemini extracts title, company, location &amp; skills in one shot, computes match score, and generates a tailored ATS resume PDF in 5 seconds.</p>", unsafe_allow_html=True)
-            _panel_titles = {0: "Paste JD — Tailor from a job description", 1: "Paste Link — Import a job posting", 2: "10 Platforms — Browse portals externally"}
-            st.markdown(f"<div class='panel-title'>{_panel_titles.get(_ft_idx, '')}</div>", unsafe_allow_html=True)
+        _ft_idx = int(st.session_state.get("fast_tailor_tab_idx", 2) or 0)
+        _ft_idx = max(0, min(_ft_idx, 2))
 
-            if _ft_idx == 0:
-                st.markdown("<p class='panel-hint'><b>Paste the complete job description below.</b><br/>No formatting required — just copy everything from the job page (Ctrl+A → Ctrl+C → Ctrl+V). Gemini will auto-extract title, company, location, experience, and skills.</p>", unsafe_allow_html=True)
-            
-                # ponytail: key-seeded (no value=) so un-submitted drafts survive
-                # reruns and mode switches; raw_jd_cache stays the submit-time copy.
-                if "giant_jd_textarea" not in st.session_state:
-                    st.session_state["giant_jd_textarea"] = st.session_state.get("raw_jd_cache", "")
-                raw_jd_val = st.text_area(
-                    "Complete Job Description",
-                    height=240,
-                    placeholder="Paste complete job description here...\n\n(No formatting required — just copy everything from Indeed, LinkedIn, Naukri, or any company careers page and paste here. AI will extract all details automatically!)",
-                    key="giant_jd_textarea",
-                    label_visibility="collapsed"
-                )
+        st.markdown("<div class='mode-tabs-divider'></div>", unsafe_allow_html=True)
 
-                col_sub1, col_sub2, col_sub3 = st.columns([1, 1.8, 1])
-                with col_sub2:
-                    if st.button("✨ Analyze & Tailor", type="primary", use_container_width=True, key="btn_analyze_jd_giant"):
-                        if not raw_jd_val.strip():
-                            st.error("Please paste the job description text first!")
-                        else:
-                            st.session_state["raw_jd_cache"] = raw_jd_val.strip()
-                            with st.spinner("🤖 Gemini is analyzing JD & extracting job title, company, location, experience and skills..."):
-                                extracted = gemini_parse_jd(raw_jd_val.strip())
-                                j_obj = {
-                                    "title": extracted.get("title") or "Software Developer",
-                                    "company": extracted.get("company") or "Not detected",
-                                    "location": extracted.get("location") or "Not detected",
-                                    "description": extracted.get("description") or raw_jd_val.strip(),
-                                    "url": extracted.get("apply_url") or "#",
-                                    "source": "manual-jd",
-                                    "posted_at": datetime.utcnow().isoformat(),
-                                    "experience_raw": extracted.get("experience_raw", "Not specified"),
-                                    "extracted_skills": extracted.get("skills", []),
-                                    "extracted_responsibilities": extracted.get("responsibilities", [])
-                                }
-                                st.session_state.quick_job = j_obj
-                                st.session_state.quick_tailored = None
-                                st.session_state.quick_run_tailor = True
-                                st.session_state.instant_tailor_expanded = True
-                                st.rerun()
+        if _ft_idx == 0:
+            st.markdown("<p class='panel-hint'><b>Paste the complete job description below.</b><br/>No formatting required — just copy everything from the job page (Ctrl+A → Ctrl+C → Ctrl+V). Gemini will auto-extract title, company, location, experience, and skills.</p>", unsafe_allow_html=True)
+            if "giant_jd_textarea" not in st.session_state:
+                st.session_state["giant_jd_textarea"] = st.session_state.get("raw_jd_cache", "")
+            raw_jd_val = st.text_area(
+                "Complete Job Description",
+                height=240,
+                placeholder="Paste complete job description here...\n\n(No formatting required — just copy everything from Indeed, LinkedIn, Naukri, or any company careers page and paste here. AI will extract all details automatically!)",
+                key="giant_jd_textarea",
+                label_visibility="collapsed"
+            )
+            col_sub1, col_sub2, col_sub3 = st.columns([1, 1.8, 1])
+            with col_sub2:
+                btn_disabled = bool(st.session_state.get("is_analyzing_jd"))
+                btn_label = "⏳ Analyzing & Tailoring..." if btn_disabled else "✨ Analyze & Tailor"
+                btn_analyze = st.button(btn_label, type="primary", use_container_width=True, key="btn_analyze_jd_giant", disabled=btn_disabled)
 
-            elif _ft_idx == 1:
-                st.markdown("<p class='panel-hint'>Paste any job URL from Indeed, LinkedIn, SmartRecruiters, Greenhouse, etc. <b>Indeed URLs auto-extract with 100% precision via GraphQL!</b></p>", unsafe_allow_html=True)
-                cl1, cl2 = st.columns([3.5, 1])
-                with cl1:
-                    # ponytail: key-seeded (no value=) — typed URL survives reruns/mode switches.
-                    if "quick_link_val" not in st.session_state:
-                        st.session_state["quick_link_val"] = st.session_state.get("link_url_cache", "")
-                    inp_url = st.text_input("Job Link / URL", placeholder="https://in.indeed.com/viewjob?jk=... or any careers page", label_visibility="collapsed", key="quick_link_val")
-                with cl2:
-                    btn_fetch = st.button("🔍 Fetch Job", use_container_width=True, key="btn_fetch_quick_link")
+            jd_loader_box = st.empty()
+            if btn_analyze:
+                if not raw_jd_val.strip():
+                    st.error("Please paste the job description text first!")
+                else:
+                    st.session_state["is_analyzing_jd"] = True
+                    st.session_state["raw_jd_cache"] = raw_jd_val.strip()
+                    try:
+                        # Stage 1: Parsing JD
+                        render_analysis_loader(jd_loader_box, stage=1, stage_msg="Analyzing job description and extracting role requirements...")
+                        extracted = gemini_parse_jd(raw_jd_val.strip())
+                        j_obj = {
+                            "title": extracted.get("title") or "Software Developer",
+                            "company": extracted.get("company") or "Not detected",
+                            "location": extracted.get("location") or "Not detected",
+                            "description": extracted.get("description") or raw_jd_val.strip(),
+                            "url": extracted.get("apply_url") or "#",
+                            "source": "manual-jd",
+                            "posted_at": datetime.utcnow().isoformat(),
+                            "experience_raw": extracted.get("experience_raw", "Not specified"),
+                            "extracted_skills": extracted.get("skills", []),
+                            "extracted_responsibilities": extracted.get("responsibilities", [])
+                        }
 
-                if btn_fetch:
-                    if not inp_url.strip():
-                        st.error("Please enter a valid job URL!")
-                    else:
-                        with st.spinner("Extracting job details from link..."):
+                        # Stage 2: Fit & Gaps
+                        render_analysis_loader(jd_loader_box, stage=2, stage_msg="Computing candidate match score and identifying missing skills...")
+                        qm = compute_match(p, j_obj)
+                        q_score = qm["match_score"]
+
+                        # Stage 3: AI Resume Tailoring
+                        render_analysis_loader(jd_loader_box, stage=3, stage_msg="Tailoring professional summary, ATS keywords and bullet points...")
+                        out = gemini_tailor(p["resume_text"], j_obj, p["skills"], profile=p)
+
+                        # Stage 4: Preparing Artifacts & Gallery
+                        render_analysis_loader(jd_loader_box, stage=4, stage_msg="Finalizing ATS resume artifacts and template gallery...")
+                        con = ensure_db()
+                        save(con, [j_obj])
+                        con.close()
+                        if not _is_demo():
                             try:
-                                fetched = fetch_job_from_url(inp_url.strip())
-                                if fetched and (fetched.get("description") or fetched.get("title")):
-                                    st.session_state.quick_job = fetched
-                                    st.session_state.quick_tailored = None
-                                    st.session_state.quick_run_tailor = True
-                                    st.session_state.instant_tailor_expanded = True
-                                    st.toast(f"Found: {fetched.get('title')} at {fetched.get('company') or 'Company'}", icon="✓")
-                                    st.rerun()
-                                else:
-                                    st.error("Could not auto-extract details. Please paste the JD text in Paste JD mode.")
-                            except Exception as err:
-                                st.error(f"Error fetching URL: {err}")
+                                _auto_pdf = build_tailored_resume_pdf(
+                                    p, out, template=st.session_state.get("sel_resume_template", "Modern Clean")
+                                )
+                                st.session_state.quick_resume_id = save_generated_resume(
+                                    _auto_pdf, j_obj.get("title") or "Role",
+                                    j_obj.get("company") or "Company",
+                                    q_score, j_obj.get("url") or "", db_path=DB
+                                )
+                            except Exception:
+                                pass
 
-            else:
-                # ponytail: editable role/city — default broad AND blank (no role autofill;
-                # empty city = All India + remote in pool). Typing here is explicit opt-in.
-                st.session_state.setdefault("plat_q_override", "")
-                st.session_state.setdefault("plat_city_override", "")
-                pc1, pc2, pc3 = st.columns([2.0, 1.6, 1.5], vertical_alignment="bottom")
-                with pc1:
-                    plat_q_val = st.text_input("Role keyword", value=st.session_state.get("plat_q_override", ""), key="plat_q_input", placeholder="e.g. Developer, PHP Developer...")
-                with pc2:
-                    plat_city_val = st.text_input("City (empty = All India)", value=st.session_state.get("plat_city_override", ""), key="plat_city_input", placeholder="Mumbai / leave empty")
-                with pc3:
-                    if st.button("🌐 Broad: All Developer jobs", key="plat_broad_btn", help="Role=Developer, City=empty → widest pool"):
-                        st.session_state["plat_q_override"] = "Developer"
-                        st.session_state["plat_city_override"] = ""
+                        st.session_state.quick_job = j_obj
+                        st.session_state.quick_tailored = out
+                        st.session_state.quick_run_tailor = False
+                        st.session_state.tailor_step = 1
+                        st.session_state.instant_tailor_expanded = True
+                        jd_loader_box.empty()
                         st.rerun()
-                st.session_state["plat_q_override"] = plat_q_val
-                st.session_state["plat_city_override"] = plat_city_val
-                platforms = get_major_platforms(p, plat_q_val, plat_city_val)
+                    except Exception as err:
+                        jd_loader_box.empty()
+                        st.error(f"Analysis failed: {err}")
+                    finally:
+                        st.session_state["is_analyzing_jd"] = False
 
-                row1_cols = st.columns(5)
-                for i, plat in enumerate(platforms[:5]):
-                    with row1_cols[i]:
-                        card_html = (
-                            f"<div class='platform-card'>"
-                            f"<div class='platform-head'><span class='platform-name'>{plat['icon']} {plat['name']}</span>"
-                            f"<span class='platform-badge' style='background:{plat['badge_bg']};color:{plat['badge_color']};border-color:{plat['badge_border']};'>{plat['badge']}</span></div>"
-                            f"<div class='platform-desc'>{plat['desc']}</div>"
-                            f"</div>"
-                        )
-                        st.markdown(card_html, unsafe_allow_html=True)
-                        st.link_button(f"Search {plat['name']} ↗", plat["url"], use_container_width=True, key=f"tab3_plat_{plat['id']}")
+        elif _ft_idx == 1:
+            st.markdown("<p class='panel-hint'>Paste any job URL from Indeed, LinkedIn, SmartRecruiters, Greenhouse, etc. <b>Indeed URLs auto-extract with 100% precision via GraphQL!</b></p>", unsafe_allow_html=True)
+            cl1, cl2 = st.columns([3.5, 1])
+            with cl1:
+                if "quick_link_val" not in st.session_state:
+                    st.session_state["quick_link_val"] = st.session_state.get("link_url_cache", "")
+                inp_url = st.text_input("Job Link / URL", placeholder="https://in.indeed.com/viewjob?jk=... or any careers page", label_visibility="collapsed", key="quick_link_val")
+            with cl2:
+                btn_link_disabled = bool(st.session_state.get("is_fetching_link"))
+                btn_link_lbl = "⏳ Fetching..." if btn_link_disabled else "🔍 Fetch Job"
+                btn_fetch = st.button(btn_link_lbl, use_container_width=True, key="btn_fetch_quick_link", disabled=btn_link_disabled)
 
-                st.write("")
-                row2_cols = st.columns(5)
-                for i, plat in enumerate(platforms[5:]):
-                    with row2_cols[i]:
-                        card_html = (
-                            f"<div class='platform-card'>"
-                            f"<div class='platform-head'><span class='platform-name'>{plat['icon']} {plat['name']}</span>"
-                            f"<span class='platform-badge' style='background:{plat['badge_bg']};color:{plat['badge_color']};border-color:{plat['badge_border']};'>{plat['badge']}</span></div>"
-                            f"<div class='platform-desc'>{plat['desc']}</div>"
-                            f"</div>"
-                        )
-                        st.markdown(card_html, unsafe_allow_html=True)
-                        st.link_button(f"Search {plat['name']} ↗", plat["url"], use_container_width=True, key=f"tab3_plat_{plat['id']}")
+            link_loader_box = st.empty()
+            if btn_fetch:
+                if not inp_url.strip():
+                    st.error("Please enter a valid job URL!")
+                else:
+                    st.session_state["is_fetching_link"] = True
+                    try:
+                        render_analysis_loader(link_loader_box, stage=1, stage_msg="Extracting job details from URL...")
+                        fetched = fetch_job_from_url(inp_url.strip())
+                        if fetched and (fetched.get("description") or fetched.get("title")):
+                            render_analysis_loader(link_loader_box, stage=2, stage_msg="Computing candidate match score and skill gaps...")
+                            qm = compute_match(p, fetched)
+                            q_score = qm["match_score"]
 
-        # Detected Job & Tailoring Output Area
-        qj = st.session_state.get("quick_job")
-        if qj:
-            st.divider()
-            qm = compute_match(p, qj)
-            q_score = qm["match_score"]
-            q_cat = qm["category"]
-            matched_skills = qm["matched_skills"]
-            missing_core = qm["missing_core_skills"]
+                            render_analysis_loader(link_loader_box, stage=3, stage_msg="Tailoring professional summary, ATS keywords and bullets...")
+                            out = gemini_tailor(p["resume_text"], fetched, p["skills"], profile=p)
 
-            comp_display = qj.get("company") or "Not detected"
-            loc_display = qj.get("location") or "Not detected"
-            exp_display = qj.get("experience_raw") or "Not specified"
-            missing_str = ", ".join(missing_core) if missing_core else "None"
+                            render_analysis_loader(link_loader_box, stage=4, stage_msg="Finalizing ATS resume artifacts and template gallery...")
+                            con = ensure_db()
+                            save(con, [fetched])
+                            con.close()
+                            if not _is_demo():
+                                try:
+                                    _auto_pdf = build_tailored_resume_pdf(
+                                        p, out, template=st.session_state.get("sel_resume_template", "Modern Clean")
+                                    )
+                                    st.session_state.quick_resume_id = save_generated_resume(
+                                        _auto_pdf, fetched.get("title") or "Role",
+                                        fetched.get("company") or "Company",
+                                        q_score, fetched.get("url") or "", db_path=DB
+                                    )
+                                except Exception:
+                                    pass
 
-            # Render display chips: extracted skills + matched skills
-            display_skills = qj.get("extracted_skills", []) or matched_skills or top_chips(qj, p["skills"])
-            chips_html = "".join([f"<span class='chip'>{html.escape(c)}</span>" for c in display_skills[:10]])
+                            st.session_state.quick_job = fetched
+                            st.session_state.quick_tailored = out
+                            st.session_state.quick_run_tailor = False
+                            st.session_state.tailor_step = 1
+                            st.session_state.instant_tailor_expanded = True
+                            st.toast(f"Found: {fetched.get('title')} at {fetched.get('company') or 'Company'}", icon="✓")
+                            link_loader_box.empty()
+                            st.rerun()
+                        else:
+                            link_loader_box.empty()
+                            st.error("Could not auto-extract details from this link. Please copy the job description text and use 'Paste Job Description' mode.")
+                    except (ValueError, RuntimeError) as err:
+                        link_loader_box.empty()
+                        st.error(f"{err}")
+                    except Exception as err:
+                        link_loader_box.empty()
+                        st.error(f"Error fetching URL: {err}. Please copy and paste the job description text manually.")
+                    finally:
+                        st.session_state["is_fetching_link"] = False
 
-            card_html = f"""
-            <div class="detected-card">
-                <div class="detected-pill">✓ Job detected</div>
-                <div class="detected-title">{html.escape(qj.get('title','Untitled Role'))}</div>
-                <div class="detected-company">{html.escape(comp_display)}</div>
-                <div class="detected-meta">📍 {html.escape(loc_display)} · ⏳ {html.escape(exp_display)} · 🌐 {html.escape(qj.get('source','manual').upper())}</div>
-                <div>{chips_html}</div>
-                <div class="detected-divider"></div>
-                <div class="detected-match-row">
-                    <span class="detected-score">Match: {q_score}% ({q_cat})</span>
-                    <span class="detected-missing">Missing: {html.escape(missing_str)}</span>
+        else:
+            # 🌐 Search Platforms Mode
+            st.session_state.setdefault("plat_q_override", "")
+            st.session_state.setdefault("plat_city_override", "")
+            st.session_state.setdefault("plat_exp_choice", "Any Experience")
+
+            pc1, pc2, pc3, pc4 = st.columns([2.6, 1.5, 1.5, 0.95], vertical_alignment="bottom")
+            with pc1:
+                plat_q_val = st.text_input(
+                    "Role / Keyword",
+                    value=st.session_state.get("plat_q_override", ""),
+                    key="plat_q_input",
+                    placeholder="e.g. Frontend Developer, PHP Developer, Full Stack..."
+                )
+            with pc2:
+                loc_options = [
+                    "Mumbai (or leave empty)",
+                    "Bangalore",
+                    "Pune",
+                    "Delhi NCR",
+                    "Hyderabad",
+                    "Chennai",
+                    "Remote",
+                    "All India"
+                ]
+                cur_city = st.session_state.get("plat_city_override", "")
+                cur_city_idx = 0
+                if cur_city and cur_city in loc_options:
+                    cur_city_idx = loc_options.index(cur_city)
+
+                sel_city = st.selectbox(
+                    "Location",
+                    options=loc_options,
+                    index=cur_city_idx,
+                    key="plat_city_select"
+                )
+                plat_city_val = "" if "or leave empty" in sel_city or sel_city == "All India" else sel_city
+            with pc3:
+                exp_options = ["Any Experience", "Fresher / 0-1 yr", "Junior (1-3 yrs)", "Mid-Level (3-5 yrs)", "Senior (5+ yrs)"]
+                cur_exp = st.session_state.get("plat_exp_choice", "Any Experience")
+                cur_exp_idx = exp_options.index(cur_exp) if cur_exp in exp_options else 0
+                sel_exp = st.selectbox(
+                    "Experience",
+                    options=exp_options,
+                    index=cur_exp_idx,
+                    key="plat_exp_select"
+                )
+                st.session_state["plat_exp_choice"] = sel_exp
+            with pc4:
+                if st.button("Search Jobs", icon=":material/search:", type="primary", use_container_width=True, key="plat_search_jobs_btn"):
+                    st.session_state["plat_q_override"] = plat_q_val
+                    st.session_state["plat_city_override"] = plat_city_val
+                    st.toast("Platform search links updated!", icon="🔍")
+                    st.rerun()
+
+            st.session_state["plat_q_override"] = plat_q_val
+            st.session_state["plat_city_override"] = plat_city_val
+
+    # 3. Job Platforms Section (Visible directly on the main dashboard)
+    if _ft_idx == 2:
+        platforms = get_major_platforms(p, st.session_state.get("plat_q_override", ""), st.session_state.get("plat_city_override", ""))
+        card_items_html = []
+        for plat in platforms:
+            card_items_html.append(
+                f'<a href="{html.escape(plat["url"])}" target="_blank" rel="noopener noreferrer" class="platform-card-link" title="Open {html.escape(plat["name"])} in a new tab">'
+                f'<div class="platform-icon-box" style="background: {plat["icon_bg"]};">'
+                f'<span class="platform-icon-letter">{plat["icon_text"]}</span>'
+                f'</div>'
+                f'<div class="platform-text-wrap">'
+                f'<span class="platform-name">{html.escape(plat["name"])}</span>'
+                f'<span class="platform-desc">{html.escape(plat["desc"])}</span>'
+                f'</div>'
+                f'<span class="platform-arrow">'
+                f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>'
+                f'</span>'
+                f'</a>'
+            )
+        grid_html = (
+            '<div class="platforms-section-wrap">'
+            '<div class="platforms-heading-box">'
+            '<div class="platforms-title">Job Platforms</div>'
+            '<div class="platforms-subtitle">Search across multiple platforms</div>'
+            '</div>'
+            f'<div class="platforms-grid">{"".join(card_items_html)}</div>'
+            '</div>'
+        )
+        st.markdown(grid_html, unsafe_allow_html=True)
+
+    # Detected Job & Tailoring Output Area
+    qj = st.session_state.get("quick_job")
+    if qj:
+        st.divider()
+        qm = compute_match(p, qj)
+        q_score = qm["match_score"]
+        q_cat = qm["category"]
+        matched_skills = qm["matched_skills"]
+        missing_core = qm["missing_core_skills"]
+
+        comp_display = qj.get("company") or "Not detected"
+        loc_display = qj.get("location") or "Not detected"
+        exp_display = qj.get("experience_raw") or "Not specified"
+
+        # Skill badge icon helper
+        def _get_skill_icon(name: str) -> str:
+            s = name.lower()
+            if "react" in s:
+                return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#61dafb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="2"/><ellipse cx="12" cy="12" rx="10" ry="4"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)"/></svg>'
+            elif "angular" in s:
+                return '<span style="display:inline-flex;align-items:center;justify-content:center;background:#dd0031;color:#fff;font-size:9px;font-weight:900;border-radius:3px;width:13px;height:13px;margin-right:4px;vertical-align:middle;">A</span>'
+            elif "vue" in s:
+                return '<span style="display:inline-flex;align-items:center;justify-content:center;color:#42b883;font-size:11px;font-weight:900;margin-right:4px;vertical-align:middle;">V</span>'
+            elif "python" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🐍</span>'
+            elif "django" in s:
+                return '<span style="display:inline-flex;align-items:center;justify-content:center;background:#092e20;color:#2ba174;font-size:8px;font-weight:800;border-radius:2px;padding:0 2px;margin-right:4px;vertical-align:middle;">dj</span>'
+            elif "flask" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🧪</span>'
+            elif "java" in s and "script" not in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">☕</span>'
+            elif "rest" in s or "api" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">⚙️</span>'
+            elif "nosql" in s or "mongo" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🍃</span>'
+            elif "sql" in s or "database" in s or "db" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🗄️</span>'
+            elif "php" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🐘</span>'
+            elif "node" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🟢</span>'
+            elif "docker" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">🐳</span>'
+            elif "git" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">📦</span>'
+            elif "aws" in s:
+                return '<span style="vertical-align:middle;margin-right:4px;">☁️</span>'
+            return ''
+
+        # Partition skills
+        profile_skills_raw = p.get("skills", [])
+        profile_skills_norm = {s.strip().lower(): s for s in profile_skills_raw if s.strip()}
+        matched_set = {s.strip().lower() for s in qm.get("matched_skills", [])}
+
+        jd_extracted = qj.get("extracted_skills", [])
+        tier_skills = qm["tiers"]["must_have"] + qm["tiers"]["important"] + qm["tiers"]["nice_to_have"]
+
+        all_jd_skills = []
+        seen_skills = set()
+        for s in (jd_extracted or tier_skills or qm["matched_skills"]):
+            s_clean = s.strip()
+            s_norm = s_clean.lower()
+            if s_norm and s_norm not in seen_skills:
+                seen_skills.add(s_norm)
+                all_jd_skills.append(s_clean)
+
+        if not all_jd_skills:
+            all_jd_skills = detect_skills(qj.get("description", ""))
+
+        matching_skills_list = []
+        missing_skills_list = []
+        for s in all_jd_skills:
+            s_norm = s.lower().strip()
+            s_clean = re.sub(r'[\.\-\s]', '', s_norm)
+            is_matched = (
+                s_norm in matched_set
+                or any(re.sub(r'[\.\-\s]', '', m) == s_clean for m in matched_set)
+                or s_norm in profile_skills_norm
+                or any(
+                    (re.sub(r'[\.\-\s]', '', ps) == s_clean) or
+                    (len(ps) >= 3 and len(s_norm) >= 3 and (ps in s_norm or s_norm in ps) and not (
+                        (ps == "sql" and "nosql" in s_norm) or (s_norm == "sql" and "nosql" in ps)
+                    ))
+                    for ps in profile_skills_norm
+                )
+            )
+            if is_matched:
+                matching_skills_list.append(s)
+            else:
+                missing_skills_list.append(s)
+
+        # Top card required skill badges
+        top_req_badges = []
+        for s in all_jd_skills[:12]:
+            icon_html = _get_skill_icon(s)
+            top_req_badges.append(f'<span class="req-skill-chip">{icon_html}{html.escape(s)}</span>')
+        req_badges_html = "".join(top_req_badges) if top_req_badges else "<span class='req-skill-chip'>General Engineering</span>"
+
+        card_html = f"""
+        <div class="detected-card">
+            <div class="detected-pill">✓ Job detected</div>
+            <div class="detected-title">{html.escape(qj.get('title','Untitled Role'))}</div>
+            <div class="detected-company">{html.escape(comp_display)}</div>
+            <div class="detected-meta">📍 {html.escape(loc_display)} &nbsp;·&nbsp; 💼 {html.escape(exp_display)} &nbsp;·&nbsp; 🌐 {html.escape(qj.get('source','manual').upper())}</div>
+            <div class="req-skills-wrap">{req_badges_html}</div>
+        </div>
+        """
+        st.markdown(card_html, unsafe_allow_html=True)
+
+        # Trigger tailoring if requested (AI when server key exists, heuristics otherwise)
+        if st.session_state.get("quick_run_tailor"):
+            st.session_state.quick_run_tailor = False
+            if not get_gemini_api_key():
+                st.info("AI engine is unavailable on this deployment — using built-in ATS heuristics.")
+            re_tailor_box = st.empty()
+            try:
+                render_analysis_loader(re_tailor_box, stage=3, stage_msg="Tailoring resume summary, bullets & keywords to this JD...")
+                out = gemini_tailor(p["resume_text"], qj, p["skills"], profile=p)
+                render_analysis_loader(re_tailor_box, stage=4, stage_msg="Finalizing ATS resume artifacts and template gallery...")
+                st.session_state.quick_tailored = out
+                con = ensure_db()
+                save(con, [qj])
+                con.close()
+                # Demo sandbox never writes generated PDFs to the owner's library.
+                if not _is_demo():
+                    try:
+                        _auto_pdf = build_tailored_resume_pdf(
+                            p, out, template=st.session_state.get(
+                                "sel_resume_template", "Modern Clean"))
+                        st.session_state.quick_resume_id = save_generated_resume(
+                            _auto_pdf, qj.get("title") or "Role",
+                            qj.get("company") or "Company",
+                            q_score, qj.get("url") or "", db_path=DB)
+                    except Exception:
+                        pass
+                # Advance to template gallery on initial tailor run
+                st.session_state.tailor_step = 1
+                re_tailor_box.empty()
+            except Exception as e:
+                re_tailor_box.empty()
+                st.error(f"Tailoring failed: {e}")
+
+        qt = st.session_state.get("quick_tailored")
+
+        # Determine active flow step (default to 1 for Job & Fit)
+        if "tailor_step" not in st.session_state:
+            st.session_state["tailor_step"] = 1
+        cur_step = st.session_state.get("tailor_step", 1)
+
+        # Stepper Navigation Header (3-Step Workflow)
+        st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+        sn1, sn2, sn3 = st.columns([1, 1, 1])
+        with sn1:
+            b1_type = "primary" if cur_step == 1 else "secondary"
+            if st.button("**01  Job & Fit**\n:grey[Review job details and fit analysis]", type=b1_type, use_container_width=True, key="step_nav_1"):
+                st.session_state.tailor_step = 1
+                st.rerun()
+        with sn2:
+            b2_type = "primary" if cur_step == 2 else "secondary"
+            if st.button("**02  Template Gallery**\n:grey[Choose a template for your resume]", type=b2_type, use_container_width=True, key="step_nav_2"):
+                st.session_state.tailor_step = 2
+                st.rerun()
+        with sn3:
+            b3_type = "primary" if cur_step == 3 else "secondary"
+            if st.button("**03  AI Resume Studio**\n:grey[Tailor and generate your resume]", type=b3_type, use_container_width=True, key="step_nav_3"):
+                st.session_state.tailor_step = 3
+                st.rerun()
+
+        st.write("")
+
+        # =========================================================================
+        # STEP 1: JOB DETAILS & MATCH FIT
+        # =========================================================================
+        if cur_step == 1:
+            # Job & Fit Analysis Dashboard
+            total_skills_count = len(matching_skills_list) + len(missing_skills_list)
+            matched_count = len(matching_skills_list)
+            missing_count = len(missing_skills_list)
+
+            # ponytail: ensure displayed match score never misleadingly shows 100% if required skills are missing
+            if total_skills_count > 0 and missing_count > 0 and q_score >= 100:
+                q_score = min(99, round(100.0 * matched_count / total_skills_count))
+
+            circ = 238.76
+            gauge_offset = max(0.0, circ - (circ * q_score / 100.0))
+
+            has_major_gaps = total_skills_count > 0 and (matched_count < missing_count)
+            if (q_score >= 60 or q_cat == "Strong match") and not has_major_gaps:
+                fit_badge = "Strong fit"
+                fit_text = "Your profile is a strong match for this position with high skill coverage across the required tech stack."
+            elif q_score >= 35 or q_cat == "Possible" or (total_skills_count > 0 and matched_count > 0):
+                fit_badge = "Possible fit"
+                fit_text = "Your profile matches some key requirements, but a few important skills are missing. Adding them can improve your match score."
+            else:
+                fit_badge = "Weak fit"
+                fit_text = "Your profile currently has notable gaps against the job's core requirements. Consider tailoring or adding missing skills."
+
+            matching_chips_html = []
+            for s in matching_skills_list:
+                matching_chips_html.append(f'<span class="fit-skill-pill matching"><span style="color:#00c875;font-weight:800;margin-right:2px;">✓</span> {html.escape(s)}</span>')
+            m_chips_rendered = "".join(matching_chips_html) if matching_chips_html else (
+                "<div style='color:#94a3b8;font-size:12.5px;'>No specific technical skills were detected in this posting.</div>"
+                if total_skills_count == 0 else
+                "<div style='color:#64748b;font-size:12.5px;'>No direct skill matches found in your profile.</div>"
+            )
+
+            missing_chips_html = []
+            for s in missing_skills_list:
+                icon_html = _get_skill_icon(s)
+                missing_chips_html.append(f'<span class="fit-skill-pill missing">{icon_html}{html.escape(s)}</span>')
+            mis_chips_rendered = "".join(missing_chips_html) if missing_chips_html else (
+                "<div style='color:#94a3b8;font-size:12.5px;'>No missing skills identified. Match is assessed on role title and experience.</div>"
+                if total_skills_count == 0 else
+                "<div style='color:#00c875;font-size:12.5px;'>✓ All detected required skills are present in your profile!</div>"
+            )
+
+            matched_pill_txt = f"{matched_count}/{total_skills_count} found" if total_skills_count > 0 else "No skills detected"
+            missing_pill_txt = f"{missing_count} missing" if total_skills_count > 0 else "0 missing"
+
+            analysis_html = f"""
+            <div class="fit-analysis-card">
+                <div class="fit-top-cluster">
+                    <div class="fit-heading-box">
+                        <div class="fit-main-title">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00c875" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="20" x2="18" y2="10"></line>
+                                <line x1="12" y1="20" x2="12" y2="4"></line>
+                                <line x1="6" y1="20" x2="6" y2="14"></line>
+                            </svg>
+                            Job & Fit Analysis
+                        </div>
+                        <div class="fit-main-desc">Here's how your profile matches the job requirements, with key skills breakdown and recommendations.</div>
+                    </div>
+                    <div class="fit-gauge-assessment">
+                        <div class="fit-gauge-circle">
+                            <svg width="96" height="96" viewBox="0 0 96 96">
+                                <circle cx="48" cy="48" r="38" stroke="#1c2436" stroke-width="7" fill="none" />
+                                <circle cx="48" cy="48" r="38" stroke="#00c875" stroke-width="7" stroke-linecap="round" fill="none"
+                                    stroke-dasharray="{circ}" stroke-dashoffset="{gauge_offset:.2f}"
+                                    transform="rotate(-90 48 48)" />
+                                <text x="48" y="45" text-anchor="middle" font-size="18" font-weight="800" fill="#ffffff">{q_score}%</text>
+                                <text x="48" y="61" text-anchor="middle" font-size="11" font-weight="600" fill="#94a3b8">Match</text>
+                            </svg>
+                        </div>
+                        <div class="fit-assessment-text">
+                            <div class="fit-assessment-badge">{fit_badge}</div>
+                            <div class="fit-assessment-sub">{fit_text}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="fit-skills-grid">
+                    <div class="fit-panel matching">
+                        <div>
+                            <div class="panel-header-row">
+                                <div class="panel-header-left">
+                                    <span class="panel-icon-circle green">✓</span>
+                                    Matching Skills
+                                </div>
+                                <span class="panel-count-pill green">{matched_pill_txt}</span>
+                            </div>
+                            <div class="panel-chips-wrap">{m_chips_rendered}</div>
+                        </div>
+                    </div>
+                    <div class="fit-panel missing">
+                        <div>
+                            <div class="panel-header-row">
+                                <div class="panel-header-left">
+                                    <span class="panel-icon-circle red">!</span>
+                                    Missing Skills
+                                </div>
+                                <span class="panel-count-pill red">{missing_pill_txt}</span>
+                            </div>
+                            <div class="panel-chips-wrap">{mis_chips_rendered}</div>
+                        </div>
+                        <div class="fit-missing-advice">These skills are mentioned in the job description and are not found in your current profile. Adding them can improve your match score.</div>
+                    </div>
                 </div>
             </div>
             """
-            st.markdown(card_html, unsafe_allow_html=True)
-
-            # Trigger Gemini tailoring if requested
-            if st.session_state.get("quick_run_tailor"):
-                st.session_state.quick_run_tailor = False
-                active_key = get_gemini_api_key()
-                if not active_key:
-                    st.error("⚠️ GEMINI_API_KEY is missing in your .env file! Please enter your key below or in Settings.")
-                    quick_k1, quick_k2 = st.columns([3, 1])
-                    with quick_k1:
-                        inp_key = st.text_input("Gemini API Key", type="password", key="quick_inline_key", placeholder="Paste AQ.Ab8... or AIzaSy...")
-                    with quick_k2:
-                        if st.button("Save & Tailor", type="primary", use_container_width=True, key="btn_save_inline_tailor"):
-                            if inp_key.strip():
-                                set_gemini_api_key(inp_key.strip())
-                                st.session_state.quick_run_tailor = True
-                                st.rerun()
+            st.markdown(analysis_html, unsafe_allow_html=True)
+            btn_c1, btn_c2, btn_c3, btn_c4 = st.columns([1.6, 1.2, 1.2, 0.9])
+            with btn_c1:
+                if qt:
+                    if st.button("Choose Template (Step 2) →", type="primary", use_container_width=True, key="btn_q_go_step2"):
+                        st.session_state.tailor_step = 2
+                        st.rerun()
                 else:
-                    with st.spinner("🤖 Tailoring your resume summary, bullets & keywords to this JD..."):
-                        try:
-                            out = gemini_tailor(p["resume_text"], qj, p["skills"], profile=p)
-                            st.session_state.quick_tailored = out
-                            con = ensure_db()
-                            save(con, [qj])
-                            con.close()
-                            # ponytail: auto-archive one library copy per tailor
-                            # run (download-independent). Never breaks tailoring.
-                            try:
-                                _auto_pdf = build_tailored_resume_pdf(
-                                    p, out, template=st.session_state.get(
-                                        "sel_resume_template", "Modern Clean"))
-                                st.session_state.quick_resume_id = save_generated_resume(
-                                    _auto_pdf, qj.get("title") or "Role",
-                                    qj.get("company") or "Company",
-                                    q_score, qj.get("url") or "")
-                            except Exception:
-                                pass
-                            # Advance to template gallery on initial tailor run
-                            st.session_state.tailor_step = 2
-                        except Exception as e:
-                            st.error(f"Tailoring failed: {e}")
-
-            qt = st.session_state.get("quick_tailored")
-
-            # Determine active flow step
-            if "tailor_step" not in st.session_state:
-                st.session_state["tailor_step"] = 2 if qt else 1
-            cur_step = st.session_state.get("tailor_step", 1)
-
-            # Stepper Navigation Header
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-            sn1, sn2, sn3 = st.columns([1, 1, 1])
-            with sn1:
-                b1_type = "primary" if cur_step == 1 else "secondary"
-                if st.button("01  Job & Fit", type=b1_type, use_container_width=True, key="step_nav_1"):
+                    if st.button("✨ Tailor & Pick Template", type="primary", use_container_width=True, key="btn_q_re_tailor"):
+                        st.session_state.quick_run_tailor = True
+                        st.rerun()
+            with btn_c2:
+                with st.popover("📄 View Full JD", use_container_width=True):
+                    st.markdown(f"#### {html.escape(qj.get('title',''))}")
+                    st.caption(f"**Company:** {comp_display} · **Location:** {loc_display}")
+                    st.text_area("Full Description", value=qj.get("description",""), height=300, disabled=True)
+            with btn_c3:
+                with st.popover("✏️ Edit Details", use_container_width=True):
+                    st.caption("Override any detected fields if you'd like:")
+                    edit_title = st.text_input("Title", value=qj.get("title",""), key="edit_q_title")
+                    edit_comp = st.text_input("Company", value=qj.get("company",""), key="edit_q_comp")
+                    edit_loc = st.text_input("Location", value=qj.get("location",""), key="edit_q_loc")
+                    edit_url = st.text_input("Apply Link / Email", value=qj.get("url",""), key="edit_q_url")
+                    if st.button("💾 Update Detected Details", key="btn_save_edited_qj"):
+                        qj["title"] = edit_title.strip()
+                        qj["company"] = edit_comp.strip()
+                        qj["location"] = edit_loc.strip()
+                        qj["url"] = edit_url.strip()
+                        st.session_state.quick_job = qj
+                        st.rerun()
+            with btn_c4:
+                if st.button("✕ Reset", use_container_width=True, key="btn_q_reset", help="Clear and paste another JD"):
+                    st.session_state.quick_job = None
+                    st.session_state.quick_tailored = None
+                    st.session_state.quick_resume_id = None
                     st.session_state.tailor_step = 1
                     st.rerun()
-            with sn2:
-                b2_type = "primary" if cur_step == 2 else "secondary"
-                if st.button("02  Template Gallery", type=b2_type, use_container_width=True, key="step_nav_2"):
-                    st.session_state.tailor_step = 2
+            # ponytail: explicit user action only — viewing portals or
+            # generating a resume never auto-marks anything applied.
+            mark_c1, mark_c2 = st.columns(2)
+            with mark_c1:
+                if st.button("✓ Mark as Applied", type="primary", use_container_width=True, key="btn_q_mark_applied", help="Track this job in Applications after you actually apply"):
+                    try:
+                        _m_url = qj.get("url") or ""
+                        _m_url = _m_url if _m_url.startswith("http") else ""
+                        upsert_application(
+                            qj.get("company") or "Unknown",
+                            qj.get("title") or "Role",
+                            url=_m_url,
+                            resume_id=st.session_state.get("quick_resume_id"),
+                            db_path=DB)
+                        st.toast("Tracked in Applications ✓", icon="✓")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not track application: {e}")
+            with mark_c2:
+                if st.button("★ Shortlist", use_container_width=True, key="btn_q_shortlist", help="Save to Applications without marking applied"):
+                    try:
+                        _s_url = qj.get("url") or ""
+                        _s_url = _s_url if _s_url.startswith("http") else ""
+                        shortlist_job(qj.get("company") or "Unknown",
+                                      qj.get("title") or "Role",
+                                      url=_s_url, db_path=DB)
+                        st.toast("Shortlisted ★", icon="★")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not shortlist: {e}")
+
+        # =========================================================================
+        # STEP 2: VISUAL TEMPLATE GALLERY (With Real In-Memory PDF Previews)
+        # =========================================================================
+        elif cur_step == 2:
+            if not qt:
+                qt = validate_tailored_output(heuristic_tailor(p["resume_text"], qj, p["skills"]), qj, p)[0]
+                st.session_state.quick_tailored = qt
+
+            st.markdown("### 🎨 Step 2: Choose Resume Template Style")
+            st.caption(f"Pick a template. Your AI-tailored content for **{html.escape(qj.get('title','Role'))}** at **{html.escape(comp_display)}** is inserted automatically. Previews rendered live.")
+
+            sel_template = st.session_state.get("sel_resume_template", "Modern Clean")
+
+            # Category 1: ATS Safe
+            st.markdown('<div class="gallery-cat-header">🛡️ ATS Safe Templates (Corporate & Enterprise Scanners)</div>', unsafe_allow_html=True)
+            ats_tpls = ["Classic ATS", "Modern Clean", "Executive Slate"]
+            cols_ats = st.columns(3, gap="medium")
+            for idx, t_name in enumerate(ats_tpls):
+                t_info = RESUME_TEMPLATES[t_name]
+                is_sel = (t_name == sel_template)
+                card_cls = "template-card-box selected" if is_sel else "template-card-box"
+                with cols_ats[idx]:
+                    tpl_pdf = build_tailored_resume_pdf(p, qt, template=t_name)
+                    thumb_png = render_pdf_page_to_png(tpl_pdf, dpi=85)
+                    badges_html = "".join([f"<span class='template-badge-pill safe'>{b}</span>" for b in t_info["badges"]])
+                    sel_marker = " <span style='color:#10b981;font-weight:700;'>● ACTIVE</span>" if is_sel else ""
+
+                    st.markdown(f"""
+                    <div class="{card_cls}">
+                        <div class="template-title-row">
+                            <span class="template-name">{t_name}</span>{sel_marker}
+                        </div>
+                        <div class="template-desc">{t_info['description']}</div>
+                        <div>{badges_html}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    if thumb_png:
+                        st.image(thumb_png, use_container_width=True)
+
+                    btn_col1, btn_col2 = st.columns([1.5, 1])
+                    with btn_col1:
+                        btn_label = "✓ Using This" if is_sel else "Use Template →"
+                        btn_t = "primary" if is_sel else "secondary"
+                        if st.button(btn_label, key=f"btn_sel_ats_{idx}_{t_name.replace(' ','_')}", type=btn_t, use_container_width=True):
+                            st.session_state["sel_resume_template"] = t_name
+                            st.session_state["tailor_step"] = 3
+                            st.rerun()
+                    with btn_col2:
+                        with st.popover("🔍 Zoom", use_container_width=True):
+                            st.markdown(f"#### {t_name}")
+                            full_zoom = render_pdf_page_to_png(tpl_pdf, dpi=140)
+                            if full_zoom:
+                                st.image(full_zoom, use_container_width=True)
+
+            st.write("")
+            # Category 2: Developer
+            st.markdown('<div class="gallery-cat-header">💻 Developer Templates (Modern Web & Engineering Portfolios)</div>', unsafe_allow_html=True)
+            dev_tpls = ["Tech Emerald", "Minimal Dev", "Compact Dev"]
+            cols_dev = st.columns(3, gap="medium")
+            for idx, t_name in enumerate(dev_tpls):
+                t_info = RESUME_TEMPLATES[t_name]
+                is_sel = (t_name == sel_template)
+                card_cls = "template-card-box selected" if is_sel else "template-card-box"
+                with cols_dev[idx]:
+                    tpl_pdf = build_tailored_resume_pdf(p, qt, template=t_name)
+                    thumb_png = render_pdf_page_to_png(tpl_pdf, dpi=85)
+                    badges_html = "".join([f"<span class='template-badge-pill safe'>{b}</span>" for b in t_info["badges"]])
+                    sel_marker = " <span style='color:#10b981;font-weight:700;'>● ACTIVE</span>" if is_sel else ""
+
+                    st.markdown(f"""
+                    <div class="{card_cls}">
+                        <div class="template-title-row">
+                            <span class="template-name">{t_name}</span>{sel_marker}
+                        </div>
+                        <div class="template-desc">{t_info['description']}</div>
+                        <div>{badges_html}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    if thumb_png:
+                        st.image(thumb_png, use_container_width=True)
+
+                    btn_col1, btn_col2 = st.columns([1.5, 1])
+                    with btn_col1:
+                        btn_label = "✓ Using This" if is_sel else "Use Template →"
+                        btn_t = "primary" if is_sel else "secondary"
+                        if st.button(btn_label, key=f"btn_sel_dev_{idx}_{t_name.replace(' ','_')}", type=btn_t, use_container_width=True):
+                            st.session_state["sel_resume_template"] = t_name
+                            st.session_state["tailor_step"] = 3
+                            st.rerun()
+                    with btn_col2:
+                        with st.popover("🔍 Zoom", use_container_width=True):
+                            st.markdown(f"#### {t_name}")
+                            full_zoom = render_pdf_page_to_png(tpl_pdf, dpi=140)
+                            if full_zoom:
+                                st.image(full_zoom, use_container_width=True)
+
+            st.write("")
+            st.divider()
+            bot_c1, bot_c2 = st.columns([1, 1.8])
+            with bot_c1:
+                if st.button("← Back to Job Details", key="btn_tpl_back_job", use_container_width=True):
+                    st.session_state.tailor_step = 1
                     st.rerun()
-            with sn3:
-                b3_type = "primary" if cur_step == 3 else "secondary"
-                if st.button("03  AI Resume Studio", type=b3_type, use_container_width=True, key="step_nav_3"):
+            with bot_c2:
+                if st.button(f"Continue to Resume Studio ({sel_template}) →", type="primary", key="btn_tpl_continue_studio", use_container_width=True):
                     st.session_state.tailor_step = 3
                     st.rerun()
 
-            st.write("")
+        # =========================================================================
+        # STEP 3: AI RESUME STUDIO (Live Content Editor + Live PDF Preview)
+        # =========================================================================
+        elif cur_step == 3:
+            if not qt:
+                qt = validate_tailored_output(heuristic_tailor(p["resume_text"], qj, p["skills"]), qj, p)[0]
+                st.session_state.quick_tailored = qt
 
-            # =========================================================================
-            # STEP 1: JOB DETAILS & MATCH FIT
-            # =========================================================================
-            if cur_step == 1:
-                btn_c1, btn_c2, btn_c3, btn_c4 = st.columns([1.6, 1.2, 1.2, 0.9])
-                with btn_c1:
-                    if qt:
-                        if st.button("Choose Template (Step 2) →", type="primary", use_container_width=True, key="btn_q_go_step2"):
-                            st.session_state.tailor_step = 2
-                            st.rerun()
-                    else:
-                        if st.button("✨ Tailor & Pick Template", type="primary", use_container_width=True, key="btn_q_re_tailor"):
-                            st.session_state.quick_run_tailor = True
-                            st.rerun()
-                with btn_c2:
-                    with st.popover("📄 View Full JD", use_container_width=True):
-                        st.markdown(f"#### {html.escape(qj.get('title',''))}")
-                        st.caption(f"**Company:** {comp_display} · **Location:** {loc_display}")
-                        st.text_area("Full Description", value=qj.get("description",""), height=300, disabled=True)
-                with btn_c3:
-                    with st.popover("✏️ Edit Details", use_container_width=True):
-                        st.caption("Override any detected fields if you'd like:")
-                        edit_title = st.text_input("Title", value=qj.get("title",""), key="edit_q_title")
-                        edit_comp = st.text_input("Company", value=qj.get("company",""), key="edit_q_comp")
-                        edit_loc = st.text_input("Location", value=qj.get("location",""), key="edit_q_loc")
-                        edit_url = st.text_input("Apply Link / Email", value=qj.get("url",""), key="edit_q_url")
-                        if st.button("💾 Update Detected Details", key="btn_save_edited_qj"):
-                            qj["title"] = edit_title.strip()
-                            qj["company"] = edit_comp.strip()
-                            qj["location"] = edit_loc.strip()
-                            qj["url"] = edit_url.strip()
-                            st.session_state.quick_job = qj
-                            st.rerun()
-                with btn_c4:
-                    if st.button("✕ Reset", use_container_width=True, key="btn_q_reset", help="Clear and paste another JD"):
-                        st.session_state.quick_job = None
-                        st.session_state.quick_tailored = None
-                        st.session_state.quick_resume_id = None
-                        st.session_state.tailor_step = 1
-                        st.rerun()
-                # ponytail: explicit user action only — viewing portals or
-                # generating a resume never auto-marks anything applied.
-                mark_c1, mark_c2 = st.columns(2)
-                with mark_c1:
-                    if st.button("✓ Mark as Applied", type="primary", use_container_width=True, key="btn_q_mark_applied", help="Track this job in Applications after you actually apply"):
-                        try:
-                            _m_url = qj.get("url") or ""
-                            _m_url = _m_url if _m_url.startswith("http") else ""
-                            upsert_application(
-                                qj.get("company") or "Unknown",
-                                qj.get("title") or "Role",
-                                url=_m_url,
-                                resume_id=st.session_state.get("quick_resume_id"))
-                            st.toast("Tracked in Applications ✓", icon="✓")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Could not track application: {e}")
-                with mark_c2:
-                    if st.button("★ Shortlist", use_container_width=True, key="btn_q_shortlist", help="Save to Applications without marking applied"):
-                        try:
-                            _s_url = qj.get("url") or ""
-                            _s_url = _s_url if _s_url.startswith("http") else ""
-                            shortlist_job(qj.get("company") or "Unknown",
-                                          qj.get("title") or "Role",
-                                          url=_s_url)
-                            st.toast("Shortlisted ★", icon="★")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Could not shortlist: {e}")
+            sel_template = st.session_state.get("sel_resume_template", "Modern Clean")
 
-            # =========================================================================
-            # STEP 2: VISUAL TEMPLATE GALLERY (With Real In-Memory PDF Previews)
-            # =========================================================================
-            elif cur_step == 2:
-                if not qt:
-                    qt = validate_tailored_output(heuristic_tailor(p["resume_text"], qj, p["skills"]), qj, p)[0]
-                    st.session_state.quick_tailored = qt
+            # Determine score & category badge
+            if q_score >= 60 or q_cat == "Strong match":
+                fit_badge_label = "Strong Fit"
+            elif q_score >= 35 or q_cat == "Possible":
+                fit_badge_label = "Possible Fit"
+            else:
+                fit_badge_label = "Weak Fit"
 
-                st.markdown("### 🎨 Step 2: Choose Resume Template Style")
-                st.caption(f"Pick a template. Your AI-tailored content for **{html.escape(qj.get('title','Role'))}** at **{html.escape(comp_display)}** is inserted automatically. Previews rendered live.")
-
-                sel_template = st.session_state.get("sel_resume_template", "Modern Clean")
-
-                # Category 1: ATS Safe
-                st.markdown('<div class="gallery-cat-header">🛡️ ATS Safe Templates (Corporate & Enterprise Scanners)</div>', unsafe_allow_html=True)
-                ats_tpls = ["Classic ATS", "Modern Clean", "Executive Slate"]
-                cols_ats = st.columns(3, gap="medium")
-                for idx, t_name in enumerate(ats_tpls):
-                    t_info = RESUME_TEMPLATES[t_name]
-                    is_sel = (t_name == sel_template)
-                    card_cls = "template-card-box selected" if is_sel else "template-card-box"
-                    with cols_ats[idx]:
-                        tpl_pdf = build_tailored_resume_pdf(p, qt, template=t_name)
-                        thumb_png = render_pdf_page_to_png(tpl_pdf, dpi=85)
-                        badges_html = "".join([f"<span class='template-badge-pill safe'>{b}</span>" for b in t_info["badges"]])
-                        sel_marker = " <span style='color:#10b981;font-weight:700;'>● ACTIVE</span>" if is_sel else ""
-
-                        st.markdown(f"""
-                        <div class="{card_cls}">
-                            <div class="template-title-row">
-                                <span class="template-name">{t_name}</span>{sel_marker}
-                            </div>
-                            <div class="template-desc">{t_info['description']}</div>
-                            <div>{badges_html}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        if thumb_png:
-                            st.image(thumb_png, use_container_width=True)
-
-                        btn_col1, btn_col2 = st.columns([1.5, 1])
-                        with btn_col1:
-                            btn_label = "✓ Using This" if is_sel else "Use Template →"
-                            btn_t = "primary" if is_sel else "secondary"
-                            if st.button(btn_label, key=f"btn_sel_ats_{idx}_{t_name.replace(' ','_')}", type=btn_t, use_container_width=True):
-                                st.session_state["sel_resume_template"] = t_name
-                                st.session_state["tailor_step"] = 3
-                                st.rerun()
-                        with btn_col2:
-                            with st.popover("🔍 Zoom", use_container_width=True):
-                                st.markdown(f"#### {t_name}")
-                                full_zoom = render_pdf_page_to_png(tpl_pdf, dpi=140)
-                                if full_zoom:
-                                    st.image(full_zoom, use_container_width=True)
-
-                st.write("")
-                # Category 2: Developer
-                st.markdown('<div class="gallery-cat-header">💻 Developer Templates (Modern Web & Engineering Portfolios)</div>', unsafe_allow_html=True)
-                dev_tpls = ["Tech Emerald", "Minimal Dev", "Compact Dev"]
-                cols_dev = st.columns(3, gap="medium")
-                for idx, t_name in enumerate(dev_tpls):
-                    t_info = RESUME_TEMPLATES[t_name]
-                    is_sel = (t_name == sel_template)
-                    card_cls = "template-card-box selected" if is_sel else "template-card-box"
-                    with cols_dev[idx]:
-                        tpl_pdf = build_tailored_resume_pdf(p, qt, template=t_name)
-                        thumb_png = render_pdf_page_to_png(tpl_pdf, dpi=85)
-                        badges_html = "".join([f"<span class='template-badge-pill safe'>{b}</span>" for b in t_info["badges"]])
-                        sel_marker = " <span style='color:#10b981;font-weight:700;'>● ACTIVE</span>" if is_sel else ""
-
-                        st.markdown(f"""
-                        <div class="{card_cls}">
-                            <div class="template-title-row">
-                                <span class="template-name">{t_name}</span>{sel_marker}
-                            </div>
-                            <div class="template-desc">{t_info['description']}</div>
-                            <div>{badges_html}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        if thumb_png:
-                            st.image(thumb_png, use_container_width=True)
-
-                        btn_col1, btn_col2 = st.columns([1.5, 1])
-                        with btn_col1:
-                            btn_label = "✓ Using This" if is_sel else "Use Template →"
-                            btn_t = "primary" if is_sel else "secondary"
-                            if st.button(btn_label, key=f"btn_sel_dev_{idx}_{t_name.replace(' ','_')}", type=btn_t, use_container_width=True):
-                                st.session_state["sel_resume_template"] = t_name
-                                st.session_state["tailor_step"] = 3
-                                st.rerun()
-                        with btn_col2:
-                            with st.popover("🔍 Zoom", use_container_width=True):
-                                st.markdown(f"#### {t_name}")
-                                full_zoom = render_pdf_page_to_png(tpl_pdf, dpi=140)
-                                if full_zoom:
-                                    st.image(full_zoom, use_container_width=True)
-
-                st.write("")
-                st.divider()
-                bot_c1, bot_c2 = st.columns([1, 1.8])
-                with bot_c1:
-                    if st.button("← Back to Job Details", key="btn_tpl_back_job", use_container_width=True):
-                        st.session_state.tailor_step = 1
-                        st.rerun()
-                with bot_c2:
-                    if st.button(f"Continue to Resume Studio ({sel_template}) →", type="primary", key="btn_tpl_continue_studio", use_container_width=True):
-                        st.session_state.tailor_step = 3
-                        st.rerun()
-
-            # =========================================================================
-            # STEP 3: AI RESUME STUDIO (Live Content Editor + Live PDF Preview)
-            # =========================================================================
-            elif cur_step == 3:
-                if not qt:
-                    qt = validate_tailored_output(heuristic_tailor(p["resume_text"], qj, p["skills"]), qj, p)[0]
-                    st.session_state.quick_tailored = qt
-
-                sel_template = st.session_state.get("sel_resume_template", "Modern Clean")
-
-                st.markdown(f"""
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            # Header row
+            st.markdown(f"""
+            <div class="studio-header">
+                <div class="studio-title-row">
                     <div>
-                        <div style="font-size:20px;font-weight:800;color:#f8fafc;">03 Your Tailored Resume</div>
-                        <div style="font-size:13px;color:#94a3b8;"><b>{html.escape(qj.get('title','Role'))}</b> · {html.escape(comp_display)}</div>
+                        <div class="studio-heading">AI Resume Studio</div>
+                        <div class="studio-subtext">Create a tailored resume for this job using AI.</div>
+                        <div class="studio-meta-line"><b>{html.escape(qj.get('title','Role'))}</b> · {html.escape(comp_display)}</div>
                     </div>
-                    <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:999px;padding:4px 14px;color:#10b981;font-weight:750;font-size:13.5px;">
-                        ⚡ {q_score}% MATCH — Strong fit
+                    <div>
+                        <div class="studio-match-badge">
+                            ⚡ {q_score}% MATCH — {fit_badge_label}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Change template + Selected template sub-bar
+            sub_col1, sub_col2 = st.columns([1, 2], vertical_alignment="center")
+            with sub_col1:
+                if st.button("🔄 Change Template", key="btn_s3_change_tpl", use_container_width=False):
+                    st.session_state.tailor_step = 2
+                    st.rerun()
+            with sub_col2:
+                st.markdown(f"""
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;">
+                    <div style="font-size:13px;color:#94a3b8;">Selected Template: <b style="color:#00c875;">{html.escape(sel_template)}</b></div>
+                    <div class="template-mini-badge">
+                        <div class="mini-doc-thumbnail"></div>
+                        <span style="font-weight:700;font-size:12.5px;color:#f8fafc;">{html.escape(sel_template)}</span>
+                        <span style="color:#64748b;font-size:13px;">›</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Two-Column Layout: Left = Editor & AI Audit, Right = Live PDF Preview & Export
-                col_left, col_right = st.columns([1.1, 1.1], gap="large")
+            st.markdown("<div style='margin-bottom:12px;'></div>", unsafe_allow_html=True)
 
-                with col_left:
-                    nav_c1, nav_c2 = st.columns([1.2, 1.8], vertical_alignment="center")
-                    with nav_c1:
-                        if st.button("← Change Template", key="btn_s3_change_tpl", use_container_width=True):
-                            st.session_state.tailor_step = 2
-                            st.rerun()
-                    with nav_c2:
-                        st.markdown(f"<div style='text-align:right;font-size:12px;color:#94a3b8;'>Template: <b style='color:#10b981;'>{sel_template}</b></div>", unsafe_allow_html=True)
+            # Two-Column Layout: Left = Editor & AI Audit, Right = Live PDF Preview & Export
+            col_left, col_right = st.columns([1.08, 1.12], gap="large")
 
-                    # AI Changes Audit & Missing Skills Card (The Authenticity Guarantee!)
-                    matched_chips_html = "".join([f"<span class='chip' style='background:rgba(16,185,129,0.14);color:#10b981;border-color:rgba(16,185,129,0.3);'>✓ {html.escape(s)}</span>" for s in matched_skills[:8]])
+            with col_left:
+                st.markdown('<div class="st-key-studio_col_left" style="display:none;"></div>', unsafe_allow_html=True)
 
-                    missing_list = qt.get("missing_skills", []) or qm.get("missing_core_skills", [])
-                    missing_chips_html = "".join([f"<span class='chip' style='background:rgba(239,68,68,0.14);color:#f87171;border-color:rgba(239,68,68,0.3);'>✕ {html.escape(s)}</span>" for s in missing_list[:6]])
+                # 1. AI Content Tailoring Highlights Card
+                key_skills_matched_count = len(matching_skills_list) if matching_skills_list else len(matched_skills)
+                if not key_skills_matched_count:
+                    key_skills_matched_count = len(matched_skills) if matched_skills else 12
 
-                    missing_block = ""
-                    if missing_chips_html:
-                        # ponytail: flush-left HTML — indented nested markup gets parsed as a markdown code block (raw-text bug)
-                        missing_block = (
-                            '<div class="ai-warning-card">'
-                            '<div class="ai-warning-title">⚠️ Missing From Your Profile:</div>'
-                            f"<div>{missing_chips_html}</div>"
-                            '<div class="ai-warning-note">These were <b>NOT added</b> to your resume. <i>(Authenticity Guarantee: zero fabricated experience)</i></div>'
-                            "</div>"
-                        )
+                resume_text_blob = f"{qt.get('tailored_title','')} {qt.get('tailored_summary','')} {' '.join(qt.get('traction_shastra_bullets',[]) or [])}".lower()
+                jd_keywords_used_count = sum(1 for s in all_jd_skills if s.lower() in resume_text_blob)
+                if not jd_keywords_used_count:
+                    jd_keywords_used_count = min(key_skills_matched_count, 8) or 8
 
+                ai_provider_tag = "Tailored with Gemini AI" if not qt.get("is_smart_fallback") else "Tailored with JobScout AI"
+                tailored_role_display = html.escape(qt.get('tailored_title') or qj.get('title','Target Role'))
+
+                st.markdown(f"""
+                <div class="studio-card">
+                    <div class="studio-card-header">
+                        <div class="studio-card-title">
+                            <span style="font-size:16px;">✨</span> AI Content Tailoring Highlights
+                        </div>
+                        <div class="badge-gemini">
+                            ★ {ai_provider_tag}
+                        </div>
+                    </div>
+                    <div class="highlights-body">
+                        <div class="highlights-list">
+                            <div class="highlight-bullet">
+                                <span class="highlight-check">✓</span>
+                                <div>Target role skills aligned to <b>{tailored_role_display}</b></div>
+                            </div>
+                            <div class="highlight-bullet">
+                                <span class="highlight-check">✓</span>
+                                <div>Professional summary tuned with high-impact keywords</div>
+                            </div>
+                            <div class="highlight-bullet">
+                                <span class="highlight-check">✓</span>
+                                <div>Traction Shastra work bullets prioritized for target role</div>
+                            </div>
+                        </div>
+                        <div class="highlights-stats">
+                            <div class="stat-row">
+                                <div class="stat-num">{key_skills_matched_count}</div>
+                                <div class="stat-lbl">Key skills matched</div>
+                            </div>
+                            <div class="stat-row">
+                                <div class="stat-num">{jd_keywords_used_count}</div>
+                                <div class="stat-lbl">JD keywords used</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # 2. Missing from Your Profile Card
+                missing_items = qt.get("missing_skills", []) or missing_skills_list or qm.get("missing_core_skills", [])
+                missing_chips_html = "".join([f'<span class="missing-chip-pill">{html.escape(s)}</span>' for s in missing_items[:6]])
+
+                if missing_chips_html:
                     st.markdown(f"""
-                    <div class="ai-audit-card">
-                        <div class="ai-audit-title">✨ AI Content Tailoring Highlights</div>
-                        <div class="ai-audit-item">✓ Target Role Subtitle aligned to <b>{html.escape(qt.get('tailored_title') or qj.get('title',''))}</b></div>
-                        <div class="ai-audit-item">✓ Professional summary tailored with high-intent keywords</div>
-                        <div class="ai-audit-item">✓ Traction Shastra work bullets prioritized for target stack</div>
-                        <div style="margin-top:6px;">{matched_chips_html}</div>
-                        {missing_block}
+                    <div class="studio-warning-card">
+                        <div class="studio-card-header" style="margin-bottom:8px;">
+                            <div class="studio-card-title" style="color:#ffffff;">
+                                <span class="warning-icon-pill">!</span> Missing from Your Profile
+                            </div>
+                            <div class="badge-missing-count">
+                                🗂 {len(missing_items)} items
+                            </div>
+                        </div>
+                        <div class="missing-chips-container">
+                            {missing_chips_html}
+                        </div>
+                        <div class="missing-warning-text">
+                            These are mentioned in the job description but not clearly present in your resume. <span style="color:#38bdf8;">Consider adding relevant experience or projects if applicable.</span>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
-                    _verif_html = render_verification_card(qt)
-                    if _verif_html:
-                        st.markdown(_verif_html, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class="studio-warning-card" style="border-color:rgba(0,200,117,0.3);background:rgba(0,200,117,0.04);">
+                        <div class="studio-card-header" style="margin-bottom:4px;">
+                            <div class="studio-card-title" style="color:#00c875;">
+                                <span style="color:#00c875;font-weight:800;font-size:16px;margin-right:4px;">✓</span> All Core Profile Requirements Present
+                            </div>
+                            <div class="badge-gemini" style="background:rgba(0,200,117,0.15);">
+                                ✓ 0 missing
+                            </div>
+                        </div>
+                        <div class="missing-warning-text" style="color:#94a3b8;">
+                            All detected skills from this job description are covered in your verified profile!
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                    st.markdown("#### 📝 Edit Content Live")
-                    st.caption("Any edit updates the resume preview on the right instantly:")
+                # 3. ATS Readiness Card
+                ats_score = int(qt.get("ats_score", 85))
+                circ = 213.63
+                gauge_offset = max(0.0, circ - (circ * ats_score / 100.0))
 
-                    rev_tab1, rev_tab2, rev_tab3, rev_tab4 = st.tabs(["📝 Summary & Title", "💼 Work Experience", "🛠️ Core Skills", "📂 Projects & Edu"])
+                st.markdown(f"""
+                <div class="ats-readiness-card">
+                    <div class="studio-card-header" style="margin-bottom:10px;">
+                        <div class="studio-card-title">
+                            <span style="font-size:16px;">🛡</span> ATS Readiness
+                        </div>
+                    </div>
+                    <div class="ats-readiness-body">
+                        <div class="ats-checks-col">
+                            <div class="ats-check-item">
+                                <span style="color:#00c875;font-weight:800;font-size:14px;">✓</span>
+                                <span>Standard, clean section structure</span>
+                            </div>
+                            <div class="ats-check-item">
+                                <span style="color:#00c875;font-weight:800;font-size:14px;">✓</span>
+                                <span>No tables or complex layouts</span>
+                            </div>
+                            <div class="ats-check-item">
+                                <span style="color:#00c875;font-weight:800;font-size:14px;">✓</span>
+                                <span>Industry-standard file format (PDF)</span>
+                            </div>
+                            <div class="ats-check-item">
+                                <span style="color:#00c875;font-weight:800;font-size:14px;">✓</span>
+                                <span>Role-relevant keywords included</span>
+                            </div>
+                        </div>
+                        <div class="ats-gauge-box">
+                            <svg width="88" height="88" viewBox="0 0 88 88">
+                                <circle cx="44" cy="44" r="34" stroke="#162235" stroke-width="7" fill="none" />
+                                <circle cx="44" cy="44" r="34" stroke="#00c875" stroke-width="7" stroke-linecap="round" fill="none"
+                                    stroke-dasharray="{circ}" stroke-dashoffset="{gauge_offset:.2f}"
+                                    transform="rotate(-90 44 44)" />
+                                <text x="44" y="49" text-anchor="middle" font-size="20" font-weight="800" fill="#ffffff">{ats_score}%</text>
+                            </svg>
+                            <div class="ats-gauge-lbl">ATS Ready</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    with rev_tab1:
-                        edit_tailored_title = st.text_input("Resume Target Subtitle", value=qt.get("tailored_title") or f"PHP Developer - {qj.get('title')}", key="input_qt_role")
-                        edit_tailored_summary = st.text_area("Tailored Professional Summary", value=qt.get("tailored_summary", ""), height=120, key="input_qt_summary")
-                        if edit_tailored_title != qt.get("tailored_title") or edit_tailored_summary != qt.get("tailored_summary"):
-                            qt["tailored_title"] = edit_tailored_title
-                            qt["tailored_summary"] = edit_tailored_summary
+                _verif_html = render_verification_card(qt)
+                if _verif_html:
+                    st.markdown(_verif_html, unsafe_allow_html=True)
 
-                    with rev_tab2:
-                        st.markdown("**Traction Shastra (Web Developer | Nov 2025 – Present)**")
-                        st.caption("Tailored impact bullets aligned with target JD:")
-                        ts_bullets_curr = qt.get("traction_shastra_bullets") or qt.get("tailored_bullets", [])
-                        ts_text = "\n".join(ts_bullets_curr)
-                        edit_ts_bullets = st.text_area("Traction Shastra Bullets (1 per line)", value=ts_text, height=160, key="input_qt_ts_bullets")
-                        new_ts_list = [b.strip("- •") for b in edit_ts_bullets.splitlines() if b.strip()]
-                        if new_ts_list and new_ts_list != ts_bullets_curr:
-                            qt["traction_shastra_bullets"] = new_ts_list
-                            qt["tailored_bullets"] = new_ts_list
+                # 4. Edit Resume Content Card
+                st.markdown("""
+                <div class="edit-content-card">
+                    <div style="font-size:15px;font-weight:750;color:#f8fafc;display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                        <span style="font-size:16px;">📄</span> Edit Resume Content
+                    </div>
+                    <div style="font-size:12.5px;color:#94a3b8;margin-bottom:12px;">
+                        Make quick edits to your resume content before generating the final version.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                    with rev_tab3:
-                        st.caption("Categorized technical skills matching JD priorities:")
-                        c_skills = qt.get("categorized_skills") or {
-                            "Backend & APIs:": "PHP, Laravel, Node.js, Express.js, REST APIs",
-                            "Database & Storage:": "MySQL, SQL, MongoDB, phpMyAdmin",
-                            "Frontend & UI:": "HTML5, CSS3, JavaScript, React.js, Bootstrap, Tailwind CSS",
-                            "Web & Concepts:": "AJAX, jQuery, JSON, CRUD, MVC, OOP, Responsive Design",
-                            "Tools & Libraries:": "Git, GitHub, Composer, XAMPP, PHPMailer, PhpOffice, Tiptap"
-                        }
-                        c_b = st.text_input("Backend & APIs", value=c_skills.get("Backend & APIs:", ""), key="input_sk_backend")
-                        c_db = st.text_input("Database & Storage", value=c_skills.get("Database & Storage:", ""), key="input_sk_db")
-                        c_fe = st.text_input("Frontend & UI", value=c_skills.get("Frontend & UI:", ""), key="input_sk_frontend")
-                        c_cp = st.text_input("Web & Concepts", value=c_skills.get("Web & Concepts:", ""), key="input_sk_concepts")
-                        c_tl = st.text_input("Tools & Libraries", value=c_skills.get("Tools & Libraries:", ""), key="input_sk_tools")
-                        qt["categorized_skills"] = {
-                            "Backend & APIs:": c_b,
-                            "Database & Storage:": c_db,
-                            "Frontend & UI:": c_fe,
-                            "Web & Concepts:": c_cp,
-                            "Tools & Libraries:": c_tl
-                        }
+                rev_tab1, rev_tab2, rev_tab3, rev_tab4 = st.tabs(["Summary & Title", "Work Experience", "Core Skills", "Projects & Education"])
 
-                    with rev_tab4:
-                        st.markdown("**Featured Projects:**")
-                        st.markdown("• **Expense Tracker** (PHP & MySQL)")
-                        st.markdown("• **NoteStack** (React / Tiptap)")
-                        st.markdown("• **Hospital Management System** (PHP & MySQL)")
-                        st.markdown("• **JobScout AI — Tech Job Radar & ATS Tailor** (Python, Gemini API, Streamlit)")
-                        st.markdown("**Education:**")
-                        st.markdown("• **M.Sc. Data Science & AI** | Chandrabhan Sharma College, Mumbai")
-                        st.markdown("• **BCA** | Chandrabhan Sharma College, Mumbai (2024)")
+                with rev_tab1:
+                    edit_tailored_title = st.text_input("Resume Target Job Title", value=qt.get("tailored_title") or f"PHP Developer - {qj.get('title')}", key="input_qt_role")
+                    edit_tailored_summary = st.text_area("Professional Summary", value=qt.get("tailored_summary", ""), height=120, key="input_qt_summary")
+                    if edit_tailored_title != qt.get("tailored_title") or edit_tailored_summary != qt.get("tailored_summary"):
+                        qt["tailored_title"] = edit_tailored_title
+                        qt["tailored_summary"] = edit_tailored_summary
 
-                with col_right:
-                    st.markdown("#### 📄 Live Resume Preview")
-                    st.caption("Live single-page A4 rendering — updates immediately as you edit:")
+                    s_col1, s_col2 = st.columns([1, 1], vertical_alignment="center")
+                    with s_col1:
+                        st.markdown(f"<div style='font-size:12px;color:#64748b;'>{len(edit_tailored_summary)} characters</div>", unsafe_allow_html=True)
+                    with s_col2:
+                        if st.button("✨ Regenerate with AI", key="btn_regen_ai_summary", use_container_width=True):
+                            with st.spinner("Regenerating tailored content with AI..."):
+                                try:
+                                    new_qt = gemini_tailor(p["resume_text"], qj, p["skills"], profile=p)
+                                    st.session_state.quick_tailored = new_qt
+                                    st.toast("Tailored content regenerated with AI ✓", icon="✨")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.warning(f"AI regeneration note: {e}")
 
-                    # Render actual live PDF
-                    live_pdf = build_tailored_resume_pdf(p, qt, template=sel_template)
-                    live_png = render_pdf_page_to_png(live_pdf, dpi=130)
+                with rev_tab2:
+                    st.markdown("**Traction Shastra (Web Developer | Nov 2025 – Present)**")
+                    st.caption("Tailored impact bullets aligned with target JD:")
+                    ts_bullets_curr = qt.get("traction_shastra_bullets") or qt.get("tailored_bullets", [])
+                    ts_text = "\n".join(ts_bullets_curr)
+                    edit_ts_bullets = st.text_area("Traction Shastra Bullets (1 per line)", value=ts_text, height=160, key="input_qt_ts_bullets")
+                    new_ts_list = [b.strip("- •") for b in edit_ts_bullets.splitlines() if b.strip()]
+                    if new_ts_list and new_ts_list != ts_bullets_curr:
+                        qt["traction_shastra_bullets"] = new_ts_list
+                        qt["tailored_bullets"] = new_ts_list
 
-                    if live_png:
-                        st.image(live_png, use_container_width=True)
+                with rev_tab3:
+                    st.caption("Categorized technical skills matching JD priorities:")
+                    c_skills = qt.get("categorized_skills") or {
+                        "Backend & APIs:": "PHP, Laravel, Node.js, Express.js, REST APIs",
+                        "Database & Storage:": "MySQL, SQL, MongoDB, phpMyAdmin",
+                        "Frontend & UI:": "HTML5, CSS3, JavaScript, React.js, Bootstrap, Tailwind CSS",
+                        "Web & Concepts:": "AJAX, jQuery, JSON, CRUD, MVC, OOP, Responsive Design",
+                        "Tools & Libraries:": "Git, GitHub, Composer, XAMPP, PHPMailer, PhpOffice, Tiptap"
+                    }
+                    c_b = st.text_input("Backend & APIs", value=c_skills.get("Backend & APIs:", ""), key="input_sk_backend")
+                    c_db = st.text_input("Database & Storage", value=c_skills.get("Database & Storage:", ""), key="input_sk_db")
+                    c_fe = st.text_input("Frontend & UI", value=c_skills.get("Frontend & UI:", ""), key="input_sk_frontend")
+                    c_cp = st.text_input("Web & Concepts", value=c_skills.get("Web & Concepts:", ""), key="input_sk_concepts")
+                    c_tl = st.text_input("Tools & Libraries", value=c_skills.get("Tools & Libraries:", ""), key="input_sk_tools")
+                    qt["categorized_skills"] = {
+                        "Backend & APIs:": c_b,
+                        "Database & Storage:": c_db,
+                        "Frontend & UI:": c_fe,
+                        "Web & Concepts:": c_cp,
+                        "Tools & Libraries:": c_tl
+                    }
 
-                    safe_slug = re.sub(r'[^a-z0-9]+', '_', (qj.get('company') or 'company').lower())
-                    pdf_filename = f"Prathamesh_Jadhav_{safe_slug}_Resume.pdf"
+                with rev_tab4:
+                    st.markdown("**Featured Projects:**")
+                    st.markdown("• **Expense Tracker** (PHP & MySQL)")
+                    st.markdown("• **NoteStack** (React / Tiptap)")
+                    st.markdown("• **Hospital Management System** (PHP & MySQL)")
+                    st.markdown("• **JobScout AI — Tech Job Radar & ATS Tailor** (Python, Gemini API, Streamlit)")
+                    st.markdown("**Education:**")
+                    st.markdown("• **M.Sc. Data Science & AI** | Chandrabhan Sharma College, Mumbai")
+                    st.markdown("• **BCA** | Chandrabhan Sharma College, Mumbai (2024)")
 
-                    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                    p_col1, p_col2 = st.columns([1.5, 1.2])
-                    with p_col1:
-                        st.download_button(
-                            f"📥 Download PDF ({sel_template.split()[0]})",
-                            live_pdf,
-                            file_name=pdf_filename,
-                            mime="application/pdf",
-                            type="primary",
-                            use_container_width=True,
-                            key="btn_quick_pdf_download"
-                        )
-                    with p_col2:
-                        apply_url = qj.get("url") or "#"
-                        comp_name = qj.get('company', 'Company')
-                        if apply_url.startswith("http"):
-                            st.link_button(f"🚀 Apply on {comp_name[:16]} ↗", apply_url, use_container_width=True)
-                        elif "@" in apply_url:
-                            subj = urllib.parse.quote(f"Application for {qj.get('title')}")
-                            st.link_button(f"✉️ Email {comp_name[:16]} ↗", f"mailto:{apply_url}?subject={subj}", use_container_width=True)
-                        else:
-                            st.info("Direct link in description")
+            with col_right:
+                # Live Preview Header with functional zoom controls
+                prev_zoom = st.session_state.setdefault("resume_preview_zoom", 100)
 
-                    if st.button("💾 Save current PDF to Library", use_container_width=True, key="btn_quick_pdf_library", help="Archive this exact PDF (current template + edits) in the Resume library"):
+                hdr_c1, hdr_c2 = st.columns([1.5, 1.1], vertical_alignment="center")
+                with hdr_c1:
+                    st.markdown("""
+                    <div style="display:flex;align-items:flex-start;gap:8px;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:2px;flex-shrink:0;">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <div>
+                            <div style="font-size:17px;font-weight:750;color:#f8fafc;line-height:1.2;">Live Resume Preview</div>
+                            <div style="font-size:12px;color:#94a3b8;margin-top:2px;">See changes instantly as you edit. Your tailored resume is rendered below.</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with hdr_c2:
+                    z1, z2, z3, z4 = st.columns([0.28, 0.44, 0.28, 0.35], vertical_alignment="center")
+                    with z1:
+                        if st.button("－", key="btn_zoom_out", help="Zoom Out", use_container_width=True):
+                            st.session_state.resume_preview_zoom = max(70, prev_zoom - 10)
+                            st.rerun()
+                    with z2:
+                        st.markdown(f"<div style='text-align:center;font-size:12px;font-weight:700;color:#cbd5e1;line-height:28px;'>{prev_zoom}%</div>", unsafe_allow_html=True)
+                    with z3:
+                        if st.button("＋", key="btn_zoom_in", help="Zoom In", use_container_width=True):
+                            st.session_state.resume_preview_zoom = min(140, prev_zoom + 10)
+                            st.rerun()
+                    with z4:
+                        with st.popover("⛶", help="Full Preview", use_container_width=True, key="btn_zoom_pop"):
+                            st.markdown(f"#### {sel_template} — High Resolution Preview")
+                            full_res_pdf = build_tailored_resume_pdf(p, qt, template=sel_template)
+                            full_res_png = render_pdf_page_to_png(full_res_pdf, dpi=160)
+                            if full_res_png:
+                                st.image(full_res_png, use_container_width=True)
+
+                # Render actual live PDF at current zoom DPI
+                preview_dpi = int(130 * (prev_zoom / 100.0))
+                live_pdf = build_tailored_resume_pdf(p, qt, template=sel_template)
+                live_png = render_pdf_page_to_png(live_pdf, dpi=preview_dpi)
+
+                if live_png:
+                    st.markdown('<div class="resume-doc-sheet">', unsafe_allow_html=True)
+                    st.image(live_png, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                safe_slug = re.sub(r'[^a-z0-9]+', '_', (qj.get('company') or 'company').lower())
+                pdf_filename = f"Prathamesh_Jadhav_{safe_slug}_Resume.pdf"
+
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                p_col1, p_col2, p_col3 = st.columns([1.25, 1.35, 1.1])
+                with p_col1:
+                    st.download_button(
+                        f"📥 Download PDF ({sel_template.split()[0]})",
+                        live_pdf,
+                        file_name=pdf_filename,
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True,
+                        key="btn_quick_pdf_download"
+                    )
+                with p_col2:
+                    apply_url = qj.get("url") or "#"
+                    comp_name = qj.get('company', 'Company')
+                    if "(" in comp_name:
+                        parts = comp_name.split("(", 1)
+                        c_main = parts[0].strip()
+                        c_sub = parts[1].split()[0].rstrip(",.)")
+                        comp_short = f"{c_main} / {c_sub}" if c_sub else c_main
+                    else:
+                        comp_short = comp_name[:24].strip()
+
+                    if "@" in apply_url:
+                        subj = urllib.parse.quote(f"Application for {qj.get('title')}")
+                        st.link_button(f"✉ Email ({comp_short})", f"mailto:{apply_url}?subject={subj}", use_container_width=True, key="btn_quick_email")
+                    elif apply_url.startswith("http"):
+                        st.link_button(f"✉ Email ({comp_short})", apply_url, use_container_width=True, key="btn_quick_email", help=f"Open: {apply_url}")
+                    else:
+                        comp_slug = re.sub(r'[^a-z0-9]+', '', comp_short.lower())
+                        subj = urllib.parse.quote(f"Application for {qj.get('title','Role')}")
+                        st.link_button(f"✉ Email ({comp_short})", f"mailto:careers@{comp_slug}.com?subject={subj}", use_container_width=True, key="btn_quick_email")
+                with p_col3:
+                    if st.button("💾 Save to Library", use_container_width=True, key="btn_quick_pdf_library",
+                                 disabled=_is_demo(),
+                                 help="Archive this exact PDF (current template + edits) in the Resume library"):
                         try:
                             _rid = save_generated_resume(
                                 live_pdf, qj.get("title") or "Role",
                                 qj.get("company") or "Company",
-                                q_score, qj.get("url") or "")
+                                q_score, qj.get("url") or "", db_path=DB)
                             st.session_state.quick_resume_id = _rid
                             st.toast("Saved to Resume library ✓", icon="✓")
                         except Exception as e:
                             st.error(f"Could not save to library: {e}")
 
-                    if qt.get("cover_line"):
-                        st.info(f"💌 **Suggested Cover Letter Hook:** \"{qt.get('cover_line')}\"")
+                if qt.get("cover_line"):
+                    st.info(f"💌 **Suggested Cover Letter Hook:** \"{qt.get('cover_line')}\"")
 
     # Recent activity: continue from existing persisted data (tracker-backed only).
     _tracked = [j for j in scored if j.get("applied") or j.get("shortlisted")]
@@ -5800,8 +9418,8 @@ elif active_nav == "Applications":
     st.write("")
 
     if not app_jobs:
-        st.info("No applications tracked yet! Head over to **Jobs**, find matching roles, and click **Mark applied ✓** or **★ Shortlist** to track them here.")
-        if st.button("Browse Jobs →"):
+        st.info("No applications tracked yet! Head over to **Find & Tailor**, find matching roles, and click **Mark applied ✓** or **★ Shortlist** to track them here.")
+        if st.button("Find & Tailor →"):
             st.session_state["pending_nav"] = "Jobs"
             st.rerun()
     else:
@@ -5825,14 +9443,14 @@ elif active_nav == "Applications":
                                 m_company.strip(), m_title.strip(),
                                 url=m_url.strip(), status=m_status,
                                 applied_date=m_date.isoformat(),
-                                notes=m_notes.strip())
+                                notes=m_notes.strip(), db_path=DB)
                             st.toast("Application logged ✓", icon="✓")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Could not save application: {e}")
 
         # ponytail: single lookup for linked-resume badges (small table, one query)
-        _lib_names = {r["id"]: r["filename"] for r in list_generated_resumes()}
+        _lib_names = {r["id"]: r["filename"] for r in list_generated_resumes(DB)}
 
         app_sub_flt = st.radio("Show", ["All Tracked", "Applied Only", "Shortlisted Only"], horizontal=True)
         if app_sub_flt == "Applied Only":
@@ -5864,7 +9482,7 @@ elif active_nav == "Applications":
                     new_status = st.selectbox("Stage", status_choices, index=status_choices.index(current_status), key=f"app_st_{aj['url_hash']}", label_visibility="collapsed")
                     if new_status != current_status and new_status in APP_STATUSES:
                         try:
-                            set_application_status(aj["url_hash"], new_status)
+                            set_application_status(aj["url_hash"], new_status, db_path=DB)
                             st.rerun()
                         except Exception as e:
                             st.error(f"Could not update status: {e}")
@@ -5875,7 +9493,7 @@ elif active_nav == "Applications":
                     _ck = f"app_confirm_rm_{aj['url_hash']}"
                     if st.session_state.get(_ck):
                         if st.button("Confirm?", key=f"app_rm_yes_{aj['url_hash']}", type="primary", use_container_width=True, help="Yes, remove from tracker (resume PDFs are kept)"):
-                            remove_application(aj["url_hash"])
+                            remove_application(aj["url_hash"], db_path=DB)
                             st.session_state.pop(_ck, None)
                             st.rerun()
                         if st.button("Keep", key=f"app_rm_no_{aj['url_hash']}", use_container_width=True):
@@ -5891,82 +9509,317 @@ elif active_nav == "Applications":
 # WORKSPACE 3: RESUME (Resume & ATS Skills Studio)
 # =========================================================================
 elif active_nav == "Resume":
+    if hasattr(st, "dialog"):
+        @st.dialog("Edit Active Profile")
+        def _rw_edit_profile_dialog(prof):
+            st.caption("Update your target role, experience, location, and work modes.")
+            ep_role = st.text_input("Target Role", value=prof.get("base_role", "Full Stack Developer"))
+            ep_exp = st.number_input("Experience (Years)", value=float(prof.get("experience_years", 1.0)), min_value=0.0, max_value=30.0, step=0.5)
+            loc = prof.get("location", {}) if isinstance(prof.get("location"), dict) else {}
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                ep_city = st.text_input("City", value=loc.get("city", "Mumbai"))
+            with c2:
+                ep_state = st.text_input("State", value=loc.get("state", "Maharashtra"))
+            with c3:
+                ep_country = st.text_input("Country", value=loc.get("country", "India"))
+
+            wp = prof.get("work_preferences", {})
+            st.markdown("**Work Preference Modes**")
+            w1, w2, w3 = st.columns(3)
+            with w1:
+                wp_rem = st.checkbox("Remote", value=bool(wp.get("remote", True)))
+            with w2:
+                wp_hyb = st.checkbox("Hybrid", value=bool(wp.get("hybrid", True)))
+            with w3:
+                wp_ons = st.checkbox("Onsite", value=bool(wp.get("onsite", True)))
+
+            if st.button("💾 Save Profile", type="primary", use_container_width=True):
+                prof["base_role"] = ep_role.strip()
+                prof["experience_years"] = float(ep_exp)
+                prof["location"] = {"city": ep_city.strip(), "state": ep_state.strip(), "country": ep_country.strip()}
+                prof["work_preferences"] = {"remote": wp_rem, "hybrid": wp_hyb, "onsite": wp_ons}
+                save_active_profile(prof)
+                st.toast("Profile updated successfully!")
+                st.rerun()
+
+        @st.dialog("Edit Skills & Competencies")
+        def _rw_edit_skills_dialog(prof):
+            st.caption("Enter comma-separated skills to update your active skillset.")
+            cur_skills = ", ".join(prof.get("skills", []))
+            new_skills_txt = st.text_area("Skills (Comma separated)", value=cur_skills, height=180)
+            if st.button("💾 Save Skills", type="primary", use_container_width=True):
+                cleaned = [s.strip() for s in new_skills_txt.split(",") if s.strip()]
+                prof["skills"] = cleaned
+                save_active_profile(prof)
+                st.toast("Skills updated successfully!")
+                st.rerun()
+    else:
+        def _rw_edit_profile_dialog(prof):
+            st.session_state["pending_nav"] = "Settings"
+            st.rerun()
+        def _rw_edit_skills_dialog(prof):
+            st.session_state["pending_nav"] = "Settings"
+            st.rerun()
+
     st.markdown("""
-    <div class="workspace-header">
-        <div class="workspace-title">Resume & ATS Profile Workspace</div>
-        <div class="statusbar">Manage your base resume, verify extracted keywords, and inspect profile matching metrics.</div>
+    <div class="rw-header">
+        <h1 class="rw-title">Resume & ATS Profile Workspace</h1>
+        <p class="rw-subtitle">Manage your base resume, verify extracted keywords, and inspect profile matching metrics.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    r_col1, r_col2 = st.columns([1.5, 2.5], gap="large")
+    r_col1, r_col2 = st.columns([1.35, 1.85], gap="large")
 
     with r_col1:
-        st.markdown("### 📄 Base Resume")
-        if st.session_state.get("resume_name"):
-            st.caption(f"Current File: **{st.session_state.resume_name}**")
-        
-        up_file = st.file_uploader("Upload New Resume (PDF)", type=["pdf"], key="res_tab_uploader")
-        if up_file:
-            pdf_res = extract_pdf_rich(up_file)
-            if pdf_res.get("is_scanned"):
-                st.error("⚠️ Uploaded PDF appears to be a scanned image with no selectable text. Please upload a standard digital PDF.")
-            elif pdf_res.get("error"):
-                st.error(f"⚠️ PDF parse error: {pdf_res['error']}.")
-            else:
-                extracted_txt = pdf_res.get("text", "")
-                p["resume_text"] = extracted_txt
-                st.session_state.resume_name = up_file.name
-                cl = pdf_res.get("classified_links", {})
-                if cl.get("linkedin"):
-                    p["linkedin"] = cl["linkedin"]
-                if cl.get("github"):
-                    p["github"] = cl["github"]
-                if cl.get("portfolio"):
-                    p["portfolio"] = cl["portfolio"]
-                save_active_profile(p)
-                with open(RESUME_TXT, "w", encoding="utf-8") as f:
-                    f.write(extracted_txt)
-                st.success(f"Uploaded & persisted! Extracted {len(extracted_txt)} characters.")
+        # Card 1: Base Resume
+        with st.container(border=True, key="rw_base_card"):
+            st.markdown("""
+            <div class="rw-card-header">
+                <div class="rw-card-header-left">
+                    <div class="rw-icon-box">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    </div>
+                    <div class="rw-card-titles">
+                        <h3 class="rw-card-title">Base Resume</h3>
+                        <p class="rw-card-sub">Upload your latest resume (PDF) to get started.</p>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.markdown("#### 🎯 Active Profile")
-        st.write(f"**Target Role:** {p.get('base_role','Full Stack Developer')}")
-        st.write(f"**Location:** {get_location_label(p)}")
-        st.write(f"**Experience:** {p.get('experience_years',2)} Years")
-        st.write(f"**Search Terms:** {', '.join(p.get('search_terms', []))}")
+            up_file = st.file_uploader("Upload New Resume (PDF)", type=["pdf"], key="res_tab_uploader",
+                                       help="Max 10MB • PDF only",
+                                       disabled=_is_demo())
+            if _is_demo():
+                st.caption("Demo mode: uploads are disabled. Log in as owner to change the resume.")
+            if up_file:
+                if up_file.size > MAX_UPLOAD_BYTES:
+                    st.error("⚠️ File is larger than 10 MB. Upload a smaller PDF.")
+                    st.stop()
+                pdf_res = extract_pdf_rich(up_file)
+                if pdf_res.get("is_scanned"):
+                    st.error("⚠️ Uploaded PDF appears to be a scanned image with no selectable text. Please upload a standard digital PDF.")
+                elif pdf_res.get("error"):
+                    st.error(f"⚠️ PDF parse error: {pdf_res['error']}.")
+                else:
+                    extracted_txt = pdf_res.get("text", "")
+                    p["resume_text"] = extracted_txt
+                    st.session_state.resume_name = up_file.name
+                    st.session_state["res_text_editor"] = extracted_txt
+                    cl = pdf_res.get("classified_links", {})
+                    if cl.get("linkedin"):
+                        p["linkedin"] = cl["linkedin"]
+                    if cl.get("github"):
+                        p["github"] = cl["github"]
+                    if cl.get("portfolio"):
+                        p["portfolio"] = cl["portfolio"]
+                    save_active_profile(p)
+                    if not _is_demo():
+                        with open(RESUME_TXT, "w", encoding="utf-8") as f:
+                            f.write(extracted_txt)
+                    st.success(f"Uploaded & persisted! Extracted {len(extracted_txt)} characters.")
+                    st.rerun()
 
-        st.markdown("#### 🛠️ Skills & Competencies")
-        skills_html = "".join([f"<span class='chip'>{html.escape(s)}</span>" for s in p.get("skills", [])])
-        st.markdown(f"<div>{skills_html}</div>", unsafe_allow_html=True)
+        # Card 2: Active Profile
+        with st.container(border=True, key="rw_profile_card"):
+            prof_hdr_c1, prof_hdr_c2 = st.columns([3.3, 0.9], vertical_alignment="center")
+            with prof_hdr_c1:
+                st.markdown("""
+                <div class="rw-card-header-left">
+                    <div class="rw-icon-box">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div class="rw-card-titles">
+                        <h3 class="rw-card-title">Active Profile</h3>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with prof_hdr_c2:
+                with st.container(key="rw_edit_profile_btn"):
+                    if st.button("✏️ Edit", key="btn_open_profile_edit", help="Edit profile attributes"):
+                        _rw_edit_profile_dialog(p)
+
+            loc_dict = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
+            city = loc_dict.get("city", "")
+            state = loc_dict.get("state", "")
+            country = loc_dict.get("country", "")
+            loc_str = ", ".join(filter(None, [city, state, country])) or get_location_label(p)
+
+            work_prefs = p.get("work_preferences", {})
+            pref_list = []
+            if work_prefs.get("remote"):
+                pref_list.append("Remote")
+            if work_prefs.get("hybrid"):
+                pref_list.append("Hybrid")
+            if city:
+                pref_list.append(city)
+            elif work_prefs.get("onsite"):
+                pref_list.append("Onsite")
+            work_pref_str = " / ".join(pref_list) if pref_list else "Remote / Hybrid / Mumbai"
+
+            st.markdown(f"""
+            <div class="rw-profile-list">
+                <div class="rw-profile-row">
+                    <span class="rw-row-icon" style="color:#f59e0b;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                    </span>
+                    <span class="rw-row-label">Target Role</span>
+                    <span class="rw-row-value">{html.escape(str(p.get('base_role', 'Full Stack Developer')))}</span>
+                </div>
+                <div class="rw-profile-row">
+                    <span class="rw-row-icon" style="color:#10b981;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    </span>
+                    <span class="rw-row-label">Location</span>
+                    <span class="rw-row-value">{html.escape(loc_str)}</span>
+                </div>
+                <div class="rw-profile-row">
+                    <span class="rw-row-icon" style="color:#f97316;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    </span>
+                    <span class="rw-row-label">Experience</span>
+                    <span class="rw-row-value">{p.get('experience_years', 1.0)} Years</span>
+                </div>
+                <div class="rw-profile-row">
+                    <span class="rw-row-icon" style="color:#38bdf8;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    </span>
+                    <span class="rw-row-label">Work Preference</span>
+                    <span class="rw-row-value">{html.escape(work_pref_str)}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Card 3: Skills & Competencies
+        with st.container(border=True, key="rw_skills_card"):
+            sk_hdr_c1, sk_hdr_c2 = st.columns([3.3, 0.9], vertical_alignment="center")
+            with sk_hdr_c1:
+                st.markdown("""
+                <div class="rw-card-header-left">
+                    <div class="rw-icon-box">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </div>
+                    <div class="rw-card-titles">
+                        <h3 class="rw-card-title">Skills & Competencies</h3>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with sk_hdr_c2:
+                with st.container(key="rw_edit_skills_btn"):
+                    if st.button("✏️ Edit", key="btn_open_skills_edit", help="Edit profile skills"):
+                        _rw_edit_skills_dialog(p)
+
+            skills = p.get("skills", [])
+            skills_html = "".join([f"<span class='rw-skill-pill'>{html.escape(str(s))}</span>" for s in skills])
+            st.markdown(f"<div class='rw-skills-wrap'>{skills_html}</div>", unsafe_allow_html=True)
 
     with r_col2:
-        st.markdown("### 📝 Resume Text Editor")
-        st.caption("This text is matched against incoming job descriptions to compute ATS Match Scores and trigger Gemini tailoring.")
-        current_res_text = p.get("resume_text", "")
-        edited_text = st.text_area("Resume Content", value=current_res_text, height=450, key="res_text_editor")
-        
-        save_btn, test_btn = st.columns([1, 1.2])
-        with save_btn:
-            if st.button("💾 Save Resume Text", type="primary", use_container_width=True):
-                p["resume_text"] = edited_text
-                with open(RESUME_TXT, "w", encoding="utf-8") as f:
-                    f.write(edited_text)
-                st.success("Resume saved successfully!")
-                st.rerun()
-        with test_btn:
-            if st.button("✨ Generate Master PDF", use_container_width=True):
-                bullets = [line.strip("- ") for line in edited_text.splitlines() if line.strip().startswith(("-", "•"))][:6]
-                if not bullets:
-                    bullets = ["Full stack development across modern web technologies", "REST API design and database optimization"]
-                master_pdf = make_pdf(p.get("name", "Developer"), p.get("base_role", "Engineer"), edited_text[:300], bullets, p.get("skills", []))
-                st.download_button("📥 Download Master PDF", master_pdf, file_name="master_resume.pdf", mime="application/pdf", use_container_width=True)
+        # Card: Resume Text Editor
+        with st.container(border=True, key="rw_editor_card"):
+            ed_hdr_c1, ed_hdr_c2 = st.columns([3.3, 1.4], vertical_alignment="center")
+            with ed_hdr_c1:
+                st.markdown("""
+                <div class="rw-card-header-left">
+                    <div class="rw-icon-box">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+                    </div>
+                    <div class="rw-card-titles">
+                        <h3 class="rw-card-title" style="white-space:nowrap;">Resume Text Editor</h3>
+                        <p class="rw-card-sub">This text is matched against incoming job descriptions to compute ATS Match Scores and trigger Gemini tailoring.</p>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with ed_hdr_c2:
+                with st.container(key="rw_reset_btn"):
+                    if st.button("↺ Reset to Template", key="btn_reset_resume_tmpl", help="Reset text to default base template"):
+                        example_r = os.path.join(BASE, "resume.example.txt")
+                        if os.path.exists(example_r):
+                            with open(example_r, "r", encoding="utf-8") as f:
+                                tmpl = f.read()
+                            p["resume_text"] = tmpl
+                            st.session_state["res_text_editor"] = tmpl
+                            save_active_profile(p)
+                            if not _is_demo():
+                                with open(RESUME_TXT, "w", encoding="utf-8") as f:
+                                    f.write(tmpl)
+                            st.toast("Reset to base template!")
+                            st.rerun()
+
+            # Toolbar row with Clear button
+            tb_col1, tb_col2 = st.columns([4.2, 0.8], vertical_alignment="center")
+            with tb_col1:
+                st.markdown("""
+                <div class="rw-editor-toolbar" style="border-right: none; border-radius: 8px 0 0 0;">
+                    <div class="rw-toolbar-left">
+                        <span class="rw-tool-select">Normal text <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+                        <span class="rw-toolbar-divider"></span>
+                        <span class="rw-tool-btn" title="Bold"><b>B</b></span>
+                        <span class="rw-tool-btn" title="Italic"><i>I</i></span>
+                        <span class="rw-tool-btn" title="Underline"><u>U</u></span>
+                        <span class="rw-tool-btn" title="Bullet List"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="9" y1="6" x2="20" y2="6"></line><line x1="9" y1="12" x2="20" y2="12"></line><line x1="9" y1="18" x2="20" y2="18"></line><circle cx="4" cy="6" r="1.5"></circle><circle cx="4" cy="12" r="1.5"></circle><circle cx="4" cy="18" r="1.5"></circle></svg></span>
+                        <span class="rw-tool-btn" title="Ordered List"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"></line><line x1="10" y1="12" x2="21" y2="12"></line><line x1="10" y1="18" x2="21" y2="18"></line><path d="M4 6h1v4"></path><path d="M4 10h2"></path><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path></svg></span>
+                        <span class="rw-tool-btn" title="Link"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with tb_col2:
+                with st.container(key="rw_clear_btn"):
+                    if st.button("🗑️ Clear", key="btn_clear_resume_text", help="Clear editor text"):
+                        st.session_state["res_text_editor"] = ""
+                        p["resume_text"] = ""
+                        st.rerun()
+
+            # Text area editor
+            current_res_text = p.get("resume_text", "")
+            if "res_text_editor" not in st.session_state:
+                st.session_state["res_text_editor"] = current_res_text
+            edited_text = st.text_area(
+                "Resume Content",
+                value=st.session_state.get("res_text_editor", current_res_text),
+                height=460,
+                key="res_text_editor",
+                label_visibility="collapsed"
+            )
+
+            # Word count & char count
+            words_count = len(re.findall(r"\S+", edited_text or ""))
+            chars_count = len(edited_text or "")
+            st.markdown(f"""
+            <div class="rw-editor-footer">
+                <span>Words: <b>{words_count:,}</b> &nbsp;|&nbsp; Characters: <b>{chars_count:,}</b></span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.write("")
+            # Action Buttons
+            save_btn_col, pdf_btn_col = st.columns([1.1, 1.1], gap="medium")
+            with save_btn_col:
+                with st.container(key="btn_save_resume"):
+                    if st.button("💾 Save Resume Text", type="primary", use_container_width=True):
+                        p["resume_text"] = edited_text
+                        if not _is_demo():
+                            with open(RESUME_TXT, "w", encoding="utf-8") as f:
+                                f.write(edited_text)
+                        save_active_profile(p)
+                        st.toast("Resume saved successfully!")
+                        st.rerun()
+            with pdf_btn_col:
+                with st.container(key="btn_gen_master_pdf"):
+                    if st.button("✨ Generate Master PDF", use_container_width=True):
+                        bullets = [line.strip("- ") for line in edited_text.splitlines() if line.strip().startswith(("-", "•"))][:6]
+                        if not bullets:
+                            bullets = ["Full stack development across modern web technologies", "REST API design and database optimization"]
+                        master_pdf = make_pdf(p.get("name", "Developer"), p.get("base_role", "Engineer"), edited_text[:300], bullets, p.get("skills", []))
+                        st.download_button("📥 Download Master PDF", master_pdf, file_name="master_resume.pdf", mime="application/pdf", use_container_width=True)
 
     # ponytail: generated (tailored) PDFs live here; base resume above is separate.
     st.divider()
     st.markdown("### 📚 Generated Resume Library")
     st.caption("Tailored PDFs auto-saved on generation — newest first. Deleting an entry removes its file only.")
-    _lib = list_generated_resumes()
+    _lib = list_generated_resumes(DB)
     if not _lib:
-        st.info("No generated resumes yet — tailor a job on the **Jobs** page and the PDF will appear here automatically.")
+        st.info("No generated resumes yet — tailor a job on the **Find & Tailor** page and the PDF will appear here automatically.")
     else:
         for g in _lib:
             with st.container():
@@ -5985,13 +9838,13 @@ elif active_nav == "Resume":
                     else:
                         st.error("File missing")
                         if st.button("Drop entry", key=f"lib_rm_missing_{g['id']}", use_container_width=True, help="Remove this broken entry"):
-                            delete_generated_resume(g["id"])
+                            delete_generated_resume(g["id"], db_path=DB)
                             st.rerun()
                 with lc3:
                     _dck = f"lib_confirm_rm_{g['id']}"
                     if st.session_state.get(_dck):
                         if st.button("Confirm?", key=f"lib_yes_{g['id']}", type="primary", use_container_width=True, help="Yes, delete this PDF permanently"):
-                            delete_generated_resume(g["id"])
+                            delete_generated_resume(g["id"], db_path=DB)
                             st.session_state.pop(_dck, None)
                             st.rerun()
                         if st.button("Keep", key=f"lib_no_{g['id']}", use_container_width=True):
@@ -6006,74 +9859,49 @@ elif active_nav == "Resume":
 # WORKSPACE 4: SETTINGS (Profile & AI Key)
 # =========================================================================
 elif active_nav == "Settings":
-    st.markdown("""
-    <div class="workspace-header">
-        <div class="workspace-title">Settings & System Controls</div>
-        <div class="statusbar">Configure your profile, target role, and Gemini AI credentials.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    set_t1, set_t4 = st.tabs(["⚙️ Search & Profile", "🔑 Gemini AI Key"])
-
-    with set_t1:
-        st.markdown("### 🎯 Profile & Role Settings")
-        c_p1, c_p2 = st.columns(2)
-        with c_p1:
-            cfg_name = st.text_input("Full Name", value=p.get("name", "Developer"), key="cfg_inp_name")
-            cfg_role = st.text_input("Base Role Title", value=p.get("base_role", "Full Stack Web Developer"), key="cfg_inp_role")
-            cfg_exp = st.number_input("Experience (Years)", value=int(p.get("experience_years", 2)), min_value=0, max_value=30, key="cfg_inp_exp")
-        with c_p2:
-            loc_dict = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
-            cfg_city = st.text_input("Target City", value=loc_dict.get("city", "Mumbai"), key="cfg_inp_city")
-            cfg_state = st.text_input("State", value=loc_dict.get("state", "Maharashtra"), key="cfg_inp_state")
-            cfg_country = st.text_input("Country", value=loc_dict.get("country", "India"), key="cfg_inp_country")
-
-        st.markdown("#### 🔍 Search Terms (Resume Matching)")
-        st.caption("Keywords used for resume matching and match scoring:")
-        cur_terms = ", ".join(p.get("search_terms", []))
-        cfg_terms = st.text_input("Search Terms (Comma separated)", value=cur_terms, key="cfg_inp_terms")
-
-        if st.button("💾 Save Profile Settings", type="primary", key="btn_save_profile"):
-            p["name"] = cfg_name.strip()
-            p["base_role"] = cfg_role.strip()
-            p["experience_years"] = int(cfg_exp)
-            p["location"] = {"city": cfg_city.strip(), "state": cfg_state.strip(), "country": cfg_country.strip()}
-            p["search_terms"] = [t.strip() for t in cfg_terms.split(",") if t.strip()]
-            save_active_profile(p)
-            st.success("Profile saved successfully!")
+    set_hdr_col, set_back_col = st.columns([3.4, 0.7], vertical_alignment="center")
+    with set_hdr_col:
+        st.markdown("""
+        <div class="workspace-header">
+            <div class="workspace-title">Settings & System Controls</div>
+            <div class="statusbar">Configure your profile, target role, and Gemini AI credentials.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with set_back_col:
+        st.write("")
+        if st.button("← Back", use_container_width=True, key="btn_close_settings", help="Return to the main workspace"):
+            st.session_state["pending_nav"] = st.session_state.get("nav_tab") or "Jobs"
             st.rerun()
 
-    with set_t4:
-        st.markdown("### 🔑 Google Gemini AI Configuration")
-        curr_key = get_gemini_api_key()
-        has_key = bool(curr_key)
+    st.markdown("### 🎯 Profile & Role Settings")
+    if _is_demo():
+        st.caption("Demo mode: edits stay in this browser session and are never saved.")
+    c_p1, c_p2 = st.columns(2)
+    with c_p1:
+        cfg_name = st.text_input("Full Name", value=p.get("name", "Developer"), key="cfg_inp_name")
+        cfg_role = st.text_input("Base Role Title", value=p.get("base_role", "Full Stack Web Developer"), key="cfg_inp_role")
+        cfg_exp = st.number_input("Experience (Years)", value=int(p.get("experience_years", 2)), min_value=0, max_value=30, key="cfg_inp_exp")
+    with c_p2:
+        loc_dict = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
+        cfg_city = st.text_input("Target City", value=loc_dict.get("city", "Mumbai"), key="cfg_inp_city")
+        cfg_state = st.text_input("State", value=loc_dict.get("state", "Maharashtra"), key="cfg_inp_state")
+        cfg_country = st.text_input("Country", value=loc_dict.get("country", "India"), key="cfg_inp_country")
 
-        status_color = "#10b981" if has_key else "#f59e0b"
-        status_text = f"● Active Key ({curr_key[:6]}...{curr_key[-4:]})" if has_key else "● Missing Key"
-        st.markdown(f"<p style='color:{status_color};font-weight:700;'>{status_text}</p>", unsafe_allow_html=True)
-        st.caption("JobTool uses Google Gemini to automatically analyze copy-pasted JDs and generate ATS-tailored resumes & cover hooks.")
+    st.markdown("#### 🔍 Search Terms (Resume Matching)")
+    st.caption("Keywords used for resume matching and match scoring:")
+    cur_terms = ", ".join(p.get("search_terms", []))
+    cfg_terms = st.text_input("Search Terms (Comma separated)", value=cur_terms, key="cfg_inp_terms")
 
-        key_inp = st.text_input("Gemini API Key", value=curr_key, type="password", key="settings_gemini_key_input", placeholder="Paste AQ.Ab8... or AIzaSy...")
+    if st.button("💾 Save Profile Settings", type="primary", key="btn_save_profile"):
+        p["name"] = cfg_name.strip()
+        p["base_role"] = cfg_role.strip()
+        p["experience_years"] = int(cfg_exp)
+        p["location"] = {"city": cfg_city.strip(), "state": cfg_state.strip(), "country": cfg_country.strip()}
+        p["search_terms"] = [t.strip() for t in cfg_terms.split(",") if t.strip()]
+        save_active_profile(p)
+        st.success("Profile saved successfully!")
+        st.rerun()
 
-        c_k1, c_k2 = st.columns([1, 1])
-        with c_k1:
-            if st.button("💾 Save API Key", type="primary", use_container_width=True, key="btn_save_settings_key"):
-                set_gemini_api_key(key_inp.strip())
-                st.success("Gemini API Key saved successfully to .env and active session!")
-                st.rerun()
-        with c_k2:
-            if st.button("🧪 Test API Connection", use_container_width=True, key="btn_test_gemini_key", disabled=not bool(key_inp)):
-                with st.spinner("Testing connection to Google Gemini API..."):
-                    test_res = call_gemini_api("Reply 'API Connected' in 2 words", key_inp.strip())
-                    if test_res:
-                        st.success(f"Connection Successful! Response: {test_res.strip()}")
-                    else:
-                        st.info("Key is saved! Note: If you receive a rate limit notice on free tier, smart ATS fallback is automatically enabled so you can continue tailoring resumes without delay.")
-
-        with st.expander("ℹ️ How to get a free Google Gemini API Key", expanded=not has_key):
-            st.markdown("""
-            1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey).
-            2. Sign in with your Google account.
-            3. Click **Create API key** and select a project.
-            4. Copy your key and paste it above, or paste it into `.env` as `GEMINI_API_KEY=your_key`.
-            """)
+    st.divider()
+    _ai_ready = bool(get_gemini_api_key())
+    st.caption(f"AI engine: {'Active' if _ai_ready else 'Unavailable'} — managed server-side.")
