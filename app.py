@@ -257,10 +257,67 @@ CSS = """
         box-sizing: border-box !important;
     }
 }
+@media (max-width: 480px) {
+    .st-key-onboard_demo {
+        padding: 0.8rem 0.85rem !important;
+    }
+    .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
+        gap: 10px !important;
+    }
+    .tour-badge-row {
+        gap: 4px 6px !important;
+        margin-bottom: 0.35rem !important;
+    }
+    .tour-badge {
+        font-size: 9px !important;
+        padding: 2px 6px !important;
+        letter-spacing: 0.04em !important;
+    }
+    .tour-meta-tag {
+        font-size: 10.5px !important;
+    }
+    .tour-title {
+        font-size: 14.5px !important;
+        line-height: 1.25 !important;
+        margin-bottom: 0.2rem !important;
+    }
+    .tour-desc {
+        font-size: 11.5px !important;
+        line-height: 1.35 !important;
+    }
+    .st-key-btn_recruiter_tour button {
+        width: 40px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        max-width: 40px !important;
+        font-size: 16px !important;
+    }
+}
 @media (max-width: 360px) {
     .block-container {
         padding-left: 0.75rem !important;
         padding-right: 0.75rem !important;
+    }
+}
+@media (max-width: 340px) {
+    .st-key-onboard_demo {
+        padding: 0.75rem 0.75rem !important;
+    }
+    .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
+        gap: 8px !important;
+    }
+    .tour-title {
+        font-size: 13.5px !important;
+    }
+    .tour-desc {
+        font-size: 11px !important;
+    }
+    .st-key-btn_recruiter_tour button {
+        width: 38px !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        max-width: 38px !important;
+        font-size: 15px !important;
     }
 }
 
@@ -3490,15 +3547,16 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     margin-bottom: 0.5rem !important;
 }
 .recruiter-tour-card {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 .tour-badge-row {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
     align-items: center;
+    gap: 4px 8px;
     margin-bottom: 0.45rem;
 }
 .tour-badge {
@@ -3510,17 +3568,23 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     border: 1px solid rgba(0, 200, 117, 0.35);
     padding: 2px 7px;
     border-radius: 4px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
 }
 .tour-meta-tag {
     font-size: 11px;
     color: #64748b;
     font-weight: 500;
+    line-height: 1.2;
 }
 .tour-title {
     font-size: 15.5px;
     font-weight: 750;
     color: #ffffff;
     margin-bottom: 0.25rem;
+    line-height: 1.3;
 }
 .tour-desc {
     font-size: 12px;
@@ -3674,17 +3738,31 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     min-width: 0 !important;
 }
 .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
+    display: flex !important;
     flex-direction: row !important;
+    flex-wrap: nowrap !important;
     align-items: center !important;
+    justify-content: space-between !important;
     gap: 12px !important;
+}
+.st-key-onboard_demo div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"],
+.st-key-onboard_demo div[data-testid="stColumn"] {
+    min-width: 0 !important;
 }
 .st-key-onboard_demo div[data-testid="stColumn"]:first-child {
     flex: 1 1 auto !important;
+    width: auto !important;
+    max-width: none !important;
     min-width: 0 !important;
 }
 .st-key-onboard_demo div[data-testid="stColumn"]:last-child {
     flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: 48px !important;
     min-width: 44px !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
 
 /* Tablet & Mobile Stacking for Landing Page */
@@ -3698,10 +3776,26 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
         max-width: 100% !important;
         flex: 1 1 100% !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) div[data-testid="stColumn"] {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"] {
         width: 100% !important;
         max-width: 100% !important;
         flex: 1 1 100% !important;
+    }
+    .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }
+    .st-key-onboard_demo div[data-testid="stColumn"]:first-child {
+        width: auto !important;
+        max-width: none !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    .st-key-onboard_demo div[data-testid="stColumn"]:last-child {
+        width: auto !important;
+        max-width: 48px !important;
+        flex: 0 0 auto !important;
+        min-width: 44px !important;
     }
     .prop-container {
         padding-right: 0 !important;
@@ -3729,6 +3823,26 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     .prop-headline {
         font-size: 2.1rem !important;
         line-height: 1.2 !important;
+    }
+    .st-key-onboard_demo {
+        padding: 0.85rem 0.95rem !important;
+    }
+    .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 10px !important;
+    }
+    .st-key-onboard_demo div[data-testid="stColumn"]:first-child {
+        width: auto !important;
+        max-width: none !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    .st-key-onboard_demo div[data-testid="stColumn"]:last-child {
+        width: auto !important;
+        max-width: 48px !important;
+        flex: 0 0 auto !important;
+        min-width: 44px !important;
     }
     .prop-desc {
         font-size: 13.5px !important;
@@ -3894,7 +4008,7 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
 /* Compact onboarding panel: single visible path, tighter vertical rhythm.
    Native focus indicators untouched (keyboard/a11y preserved). */
 .onboard-header-sub { margin-bottom: 0.6rem; }
-.recruiter-tour-card { padding: 0.7rem 0.9rem; margin-bottom: 0.6rem; }
+.recruiter-tour-card { padding: 0 !important; margin: 0 !important; }
 .or-separator { margin: 0.7rem 0 0.6rem 0; }
 .file-uploaded-card { padding: 8px 12px; }
 /* Clickable onboarding path cards (class added by JS bridge; buttons always work without it) */
