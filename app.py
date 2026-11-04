@@ -3620,6 +3620,108 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
 }
 
+/* Welcome action card — clean, premium, single CTA */
+.welcome-action-card {
+    padding: 1.6rem 1.5rem;
+    margin-bottom: 0.4rem;
+}
+.welcome-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 200, 117, 0.1);
+    border: 1px solid rgba(0, 200, 117, 0.25);
+    color: #00c875;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+}
+.welcome-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+.welcome-desc {
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 100%;
+}
+
+/* Clean divider */
+.or-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 1.1rem 0 0.6rem 0;
+    color: #475569;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.or-separator span {
+    padding: 0 0.5rem;
+    background: #0b0f17;
+}
+
+/* Welcome demo button — full width primary */
+.st-key-btn_welcome_demo button {
+    background: #00c875 !important;
+    border: 1px solid #00c875 !important;
+    color: #042f20 !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    border-radius: 10px !important;
+    padding: 10px 16px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    width: 100% !important;
+    box-shadow: 0 4px 16px rgba(0, 200, 117, 0.3) !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-btn_welcome_demo button:hover {
+    background: #00b368 !important;
+    border-color: #00b368 !important;
+    color: #ffffff !important;
+    box-shadow: 0 6px 20px rgba(0, 200, 117, 0.4) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Top bar brand spacing */
+.st-key-onb_top_bar {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Mobile responsive for welcome screen */
+@media (max-width: 768px) {
+    .st-key-onboard_demo .welcome-action-card {
+        padding: 1.3rem 1.2rem;
+    }
+    .welcome-title {
+        font-size: 1.05rem;
+    }
+    .welcome-desc {
+        font-size: 12.5px;
+    }
+    .st-key-btn_welcome_demo button {
+        height: 44px !important;
+        min-height: 44px !important;
+        font-size: 13.5px !important;
+    }
+    .col_prop, .col_onboard {
+        /* handled by Streamlit column stacking */
+    }
+}
+
 /* Subtle divider between Tour and Upload */
 .or-separator {
     display: flex;
@@ -7421,56 +7523,43 @@ def render_welcome_screen():
     # ponytail: review (pending_profile) renders INSIDE the same fixed wizard
     # card below (body/footer switch to step 3) — the page never takes over.
     # Unauthenticated visitors always get the sanitized example profile.
+    # Owner login lives only in the settings menu — never a banner on the public welcome screen.
 
-    # 1. Subtle, understated top bar
+    # 1. Clean top bar: brand only
     with st.container(border=False, key="onb_top_bar"):
-        tb_l, tb_r = st.columns([4.2, 0.8], vertical_alignment="center")
-        with tb_l:
-            st.markdown("""
-            <div class="app-brand">
-                <span class="brand-bolt">⚡</span>
-                <span class="brand-name">JOBSCOUT</span>
-                <span class="app-brand-badge">PRO</span>
-            </div>
-            """, unsafe_allow_html=True)
-        with tb_r:
-            if st.button("▶ Try Demo", key="btn_top_demo_action", use_container_width=True, help="Explore workspace with the safe example profile"):
-                _start_demo()
+        st.markdown("""
+        <div class="app-brand">
+            <span class="brand-bolt">⚡</span>
+            <span class="brand-name">JobScout</span>
+            <span class="app-brand-badge">AI</span>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.write("")
 
-    # 2. Split Screen: Left ~56% (Clean Showcase) vs Right ~44% (Dual-Action Action Panel)
-    col_prop, col_onboard = st.columns([1.25, 1.0], gap="large")
+    # 2. Split screen: Left = value prop showcase, Right = single clean action card
+    col_prop, col_onboard = st.columns([1.15, 1.0], gap="large")
 
     with col_prop:
         st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
     with col_onboard:
-        _render_owner_login()
-        # ponytail: recruiter/demo card lives OUTSIDE the fixed wizard in its own
-        # card (same visuals) so it can never affect the wizard's height (req 10).
+        # ponytail: One clean, prominent action card — no badge clutter, no small
+        # circular buttons, no competing CTAs. Just one clear path into the demo.
         with st.container(border=True, key="onboard_demo"):
-            dt_col_text, dt_col_btn = st.columns([5.2, 0.9], vertical_alignment="center")
-            with dt_col_text:
-                st.markdown("""
-                <div class="recruiter-tour-card">
-                    <div class="tour-badge-row">
-                        <span class="tour-badge">⚡ 1-CLICK DEMO TOUR</span>
-                        <span class="tour-meta-tag">For Recruiters & Evaluators</span>
-                    </div>
-                    <div class="tour-title">Interactive Developer Workspace</div>
-                    <div class="tour-desc">Explore the interactive developer workspace, test stack-fit scoring on sample roles, and preview the verified ATS resume studio.</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with dt_col_btn:
-                tour_clicked = st.button("❯", key="btn_recruiter_tour", type="secondary", use_container_width=True, help="Explore Live Demo Workspace")
-
-            if tour_clicked:
+            st.markdown("""
+            <div class="welcome-action-card">
+                <div class="welcome-badge">Try the live workspace</div>
+                <div class="welcome-title">Interactive Developer Workspace</div>
+                <div class="welcome-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio — no signup required.</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("▶ Start Demo", key="btn_welcome_demo", type="primary", use_container_width=True, help="Explore the workspace with the safe example profile"):
                 _start_demo()
 
         st.markdown("""
         <div class="or-separator">
-            <span>OR PERSONALIZE WITH YOUR RESUME</span>
+            <span>Or personalize with your resume</span>
         </div>
         """, unsafe_allow_html=True)
 
