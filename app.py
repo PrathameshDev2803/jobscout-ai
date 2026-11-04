@@ -3622,41 +3622,39 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 
 /* Demo card — matches reference image precisely */
 .st-key-onboard_demo {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    margin-bottom: 0.75rem !important;
-}
-.demo-card {
     background: #050a12 !important;
     border: 1px solid #1e293b !important;
     border-radius: 16px !important;
     padding: 1.25rem 1.5rem !important;
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: 48px 1fr 1px auto !important;
     align-items: center !important;
-    justify-content: space-between !important;
-    gap: 0 !important;
+    gap: 16px !important;
+    column-gap: 16px !important;
+    box-sizing: border-box !important;
     transition: border-color 0.2s ease !important;
 }
-.demo-card:hover {
+.st-key-onboard_demo:hover {
     border-color: #334155 !important;
 }
-.demo-wrap {
-    display: flex !important;
-    align-items: center !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
+
+/* Zero out default Streamlit margins/padding on grid children */
+.st-key-onboard_demo > * {
+    margin: 0 !important;
+    padding: 0 !important;
 }
+
+/* Icon — fixed-width column */
 .demo-icon {
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
-    border-radius: 10px !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    border-radius: 12px !important;
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 18px !important;
+    font-size: 20px !important;
     font-weight: 700 !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     display: flex !important;
@@ -3664,29 +3662,34 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     justify-content: center !important;
     flex-shrink: 0 !important;
     line-height: 1 !important;
-    margin-right: 16px !important;
 }
+
+/* Content — flexible column */
 .demo-info {
     display: flex !important;
     flex-direction: column !important;
-    gap: 4px !important;
-    flex: 1 1 auto !important;
+    gap: 6px !important;
     min-width: 0 !important;
 }
+
+/* Badge — fit-content, pill shaped, never stretched */
 .demo-badge {
     display: inline-flex !important;
+    width: fit-content !important;
     align-items: center !important;
     gap: 4px !important;
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
     font-weight: 750 !important;
     letter-spacing: 0.05em !important;
-    padding: 3px 10px !important;
+    padding: 4px 12px !important;
     border-radius: 999px !important;
     white-space: nowrap !important;
 }
+
+/* Heading — single line on desktop */
 .demo-title {
     font-size: 20px !important;
     font-weight: 700 !important;
@@ -3698,31 +3701,31 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
+
+/* Description — no truncation on desktop, uses available width */
 .demo-desc {
     font-size: 14px !important;
     color: #8892b0 !important;
     line-height: 1.45 !important;
     margin: 0 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 340px !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
 }
+
+/* Divider — fixed 1px column, stretched vertically */
 .demo-divider {
     width: 1px !important;
-    height: 36px !important;
+    height: 40px !important;
     background: rgba(255, 255, 255, 0.08) !important;
-    margin: 0 16px !important;
     flex-shrink: 0 !important;
 }
-.demo-cta {
-    flex-shrink: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-}
+
+/* CTA button — inside the grid, auto-sized column */
 .st-key-btn_welcome_demo {
-    width: auto !important;
     margin: 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
 }
 .st-key-btn_welcome_demo button {
     background: #00c875 !important;
@@ -3733,11 +3736,12 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     border-radius: 10px !important;
     height: 40px !important;
     min-height: 40px !important;
-    padding: 0 20px !important;
+    padding: 0 24px !important;
     width: auto !important;
-    min-width: 120px !important;
+    min-width: 130px !important;
     transition: all 0.15s ease !important;
     box-shadow: none !important;
+    white-space: nowrap !important;
 }
 .st-key-btn_welcome_demo button:hover {
     border-color: #00df82 !important;
@@ -3746,6 +3750,34 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 .st-key-btn_welcome_demo button:focus-visible {
     outline: 2px solid #00c875 !important;
     outline-offset: 2px !important;
+}
+
+/* Mobile: stack vertically, hide divider, full-width CTA */
+@media (max-width: 768px) {
+    .st-key-onboard_demo {
+        grid-template-columns: 1fr !important;
+        column-gap: 0 !important;
+        gap: 12px !important;
+        padding: 1rem 1.25rem !important;
+    }
+    .demo-divider { display: none !important; }
+    .demo-info {
+        width: 100% !important;
+    }
+    .demo-title {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+    .demo-desc {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+    .st-key-btn_welcome_demo button {
+        width: 100% !important;
+        min-width: auto !important;
+    }
 }
 
 /* Top bar brand spacing */
@@ -7634,22 +7666,19 @@ def render_welcome_screen():
         # design language — dark surface, subtle border, restrained emerald
         # accent, horizontal layout on desktop, stacked on mobile.
         with st.container(border=False, key="onboard_demo"):
+            # Icon — fixed column
+            st.markdown('<div class="demo-icon">&gt;_</div>', unsafe_allow_html=True)
+            # Content — flexible column (badge, heading, description)
             st.markdown("""
-            <div class="demo-card">
-                <div class="demo-wrap">
-                    <div class="demo-icon">&gt;_</div>
-                    <div class="demo-info">
-                        <div class="demo-badge">LIVE DEMO</div>
-                        <div class="demo-title">Interactive Developer Workspace</div>
-                        <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
-                    </div>
-                    <div class="demo-divider"></div>
-                </div>
-                <div class="demo-cta">
-                    <span class="demo-cta-marker"></span>
-                </div>
+            <div class="demo-info">
+                <div class="demo-badge">LIVE DEMO</div>
+                <div class="demo-title">Interactive Developer Workspace</div>
+                <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
             </div>
             """, unsafe_allow_html=True)
+            # Vertical divider — fixed 1px column
+            st.markdown('<div class="demo-divider"></div>', unsafe_allow_html=True)
+            # CTA — auto column, rendered by Streamlit button as 4th grid item
             if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
                 _start_demo()
 
