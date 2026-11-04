@@ -49,15 +49,6 @@ _PUBLIC_AI_LOCK = threading.Lock()
 _PUBLIC_AI_GLOBAL_CALLS = []
 load_dotenv(ENV_FILE, override=True)
 
-# Sync Streamlit Community Cloud secrets to os.environ
-try:
-    if hasattr(st, "secrets"):
-        for sec_k, sec_v in st.secrets.items():
-            if isinstance(sec_v, str) and sec_k not in os.environ:
-                os.environ[sec_k] = sec_v
-except Exception:
-    pass
-
 DB = os.path.join(BASE, "jobs.db")
 PROFILE = os.path.join(BASE, "profile.json")
 RESUME_TXT = os.path.join(BASE, "resume.txt")
@@ -149,6 +140,15 @@ def _reset_public_ai_limits_for_tests():
 
 # ponytail: Top navigation layout replaces permanent sidebar for a distraction-free, full-width workspace
 st.set_page_config(page_title="JobScout", layout="wide", initial_sidebar_state="collapsed")
+
+# Sync Streamlit Community Cloud secrets to os.environ (after set_page_config per Streamlit requirements)
+try:
+    if hasattr(st, "secrets"):
+        for sec_k, sec_v in st.secrets.items():
+            if isinstance(sec_v, str) and sec_k not in os.environ:
+                os.environ[sec_k] = sec_v
+except Exception:
+    pass
 
 
 def _is_demo():
@@ -8923,7 +8923,11 @@ st.session_state.setdefault("onboarded", False)
 # ACCESS CONTROL: owner password → real data; everyone else → isolated demo
 # =========================================================================
 if not _owner_logged_in() and not st.session_state.get("demo_mode"):
-    render_welcome_screen()
+    try:
+        render_welcome_screen()
+    except Exception as _welcome_err:
+        st.error("Workspace failed to load. Please refresh the page.")
+        st.caption(f"Details: {html.escape(str(_welcome_err))}")
     st.stop()
 
 if _owner_logged_in():
