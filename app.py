@@ -3620,89 +3620,129 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
 }
 
-/* Demo card — matches Launch Workspace card design language */
+/* Demo card — matches reference image precisely */
 .st-key-onboard_demo {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.75rem !important;
 }
 .demo-card {
-    background: #090e17 !important;
+    background: #0b111e !important;
     border: 1px solid #1e293b !important;
-    border-radius: 10px !important;
-    padding: 0.85rem 1rem !important;
+    border-radius: 12px !important;
+    padding: 0.9rem 1rem !important;
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 1rem !important;
+    gap: 0 !important;
     transition: border-color 0.2s ease !important;
+    min-height: 96px !important;
 }
 .demo-card:hover {
-    border-color: rgba(0, 200, 117, 0.4) !important;
+    border-color: #334155 !important;
 }
-.demo-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    flex: 1 1 auto;
-    min-width: 0;
+.demo-wrap {
+    display: flex !important;
+    align-items: center !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+.demo-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 8px !important;
+    background: #03281e !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    color: #00c875 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    line-height: 1 !important;
+    margin-right: 12px !important;
+}
+.demo-info {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 3px !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
 }
 .demo-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: rgba(0, 200, 117, 0.1);
-    border: 1px solid rgba(0, 200, 117, 0.35);
-    color: #00c875;
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: 0.05em;
-    padding: 2px 8px;
-    border-radius: 999px;
-    white-space: nowrap;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: transparent !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    color: #00c875 !important;
+    font-size: 10px !important;
+    font-weight: 750 !important;
+    letter-spacing: 0.05em !important;
+    padding: 2px 8px !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
 }
 .demo-title {
-    font-size: 14px;
-    font-weight: 750;
-    color: #ffffff;
-    margin: 0;
-    line-height: 1.3;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    margin: 0 !important;
+    line-height: 1.3 !important;
+    letter-spacing: -0.01em !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 .demo-desc {
-    font-size: 11px;
-    color: #8892b0;
-    line-height: 1.45;
-    margin: 0;
+    font-size: 12.5px !important;
+    color: #8892b0 !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 260px !important;
+}
+.demo-divider {
+    width: 1px !important;
+    height: 32px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    margin: 0 12px !important;
+    flex-shrink: 0 !important;
 }
 .demo-cta {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
 }
 .st-key-btn_welcome_demo {
     width: auto !important;
     margin: 0 !important;
 }
 .st-key-btn_welcome_demo button {
-    background: #121824 !important;
-    border: 1px solid #2a384c !important;
-    color: #cbd5e1 !important;
+    background: #03281e !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    color: #ffffff !important;
     font-size: 13px !important;
-    font-weight: 650 !important;
+    font-weight: 600 !important;
     border-radius: 8px !important;
     height: 36px !important;
     min-height: 36px !important;
-    padding: 0 14px !important;
+    padding: 0 16px !important;
     width: auto !important;
-    min-width: 100px !important;
+    min-width: 110px !important;
     transition: all 0.15s ease !important;
     box-shadow: none !important;
 }
 .st-key-btn_welcome_demo button:hover {
     border-color: #00c875 !important;
-    color: #ffffff !important;
-    background: #182232 !important;
+    background: #043a2a !important;
 }
 .st-key-btn_welcome_demo button:focus-visible {
     outline: 2px solid #00c875 !important;
@@ -3719,17 +3759,54 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     .demo-card {
         flex-direction: column !important;
         align-items: flex-start !important;
-        gap: 0.75rem !important;
-        padding: 0.85rem 1rem !important;
+        gap: 1rem !important;
+        padding: 1rem 1rem !important;
+        min-height: auto !important;
+    }
+    .demo-wrap {
+        flex-direction: row !important;
+        align-items: center !important;
+        width: 100% !important;
+        gap: 10px !important;
+    }
+    .demo-divider {
+        width: 1px !important;
+        height: 32px !important;
+        margin: 0 10px !important;
+    }
+    .demo-title {
+        white-space: normal !important;
+    }
+    .demo-desc {
+        white-space: normal !important;
+        max-width: none !important;
     }
     .demo-cta {
         width: 100% !important;
         display: flex !important;
         justify-content: flex-start !important;
+        margin-top: 4px !important;
     }
     .st-key-btn_welcome_demo button {
         width: 100% !important;
         min-width: auto !important;
+    }
+}
+
+/* Tablet: tighter spacing */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .demo-card {
+        padding: 0.85rem 1rem !important;
+        gap: 0 !important;
+    }
+    .demo-icon {
+        margin-right: 10px !important;
+    }
+    .demo-divider {
+        margin: 0 10px !important;
+    }
+    .demo-desc {
+        max-width: 200px !important;
     }
 }
 
@@ -7561,10 +7638,14 @@ def render_welcome_screen():
         with st.container(border=False, key="onboard_demo"):
             st.markdown("""
             <div class="demo-card">
-                <div class="demo-content">
-                    <div class="demo-badge">LIVE DEMO</div>
-                    <div class="demo-title">Interactive Developer Workspace</div>
-                    <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
+                <div class="demo-wrap">
+                    <div class="demo-icon">&gt;_</div>
+                    <div class="demo-info">
+                        <div class="demo-badge">LIVE DEMO</div>
+                        <div class="demo-title">Interactive Developer Workspace</div>
+                        <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
+                    </div>
+                    <div class="demo-divider"></div>
                 </div>
                 <div class="demo-cta">
                     <span class="demo-cta-marker"></span>

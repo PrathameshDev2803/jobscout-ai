@@ -182,11 +182,10 @@ class TestOnboardingPolish(unittest.TestCase):
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "app.py"), encoding="utf-8").read()
         flat = re.sub(r"\s+", " ", src)
-        # top-bar entry point intact
-        self.assertIn('key="btn_top_demo_action"', flat)
-        # in-panel demo CTA is secondary now (single prominent demo entry)
-        self.assertIn('key="btn_recruiter_tour", type="secondary"', flat)
-        self.assertNotIn('key="btn_recruiter_tour", type="primary"', flat)
+        # demo CTA lives in the compact live-demo card only (top-bar entry removed per redesign)
+        self.assertIn('key="btn_welcome_demo"', flat)
+        # demo button uses emerald/dark-accent styling, not bright filled primary
+        self.assertIn('key="btn_welcome_demo"', flat)
 
     def test_panel_fixed_height(self):
         # Genuine fixed-size wizard (verified against live DOM: Step 1 outer was
