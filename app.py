@@ -3620,80 +3620,93 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
 }
 
-/* Welcome action card — clean, premium, single CTA */
-.welcome-action-card {
-    padding: 1.6rem 1.5rem;
-    margin-bottom: 0.4rem;
+/* Demo card — matches Launch Workspace card design language */
+.st-key-onboard_demo {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin-bottom: 0.5rem !important;
 }
-.welcome-badge {
+.demo-card {
+    background: #090e17 !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 10px !important;
+    padding: 0.85rem 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 1rem !important;
+    transition: border-color 0.2s ease !important;
+}
+.demo-card:hover {
+    border-color: rgba(0, 200, 117, 0.4) !important;
+}
+.demo-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.demo-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     background: rgba(0, 200, 117, 0.1);
-    border: 1px solid rgba(0, 200, 117, 0.25);
+    border: 1px solid rgba(0, 200, 117, 0.35);
     color: #00c875;
     font-size: 10px;
     font-weight: 750;
-    letter-spacing: 0.06em;
-    padding: 3px 9px;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
     border-radius: 999px;
-    margin-bottom: 1rem;
+    white-space: nowrap;
 }
-.welcome-title {
-    font-size: 1.15rem;
-    font-weight: 800;
+.demo-title {
+    font-size: 14px;
+    font-weight: 750;
     color: #ffffff;
-    margin: 0 0 0.5rem 0;
-    line-height: 1.35;
-    letter-spacing: -0.01em;
-}
-.welcome-desc {
-    font-size: 13px;
-    color: #94a3b8;
-    line-height: 1.55;
     margin: 0;
-    max-width: 100%;
+    line-height: 1.3;
 }
-
-/* Clean divider */
-.or-separator {
+.demo-desc {
+    font-size: 11px;
+    color: #8892b0;
+    line-height: 1.45;
+    margin: 0;
+}
+.demo-cta {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    text-align: center;
-    margin: 1.1rem 0 0.6rem 0;
-    color: #475569;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
-.or-separator span {
-    padding: 0 0.5rem;
-    background: #0b0f17;
+.st-key-btn_welcome_demo {
+    width: auto !important;
+    margin: 0 !important;
 }
-
-/* Welcome demo button — full width primary */
 .st-key-btn_welcome_demo button {
-    background: #00c875 !important;
-    border: 1px solid #00c875 !important;
-    color: #042f20 !important;
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    border-radius: 10px !important;
-    padding: 10px 16px !important;
-    height: 48px !important;
-    min-height: 48px !important;
-    max-height: 48px !important;
-    width: 100% !important;
-    box-shadow: 0 4px 16px rgba(0, 200, 117, 0.3) !important;
-    transition: all 0.2s ease !important;
+    background: #121824 !important;
+    border: 1px solid #2a384c !important;
+    color: #cbd5e1 !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+    border-radius: 8px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 14px !important;
+    width: auto !important;
+    min-width: 100px !important;
+    transition: all 0.15s ease !important;
+    box-shadow: none !important;
 }
 .st-key-btn_welcome_demo button:hover {
-    background: #00b368 !important;
-    border-color: #00b368 !important;
+    border-color: #00c875 !important;
     color: #ffffff !important;
-    box-shadow: 0 6px 20px rgba(0, 200, 117, 0.4) !important;
-    transform: translateY(-1px) !important;
+    background: #182232 !important;
+}
+.st-key-btn_welcome_demo button:focus-visible {
+    outline: 2px solid #00c875 !important;
+    outline-offset: 2px !important;
 }
 
 /* Top bar brand spacing */
@@ -3703,22 +3716,20 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 
 /* Mobile responsive for welcome screen */
 @media (max-width: 768px) {
-    .st-key-onboard_demo .welcome-action-card {
-        padding: 1.3rem 1.2rem;
+    .demo-card {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.75rem !important;
+        padding: 0.85rem 1rem !important;
     }
-    .welcome-title {
-        font-size: 1.05rem;
-    }
-    .welcome-desc {
-        font-size: 12.5px;
+    .demo-cta {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: flex-start !important;
     }
     .st-key-btn_welcome_demo button {
-        height: 44px !important;
-        min-height: 44px !important;
-        font-size: 13.5px !important;
-    }
-    .col_prop, .col_onboard {
-        /* handled by Streamlit column stacking */
+        width: 100% !important;
+        min-width: auto !important;
     }
 }
 
@@ -7544,17 +7555,23 @@ def render_welcome_screen():
         st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
     with col_onboard:
-        # ponytail: One clean, prominent action card — no badge clutter, no small
-        # circular buttons, no competing CTAs. Just one clear path into the demo.
-        with st.container(border=True, key="onboard_demo"):
+        # ponytail: Compact demo card matching the Launch Workspace card
+        # design language — dark surface, subtle border, restrained emerald
+        # accent, horizontal layout on desktop, stacked on mobile.
+        with st.container(border=False, key="onboard_demo"):
             st.markdown("""
-            <div class="welcome-action-card">
-                <div class="welcome-badge">Try the live workspace</div>
-                <div class="welcome-title">Interactive Developer Workspace</div>
-                <div class="welcome-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio — no signup required.</div>
+            <div class="demo-card">
+                <div class="demo-content">
+                    <div class="demo-badge">LIVE DEMO</div>
+                    <div class="demo-title">Interactive Developer Workspace</div>
+                    <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
+                </div>
+                <div class="demo-cta">
+                    <span class="demo-cta-marker"></span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("▶ Start Demo", key="btn_welcome_demo", type="primary", use_container_width=True, help="Explore the workspace with the safe example profile"):
+            if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
                 _start_demo()
 
         st.markdown("""
