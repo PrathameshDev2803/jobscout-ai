@@ -1,0 +1,19 @@
+name: Keepalive - prevent Streamlit Cloud cold-start sleep
+
+on:
+  schedule:
+    # Every 15 minutes keeps the free-tier container warm so visitors
+    # never hit a >10s cold-start spinner on first load.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Keepalive ping
+        env:
+          JOBSKEEPALIVE_URL: https://jobscout-dev.streamlit.app/
+        run: |
+          python keepalive.py
