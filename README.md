@@ -49,6 +49,14 @@ No generic keyword searching. Every job is evaluated against your personalized `
 - Quick Actions command bar: **Paste JD** / **Paste Link** / **10 Platforms**.
 - Built-in Application Tracker with status states (`Applied`, `Interview`, `Offer`, `Rejected`).
 
+### 5. 📄 Onboarding Resume Autofill
+- Upload **PDF, DOCX, or TXT** on Step 2 and stay on Step 2.
+- Text is extracted locally, then categorized by Gemini into name, contact, links, city, role, skills, experience, education, and projects.
+- Full extracted profile preview appears immediately; fields are prefilled and editable.
+- One bounded AI call per new file, cached by hash. **Analyze** reuses the cache and never calls Gemini again.
+- If the public AI key is missing or quota is exhausted, local extraction still fills the preview and the UI shows a **local fallback** badge.
+- Public uploads use `GEMINI_PUBLIC_API_KEY`; the owner workspace key is never exposed to guests.
+
 ---
 
 ## 🏗️ Architecture Flow
@@ -107,13 +115,28 @@ cp .env.example .env
 ```
 Open `.env` and fill in your keys:
 ```env
-# Gemini API Key (Get free at https://aistudio.google.com/app/apikey)
-GEMINI_API_KEY=your_gemini_api_key_here
+# Owner/workspace Gemini key (https://aistudio.google.com/app/apikey)
+GEMINI_API_KEY=your_owner_gemini_key_here
+
+# Separate low-quota key for public onboarding categorization
+GEMINI_PUBLIC_API_KEY=your_public_gemini_key_here
+
+# Password that unlocks owner mode; leave blank for demo-only deployment
+OWNER_PASSWORD=your_owner_password_here
 ```
+
+Use a separate Google AI Studio project/key for `GEMINI_PUBLIC_API_KEY`. Public uploads
+must not spend the owner workspace quota. If it is empty, public onboarding falls back
+to local extraction.
 
 ### 3. Launch App
 ```bash
 streamlit run app.py
+```
+
+Windows detached launcher with health check:
+```powershell
+.\start_streamlit.ps1
 ```
 > The app will automatically initialize `profile.json` and `resume.txt` on first launch from safe templates. You can customize them directly in the **Settings** tab.
 
@@ -128,6 +151,7 @@ streamlit run app.py
 ├── profile.example.json   # Base configuration profile template
 ├── resume.example.txt     # Clean plain-text master resume template
 ├── requirements.txt       # Production dependencies
+├── start_streamlit.ps1    # Windows detached launcher + health check
 ├── .env.example           # Environment template
 └── .gitignore             # Airtight protection for PII, keys, and DBs
 ```
@@ -136,9 +160,12 @@ streamlit run app.py
 
 ## 🛡️ Security & Privacy First
 
-- **Zero PII Exposure**: `profile.json` and `resume.txt` are strictly git-ignored. Your personal identity, contact numbers, and employment history stay safely on your local machine.
-- **No Hardcoded Secrets**: All API keys and SMTP credentials load from `.env` or temporary session state.
-- **Sanitized Templates**: Cloned instances start with mock profiles that won't break on a fresh clone.
+- **Zero PII in Git**: `profile.json`, `resume.txt`, `jobs.db`, and `demo.db` are strictly git-ignored.
+- **No Hardcoded Secrets**: All keys load from `.env` or Streamlit secrets. Gemini keys travel in request headers, never URLs.
+- **Public/Owner Key Isolation**: public onboarding uses `GEMINI_PUBLIC_API_KEY`; guests never receive or spend `GEMINI_API_KEY`.
+- **Resume Privacy Notice**: onboarding tells users that extracted resume text is sent to Google Gemini for categorization when AI is available.
+- **Session-Only Upload Cache**: parsed profiles are cached by file hash in the browser session, not written to disk.
+- **Sanitized Templates**: cloned instances start with mock profiles that won't break on a fresh clone.
 
 ---
 
