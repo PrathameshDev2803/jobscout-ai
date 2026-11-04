@@ -3628,16 +3628,15 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     margin-bottom: 0.75rem !important;
 }
 .demo-card {
-    background: #0b111e !important;
+    background: #050a12 !important;
     border: 1px solid #1e293b !important;
-    border-radius: 12px !important;
-    padding: 0.9rem 1rem !important;
+    border-radius: 16px !important;
+    padding: 1.25rem 1.5rem !important;
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
     gap: 0 !important;
     transition: border-color 0.2s ease !important;
-    min-height: 96px !important;
 }
 .demo-card:hover {
     border-color: #334155 !important;
@@ -3649,15 +3648,15 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     min-width: 0 !important;
 }
 .demo-icon {
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    min-height: 36px !important;
-    border-radius: 8px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    border-radius: 10px !important;
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 16px !important;
+    font-size: 18px !important;
     font-weight: 700 !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     display: flex !important;
@@ -3665,12 +3664,12 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     justify-content: center !important;
     flex-shrink: 0 !important;
     line-height: 1 !important;
-    margin-right: 12px !important;
+    margin-right: 16px !important;
 }
 .demo-info {
     display: flex !important;
     flex-direction: column !important;
-    gap: 3px !important;
+    gap: 4px !important;
     flex: 1 1 auto !important;
     min-width: 0 !important;
 }
@@ -3678,42 +3677,42 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     display: inline-flex !important;
     align-items: center !important;
     gap: 4px !important;
-    background: transparent !important;
+    background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 10px !important;
+    font-size: 11px !important;
     font-weight: 750 !important;
     letter-spacing: 0.05em !important;
-    padding: 2px 8px !important;
+    padding: 3px 10px !important;
     border-radius: 999px !important;
     white-space: nowrap !important;
 }
 .demo-title {
-    font-size: 15px !important;
+    font-size: 20px !important;
     font-weight: 700 !important;
     color: #ffffff !important;
     margin: 0 !important;
-    line-height: 1.3 !important;
+    line-height: 1.25 !important;
     letter-spacing: -0.01em !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
 .demo-desc {
-    font-size: 12.5px !important;
+    font-size: 14px !important;
     color: #8892b0 !important;
     line-height: 1.45 !important;
     margin: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 260px !important;
+    max-width: 340px !important;
 }
 .demo-divider {
     width: 1px !important;
-    height: 32px !important;
+    height: 36px !important;
     background: rgba(255, 255, 255, 0.08) !important;
-    margin: 0 12px !important;
+    margin: 0 16px !important;
     flex-shrink: 0 !important;
 }
 .demo-cta {
@@ -3726,23 +3725,23 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     margin: 0 !important;
 }
 .st-key-btn_welcome_demo button {
-    background: #03281e !important;
-    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    background: #00c875 !important;
+    border: 1px solid #00c875 !important;
     color: #ffffff !important;
-    font-size: 13px !important;
+    font-size: 14px !important;
     font-weight: 600 !important;
-    border-radius: 8px !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    padding: 0 16px !important;
+    border-radius: 10px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 20px !important;
     width: auto !important;
-    min-width: 110px !important;
+    min-width: 120px !important;
     transition: all 0.15s ease !important;
     box-shadow: none !important;
 }
 .st-key-btn_welcome_demo button:hover {
-    border-color: #00c875 !important;
-    background: #043a2a !important;
+    border-color: #00df82 !important;
+    background: #00df82 !important;
 }
 .st-key-btn_welcome_demo button:focus-visible {
     outline: 2px solid #00c875 !important;
@@ -3760,19 +3759,18 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
         flex-direction: column !important;
         align-items: flex-start !important;
         gap: 1rem !important;
-        padding: 1rem 1rem !important;
-        min-height: auto !important;
+        padding: 1rem 1.25rem !important;
     }
     .demo-wrap {
         flex-direction: row !important;
         align-items: center !important;
         width: 100% !important;
-        gap: 10px !important;
+        gap: 12px !important;
     }
     .demo-divider {
         width: 1px !important;
-        height: 32px !important;
-        margin: 0 10px !important;
+        height: 36px !important;
+        margin: 0 12px !important;
     }
     .demo-title {
         white-space: normal !important;
@@ -3785,7 +3783,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
         width: 100% !important;
         display: flex !important;
         justify-content: flex-start !important;
-        margin-top: 4px !important;
+        margin-top: 8px !important;
     }
     .st-key-btn_welcome_demo button {
         width: 100% !important;
@@ -3796,17 +3794,17 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 /* Tablet: tighter spacing */
 @media (max-width: 1024px) and (min-width: 769px) {
     .demo-card {
-        padding: 0.85rem 1rem !important;
+        padding: 1rem 1.25rem !important;
         gap: 0 !important;
     }
     .demo-icon {
-        margin-right: 10px !important;
+        margin-right: 12px !important;
     }
     .demo-divider {
-        margin: 0 10px !important;
+        margin: 0 12px !important;
     }
     .demo-desc {
-        max-width: 200px !important;
+        max-width: 260px !important;
     }
 }
 
