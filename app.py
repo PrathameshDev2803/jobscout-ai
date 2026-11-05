@@ -4070,7 +4070,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 /* Responsive Preview Job Card (320px - 360px screens) */
 @media (max-width: 360px) {
     .preview-card-wrap {
-        padding: 12px 14px !important;
+        padding: 12px !important;
         box-sizing: border-box !important;
         max-width: 100% !important;
     }
@@ -4082,50 +4082,61 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
         min-width: 0 !important;
     }
     .preview-job-title {
-        font-size: 16.5px !important;
-        line-height: 1.25 !important;
+        font-size: 15px !important;
+        line-height: 1.2 !important;
+        margin-bottom: 4px !important;
         overflow-wrap: break-word !important;
         word-break: break-word !important;
     }
     .preview-score-badge {
-        font-size: 11px !important;
-        padding: 2px 7px !important;
+        font-size: 10.5px !important;
+        padding: 3px 7px !important;
         flex-shrink: 0 !important;
         align-self: flex-start !important;
     }
     .preview-job-meta {
-        font-size: 13px !important;
-        row-gap: 6px !important;
-        column-gap: 8px !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        column-gap: 10px !important;
+        row-gap: 4px !important;
+        align-items: center !important;
+        font-size: 12px !important;
     }
     .preview-job-meta .meta-item {
         display: inline-flex !important;
         align-items: center !important;
-        gap: 5px !important;
-        max-width: 100% !important;
-        min-width: 0 !important;
-        overflow-wrap: break-word !important;
+        gap: 4px !important;
+        font-size: 12px !important;
+        line-height: 1.3 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
     }
     .preview-job-meta .meta-icon {
+        width: 14px !important;
+        font-size: 12px !important;
         flex-shrink: 0 !important;
         display: inline-flex !important;
         align-items: center !important;
+        justify-content: center !important;
     }
     .preview-chips-row {
         display: flex !important;
         flex-wrap: wrap !important;
-        gap: 6px !important;
-        margin-bottom: 8px !important;
+        gap: 5px !important;
+        margin-bottom: 0 !important;
     }
     .pchip {
-        font-size: 11.5px !important;
-        padding: 4px 8px !important;
-        line-height: 1.25 !important;
+        font-size: 11px !important;
+        padding: 3px 7px !important;
+        line-height: 1.2 !important;
         white-space: nowrap !important;
     }
     .preview-bar-track {
         width: 100% !important;
-        margin-top: 0 !important;
+        margin-top: 8px !important;
     }
 }
 
