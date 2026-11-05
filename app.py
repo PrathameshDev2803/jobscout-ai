@@ -3346,14 +3346,14 @@ def render_welcome_screen():
                 _f_bl, _f_br = st.columns([1, 2.4], vertical_alignment="center")
                 with _f_bl:
                     if _is_review:
-                        if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume"):
+                        if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
                             for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated"):
                                 st.session_state.pop(k, None)
                             _clear_onb_upload_state(clear_autofill=True)
                             st.rerun()
                     else:
                         if st.button("← Back", key="btn_onb_back", disabled=(_step == 1),
-                                     help="Change your path — entered data is kept"):
+                                     help="Change your path — entered data is kept", use_container_width=True):
                             onb_go_step(st.session_state, 1)
                             st.rerun()
                 with _f_br:
