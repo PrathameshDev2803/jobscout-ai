@@ -4067,6 +4067,68 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     }
 }
 
+/* Responsive Preview Job Card (320px - 360px screens) */
+@media (max-width: 360px) {
+    .preview-card-wrap {
+        padding: 12px 14px !important;
+        box-sizing: border-box !important;
+        max-width: 100% !important;
+    }
+    .preview-title-row {
+        gap: 8px !important;
+        margin-bottom: 8px !important;
+    }
+    .preview-title-row > div {
+        min-width: 0 !important;
+    }
+    .preview-job-title {
+        font-size: 16.5px !important;
+        line-height: 1.25 !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+    }
+    .preview-score-badge {
+        font-size: 11px !important;
+        padding: 2px 7px !important;
+        flex-shrink: 0 !important;
+        align-self: flex-start !important;
+    }
+    .preview-job-meta {
+        font-size: 13px !important;
+        row-gap: 6px !important;
+        column-gap: 8px !important;
+    }
+    .preview-job-meta .meta-item {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-wrap: break-word !important;
+    }
+    .preview-job-meta .meta-icon {
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+    }
+    .preview-chips-row {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        margin-bottom: 8px !important;
+    }
+    .pchip {
+        font-size: 11.5px !important;
+        padding: 4px 8px !important;
+        line-height: 1.25 !important;
+        white-space: nowrap !important;
+    }
+    .preview-bar-track {
+        width: 100% !important;
+        margin-top: 0 !important;
+    }
+}
+
 /* Form Input Scale & Styling */
 div[data-testid="stTextInput"] label, div[data-testid="stFileUploader"] label {
     font-size: 14.5px !important;
