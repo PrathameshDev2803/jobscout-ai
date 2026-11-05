@@ -2897,7 +2897,7 @@ def render_welcome_screen():
     st.write("")
 
     # 2. Split screen: Left = value prop showcase, Right = single clean action card
-    col_prop, col_onboard = st.columns([1.15, 1.0], gap="large")
+    col_prop, col_onboard = st.columns([0.44, 0.56], gap="medium")
 
     with col_prop:
         st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
@@ -2956,7 +2956,7 @@ def render_welcome_screen():
                 dur_label = "1 Month"
                 dur_months = 1
                 if (not _is_review) and _step == 2:
-                    col_rem, col_dur = st.columns([1.1, 1.45], vertical_alignment="center")
+                    col_rem, col_dur = st.columns([0.9, 1.3], vertical_alignment="center")
                     with col_rem:
                         remember_me = st.checkbox("Remember me", value=True, key="onb_remember_me", help="Resume stays saved on this machine regardless; this keeps the browser signed in for the chosen duration")
                     with col_dur:
@@ -3340,7 +3340,7 @@ def render_welcome_screen():
             # single Back key (no source duplicates). Step 1 shows it disabled
             # (nothing to go back to); review swaps in Upload-another + Confirm.
             with st.container(border=False, key="onboard_step_foot"):
-                _f_bl, _f_br = st.columns([1, 2.2], vertical_alignment="center")
+                _f_bl, _f_br = st.columns([1, 2.4], vertical_alignment="center")
                 with _f_bl:
                     if _is_review:
                         if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume"):

@@ -142,31 +142,19 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
 .onb-path-card:hover { border-color: rgba(16, 185, 129, 0.5) !important; }
 .onb-path-card:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
 
-/* Fixed-size onboarding wizard: genuine modal-like card.
-   Root cause (measured in headless Chrome 1440x900, Streamlit 1.64):
-   Step 1 outer = 531.5x758.7px, Step 2 outer = 531.5x868.4px (+109.8px) while the
-   inner body stayed 380px with no overflow. The expanding parent is
-   .st-key-onboard_panel itself (height:auto, maxHeight:none, overflow:visible):
-   Step 2 mounts a remember row + footer OUTSIDE the fixed inner body, and
-   error/status messages render after the footer inside the panel.
-   Fix: constrain the OUTER card with a real height (not min-height alone, which
-   still allows growth), flex-column layout, and scroll ONLY the inner viewport.
-   Observed DOM (verified, not guessed): DIV.stVerticalBlock.st-key-onboard_panel
-   (display:flex, flex-direction:column) whose children are
-   DIV[data-testid="stLayoutWrapper"] wrappers (native height= becomes
-   flex:0 0 Npx on the wrapper) each holding DIV.stVerticalBlock.st-key-*.
-   Structural hooks below use the documented container-key classes; the single
-   wrapper combinator targets the observed parent/child testids. */
+/* Layout Architecture:
+   Formerly constrained with height: min(720px, calc(100vh - 180px)), overflow: hidden,
+   and .st-key-onboard_step_body using overflow-y: auto and flex: 1 1 auto.
+   Now optimized to eliminate nested scrolling: the Launch Workspace card expands naturally
+   (height: auto, overflow: visible) and the browser's main window handles all vertical scrolling. */
 .st-key-onboard_panel {
-    height: min(720px, calc(100vh - 180px)) !important;
-    max-height: calc(100vh - 120px) !important;
+    height: auto !important;
+    max-height: none !important;
     min-height: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
-    /* ponytail: Streamlit emotion gives vertical blocks flex:1 1 0% — the 0%
-       flex-basis would defeat height in the column layout. flex:none restores it. */
     flex: 0 0 auto !important;
 }
 .st-key-onboard_panel > div[data-testid="stLayoutWrapper"] {
@@ -174,7 +162,7 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
     box-sizing: border-box !important;
     min-width: 0 !important;
 }
-/* Header + footer wrappers: fixed chrome, never scroll, never grow the card. */
+/* Header + footer wrappers: in normal document flow */
 .st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_head),
 .st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_foot) {
     flex: 0 0 auto !important;
@@ -190,33 +178,188 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
     border-top: 1px solid rgba(255, 255, 255, 0.07);
     padding-top: 0.65rem;
 }
-/* Body wrapper: the ONLY flexible child — absorbs all remaining card height. */
+/* Body wrapper: natural expansion with no restrictive height or inner overflow */
 .st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_body) {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-}
-/* Inner content viewport: the ONLY scroller. No native height= param is used
-   (it would pin flex-basis and fight the flex layout); sizing comes from flex. */
-.st-key-onboard_step_body {
-    flex: 1 1 auto !important;
+    flex: 0 0 auto !important;
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    overscroll-behavior: contain;
-    box-sizing: border-box !important;
-    padding-right: 2px;
-    scroll-padding: 8px;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
-/* Bare element containers directly in the panel (e.g. zero-height script
-   bridges) must never become flexible spacers. */
+/* Inner content viewport: expands naturally, no scrollbar */
+.st-key-onboard_step_body {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    box-sizing: border-box !important;
+    padding-right: 0 !important;
+}
+/* Bare element containers directly in the panel */
 .st-key-onboard_panel > div[data-testid="stElementContainer"] {
     flex: 0 0 auto !important;
     min-height: 0 !important;
+}
+
+/* Compact form fields & elements */
+.st-key-onboard_panel div[data-testid="stVerticalBlock"] {
+    gap: 8px !important;
+}
+.st-key-onboard_step_body div[data-testid="stTextInput"],
+.st-key-onboard_step_body div[data-testid="stTextArea"],
+.st-key-onboard_step_body div[data-testid="stSelectbox"],
+.st-key-onboard_step_body div[data-testid="stFileUploader"] {
+    margin-bottom: 0 !important;
+}
+.st-key-onboard_panel div[data-testid="stTextInput"] label,
+.st-key-onboard_panel div[data-testid="stTextArea"] label,
+.st-key-onboard_panel div[data-testid="stSelectbox"] label,
+.st-key-onboard_panel div[data-testid="stFileUploader"] label {
+    font-size: 12px !important;
+    font-weight: 650 !important;
+    color: #cbd5e1 !important;
+    margin-bottom: 2px !important;
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+}
+.st-key-onboard_panel div[data-testid="stTextInput"] input,
+.st-key-onboard_panel div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+    min-height: 38px !important;
+    height: 38px !important;
+    font-size: 13.5px !important;
+    border-radius: 8px !important;
+}
+
+/* Compact resume dropzone */
+.st-key-onboard_panel div[data-testid="stFileUploader"] section {
+    padding: 12px 16px !important;
+    min-height: auto !important;
+    border-radius: 10px !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1.5px dashed rgba(255, 255, 255, 0.16) !important;
+    transition: border-color 0.2s ease, background 0.2s ease !important;
+}
+.st-key-onboard_panel div[data-testid="stFileUploader"] section:hover {
+    border-color: rgba(16, 185, 129, 0.45) !important;
+    background: rgba(16, 185, 129, 0.03) !important;
+}
+.st-key-onboard_panel div[data-testid="stFileUploader"] section > div,
+.st-key-onboard_panel div[data-testid="stFileUploaderDropzone"] {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    padding: 2px 0 !important;
+}
+.st-key-onboard_panel div[data-testid="stFileUploader"] section button {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0 14px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+}
+.st-key-onboard_panel div[data-testid="stFileUploader"] section span,
+.st-key-onboard_panel div[data-testid="stFileUploader"] section small {
+    font-size: 12px !important;
+    color: #94a3b8 !important;
+}
+
+/* Compact privacy caption */
+.st-key-onboard_panel div[data-testid="stCaptionContainer"] {
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+    color: #64748b !important;
+    margin: 2px 0 6px 0 !important;
+    padding: 0 !important;
+}
+
+/* Sleek expander for plain text resume */
+.st-key-onboard_panel div[data-testid="stExpander"] {
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.015) !important;
+    margin-top: 4px !important;
+}
+.st-key-onboard_panel div[data-testid="stExpander"] summary {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    color: #94a3b8 !important;
+}
+.st-key-onboard_panel div[data-testid="stExpander"] summary:hover {
+    color: #10b981 !important;
+}
+
+/* Remember me & duration alignment */
+.st-key-onboard_head div[data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+    gap: 10px !important;
+    margin-bottom: 0.25rem !important;
+}
+.st-key-onb_remember_me {
+    margin-bottom: 0 !important;
+}
+.st-key-onb_remember_me label span {
+    font-size: 12.5px !important;
+    color: #cbd5e1 !important;
+}
+.st-key-onb_remember_duration button,
+.st-key-onb_remember_duration [role="radio"] {
+    min-height: 28px !important;
+    height: 28px !important;
+    padding: 2px 10px !important;
+    font-size: 11.5px !important;
+}
+
+/* Footer buttons balanced layout */
+.st-key-onboard_step_foot div[data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+    gap: 10px !important;
+}
+.st-key-btn_onb_back button {
+    width: 100% !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #cbd5e1 !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_onb_back button:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+.st-key-btn_onboard_launch button,
+.st-key-btn_onboard_manual button,
+.st-key-btn_confirm_go button {
+    width: 100% !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35) !important;
+    letter-spacing: -0.01em !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_onboard_launch button:hover,
+.st-key-btn_onboard_manual button:hover,
+.st-key-btn_confirm_go button:hover {
+    box-shadow: 0 6px 22px rgba(16, 185, 129, 0.5) !important;
+    filter: brightness(1.05) !important;
 }
 @media (max-width: 640px) {
     /* Global card safety & overflow prevention */

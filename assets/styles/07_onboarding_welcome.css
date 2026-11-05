@@ -54,7 +54,7 @@
 
 /* Left Proposition Column - Minimal & Clean */
 .prop-container {
-    padding-right: 1.5rem;
+    padding-right: 0.75rem;
     padding-top: 0.2rem;
 }
 .prop-eyebrow {
@@ -596,11 +596,34 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 }
 /* onboard_demo columns cleanup (legacy) */
 
-/* Tablet & Mobile Stacking for Landing Page */
-@media (max-width: 1023px) {
+/* Tablet Layout: Preserve balanced 2-column layout with wider form (60%) and compact left intro (40%) */
+@media (min-width: 768px) and (max-width: 1023px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
+        flex-direction: row !important;
+        gap: 1rem !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"]:first-child,
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"]:first-child {
+        flex: 0 0 40% !important;
+        max-width: 40% !important;
+        width: 40% !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"]:last-child,
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"]:last-child {
+        flex: 0 0 60% !important;
+        max-width: 60% !important;
+        width: 60% !important;
+    }
+    .prop-headline {
+        font-size: 2.2rem !important;
+    }
+}
+
+/* Mobile Stacking for Landing Page */
+@media (max-width: 767px) {
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
         flex-direction: column !important;
-        gap: 1.5rem !important;
+        gap: 1.25rem !important;
     }
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"],
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"],
@@ -611,10 +634,10 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     }
     .prop-container {
         padding-right: 0 !important;
-        margin-bottom: 1.5rem !important;
+        margin-bottom: 1.25rem !important;
     }
     .prop-headline {
-        font-size: 2.6rem !important;
+        font-size: 2.2rem !important;
     }
 }
 
