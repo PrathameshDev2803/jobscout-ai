@@ -5,7 +5,4 @@
 - **Investigation Limit**: For UI requests, limit investigation to 3 searches. If a stray element is not found by then, ask. Exclude `.venv`, `.git`, and `__pycache__`.
 - **Execution & Scope**: Edit only files named. Changes under ~50 lines: edit directly, summarize in 3 lines. Match existing styles/tokens without adding dependencies. Avoid `<` or `&` in `python -c`. Commands >60s stop.
 
-# Project Map (`app.py`)
-- Demo workspace card markup: ~lines 7530–7550 (`st-key-onboard_demo`)
-- Demo card CSS: ~lines 3615–3740 (`.st-key-onboard_demo`, `.demo-*`)
-- Responsive CSS: ~lines 3745–3770 (mobile layout/button) & lines 260–310 (screen padding)
+CSS lives in assets/styles/, loaded by ui/theme.py. Line numbers in app.py are not tracked.

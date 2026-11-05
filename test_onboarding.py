@@ -179,8 +179,9 @@ class TestOnboardingPolish(unittest.TestCase):
 
     def test_demo_entry_preserved_but_demoted(self):
         import re
+        from ui.theme import load_css
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+                                "app.py"), encoding="utf-8").read() + load_css()
         flat = re.sub(r"\s+", " ", src)
         # demo CTA lives in the compact live-demo card only (top-bar entry removed per redesign)
         self.assertIn('key="btn_welcome_demo"', flat)
@@ -195,8 +196,9 @@ class TestOnboardingPolish(unittest.TestCase):
         # the inner body scrolls (flex:1 + min-height:0 + overflow-y:auto).
         # Demo lives outside the card; review renders inside the same card.
         import re
+        from ui.theme import load_css
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+                                "app.py"), encoding="utf-8").read() + load_css()
         flat = re.sub(r"\s+", " ", src)
         self.assertIn('with st.container(border=True, key="onboard_panel"):', flat)
         self.assertNotIn("height=620", flat)
@@ -249,16 +251,18 @@ class TestClickableCards(unittest.TestCase):
         self.assertIn('<span data-onb-card="manual">', src)
 
     def test_card_css_states(self):
+        from ui.theme import load_css
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+                                "app.py"), encoding="utf-8").read() + load_css()
         for bit in (".onb-path-card:hover", ".onb-path-card:focus-visible",
                     "outline: 2px solid #10b981", "cursor: pointer"):
             self.assertIn(bit, src)
 
     def test_bridge_wired_after_cards(self):
         import re
+        from ui.theme import load_css
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+                                "app.py"), encoding="utf-8").read() + load_css()
         flat = re.sub(r"\s+", " ", src)
         self.assertIn("st.html(onb_path_cards_script(), unsafe_allow_javascript=True)", flat)
 

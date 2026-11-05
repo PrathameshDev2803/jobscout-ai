@@ -1,0 +1,561 @@
+/* Form Input Scale & Styling */
+div[data-testid="stTextInput"] label, div[data-testid="stFileUploader"] label {
+    font-size: 14.5px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+    color: #f1f5f9 !important;
+    margin-bottom: 6px !important;
+}
+div[data-testid="stTextInput"] input {
+    font-size: 15.5px !important;
+    line-height: 1.5 !important;
+    padding: 12px 14px !important;
+    min-height: 48px !important;
+    border-radius: 9px !important;
+    background: #090d16 !important;
+    border: 1px solid #2a3650 !important;
+    color: #f1f5f9 !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+div[data-testid="stTextInput"] input::placeholder,
+div[data-testid="stTextArea"] textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1 !important;
+}
+div[data-testid="stTextInput"] input:focus {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+    background: #0c121d !important;
+}
+/* Jobs filter row: consistent heights, aligned Broad action */
+.st-key-modecard div[data-testid="stTextInput"] input {
+    min-height: 48px !important;
+}
+.st-key-modecard div[data-testid="stButton"] button {
+    min-height: 48px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+    border-radius: 9px !important;
+}
+.st-key-modecard div[data-testid="stButton"] button[kind="secondary"] {
+    color: #f1f5f9 !important;
+    background: #162032 !important;
+    border: 1px solid #2a3650 !important;
+}
+.st-key-modecard div[data-testid="stButton"] button[kind="secondary"]:hover {
+    border-color: #10b981 !important;
+    color: #ffffff !important;
+}
+
+/* Resume Upload Custom Zone */
+div[data-testid="stFileUploader"] section {
+    background: rgba(16, 185, 129, 0.03) !important;
+    border: 1.5px dashed rgba(16, 185, 129, 0.35) !important;
+    border-radius: 12px !important;
+    padding: 1.3rem 1.1rem !important;
+    transition: all 0.2s ease !important;
+    text-align: center !important;
+}
+div[data-testid="stFileUploader"] section:hover {
+    background: rgba(16, 185, 129, 0.07) !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.15) !important;
+}
+div[data-testid="stFileUploader"] button {
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+}
+
+/* Hide confusing '+' button when a resume file is attached (prevents accidental replace) */
+div[data-testid="stFileUploader"] button[aria-label="Add files"],
+div[data-testid="stFileUploader"] button[aria-label*="Add files"],
+div[data-testid="stFileUploader"] button[aria-label*="Add"],
+div[data-testid="stFileUploaderDropzone"] button[aria-label="Add files"],
+div[data-testid="stFileUploaderDropzone"] button[aria-label*="Add"],
+div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([aria-label*="Delete"]):not([aria-label*="delete"]):not([aria-label*="Remove"]):not([aria-label*="remove"]) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Uploaded file card */
+.file-uploaded-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-top: 8px;
+}
+.file-card-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.file-card-check {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+}
+.file-card-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+.file-card-meta {
+    font-size: 11.5px;
+    color: #94a3b8;
+}
+.file-card-badge {
+    font-size: 11px;
+    font-weight: 750;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+/* Compact onboarding panel: single visible path, tighter vertical rhythm.
+   Native focus indicators untouched (keyboard/a11y preserved). */
+.onboard-header-sub { margin-bottom: clamp(4px, 0.8vh, 8px); }
+.recruiter-tour-card { padding: 0 !important; margin: 0 !important; }
+.or-separator { margin: clamp(6px, 1.2vh, 12px) 0 clamp(6px, 1vh, 10px) 0; }
+.file-uploaded-card { padding: 8px 12px; }
+/* Clickable onboarding path cards (class added by JS bridge; buttons always work without it) */
+.onb-path-card { cursor: pointer; }
+.onb-path-card:hover { border-color: rgba(16, 185, 129, 0.5) !important; }
+.onb-path-card:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+
+/* Fixed-size onboarding wizard: genuine modal-like card.
+   Root cause (measured in headless Chrome 1440x900, Streamlit 1.64):
+   Step 1 outer = 531.5x758.7px, Step 2 outer = 531.5x868.4px (+109.8px) while the
+   inner body stayed 380px with no overflow. The expanding parent is
+   .st-key-onboard_panel itself (height:auto, maxHeight:none, overflow:visible):
+   Step 2 mounts a remember row + footer OUTSIDE the fixed inner body, and
+   error/status messages render after the footer inside the panel.
+   Fix: constrain the OUTER card with a real height (not min-height alone, which
+   still allows growth), flex-column layout, and scroll ONLY the inner viewport.
+   Observed DOM (verified, not guessed): DIV.stVerticalBlock.st-key-onboard_panel
+   (display:flex, flex-direction:column) whose children are
+   DIV[data-testid="stLayoutWrapper"] wrappers (native height= becomes
+   flex:0 0 Npx on the wrapper) each holding DIV.stVerticalBlock.st-key-*.
+   Structural hooks below use the documented container-key classes; the single
+   wrapper combinator targets the observed parent/child testids. */
+.st-key-onboard_panel {
+    height: min(720px, calc(100vh - 180px)) !important;
+    max-height: calc(100vh - 120px) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    /* ponytail: Streamlit emotion gives vertical blocks flex:1 1 0% — the 0%
+       flex-basis would defeat height in the column layout. flex:none restores it. */
+    flex: 0 0 auto !important;
+}
+.st-key-onboard_panel > div[data-testid="stLayoutWrapper"] {
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+}
+/* Header + footer wrappers: fixed chrome, never scroll, never grow the card. */
+.st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_head),
+.st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_foot) {
+    flex: 0 0 auto !important;
+    overflow: visible !important;
+}
+.st-key-onboard_head,
+.st-key-onboard_step_foot {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    box-sizing: border-box !important;
+}
+.st-key-onboard_step_foot {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    padding-top: 0.65rem;
+}
+/* Body wrapper: the ONLY flexible child — absorbs all remaining card height. */
+.st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_body) {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+/* Inner content viewport: the ONLY scroller. No native height= param is used
+   (it would pin flex-basis and fight the flex layout); sizing comes from flex. */
+.st-key-onboard_step_body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    box-sizing: border-box !important;
+    padding-right: 2px;
+    scroll-padding: 8px;
+}
+/* Bare element containers directly in the panel (e.g. zero-height script
+   bridges) must never become flexible spacers. */
+.st-key-onboard_panel > div[data-testid="stElementContainer"] {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+}
+@media (max-width: 640px) {
+    /* Global card safety & overflow prevention */
+    .st-key-onboard_panel * {
+        box-sizing: border-box !important;
+    }
+    .st-key-onboard_panel div[data-testid="stColumn"],
+    .st-key-onboard_panel div[data-testid="stLayoutWrapper"],
+    .st-key-onboard_panel div[data-testid="stVerticalBlock"],
+    .st-key-onboard_panel div[data-testid="stHorizontalBlock"] {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* Card/step container: unlock height and remove nested scrolling */
+    .st-key-onboard_panel {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 12px 0 !important;
+        padding: 16px 16px 72px 16px !important;
+        flex: 0 0 auto !important;
+    }
+    .st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_body) {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    .st-key-onboard_step_body {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+        overflow-x: visible !important;
+        min-height: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    /* Remember me + Duration selector row */
+    .st-key-onboard_head div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        row-gap: 10px !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_head div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    .st-key-onboard_head div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-onb_remember_duration,
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .st-key-onb_remember_duration div[role="radiogroup"],
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] div[role="radiogroup"],
+    .st-key-onb_remember_duration [data-testid="stSegmentedControl"] {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .st-key-onb_remember_duration button,
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] button,
+    .st-key-onb_remember_duration [role="radio"],
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] [role="radio"] {
+        flex: 1 1 0% !important;
+        text-align: center !important;
+        min-height: 40px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 13px !important;
+    }
+
+    /* Dropzone styling */
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section {
+        padding: 16px !important;
+        box-sizing: border-box !important;
+        max-width: 100% !important;
+        border-radius: 12px !important;
+    }
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section > div,
+    .st-key-onboard_panel div[data-testid="stFileUploaderDropzone"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        text-align: center !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section button {
+        margin: 0 !important;
+        min-height: 40px !important;
+    }
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section span,
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section small {
+        text-align: center !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        display: block !important;
+    }
+
+    /* Privacy caption */
+    .st-key-onboard_panel div[data-testid="stCaptionContainer"] {
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+
+    /* Location & Target Role column stack */
+    .st-key-onboard_step_body div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_step_body div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    .st-key-onboard_step_body div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+
+    /* All inputs: 100% width, min-height 44px, 16px font */
+    .st-key-onboard_panel div[data-testid="stTextInput"] input,
+    .st-key-onboard_panel div[data-testid="stTextArea"] textarea,
+    .st-key-onboard_panel div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 16px !important;
+        min-height: 44px !important;
+        box-sizing: border-box !important;
+    }
+    .st-key-onboard_panel div[data-testid="stTextInput"],
+    .st-key-onboard_panel div[data-testid="stTextArea"],
+    .st-key-onboard_panel div[data-testid="stFileUploader"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* Footer buttons */
+    .st-key-onboard_step_foot {
+        width: 100% !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+        padding-top: 12px !important;
+    }
+    .st-key-onboard_step_foot div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_step_foot div[data-testid="stColumn"],
+    .st-key-onboard_step_foot div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-onboard_step_foot div[data-testid="stButton"],
+    .st-key-onboard_step_foot div[data-testid="stButton"] button {
+        width: 100% !important;
+        min-height: 44px !important;
+        height: auto !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.3 !important;
+        padding: 10px 14px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+}
+
+/* Launch CTA button */
+.st-key-onboard_panel div[data-testid="stButton"] button[kind="primary"] {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+    color: #ffffff !important;
+    font-size: 15.5px !important;
+    font-weight: 750 !important;
+    padding: 0.8rem 1.6rem !important;
+    border-radius: 10px !important;
+    border: none !important;
+    box-shadow: 0 6px 22px rgba(16, 185, 129, 0.38) !important;
+    letter-spacing: -0.01em !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-onboard_panel div[data-testid="stButton"] button[kind="primary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 8px 28px rgba(16, 185, 129, 0.5) !important;
+}
+
+/* Confirm screen: centered reveal card, quiet by design */
+.confirm-wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 4px;
+}
+.confirm-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #10b981;
+    margin-bottom: 6px;
+}
+.confirm-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #f8fafc;
+    margin: 0 0 4px 0;
+}
+.confirm-sub {
+    font-size: 13.5px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+.confirm-card {
+    background: #0b0f19;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 14px;
+}
+.tw-line { margin-bottom: 6px; }
+.tw-name { font-size: 24px; font-weight: 800; color: #f8fafc; letter-spacing: -0.02em; }
+.tw-role { font-size: 15px; font-weight: 650; color: #34d399; }
+.tw-fact { font-size: 13px; color: #94a3b8; }
+.tw-label {
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin: 14px 0 4px 0;
+}
+.tw-active .tw-text::after {
+    content: '▍';
+    color: #10b981;
+    animation: tw-blink 0.8s steps(1) infinite;
+}
+@keyframes tw-blink { 50% { opacity: 0; } }
+.confirm-sec-title {
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin: 0 0 8px 0;
+    padding-top: 4px;
+}
+.confirm-exp-role { font-size: 14px; font-weight: 700; color: #f1f5f9; }
+.confirm-exp-sub { font-size: 12.5px; color: #94a3b8; margin-bottom: 4px; }
+.confirm-exp-bullets { font-size: 12.5px; color: #cbd5e1; margin: 0 0 10px 0; padding-left: 16px; }
+.confirm-exp-bullets li { margin-bottom: 2px; }
+.confirm-link { font-size: 12.5px; color: #cbd5e1; margin-bottom: 2px; }
+.confirm-link span { color: #64748b; }
+.sr-only {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+div[data-testid="stButton"] button:focus-visible,
+div[data-testid="stTextInput"] input:focus-visible {
+    outline: 2px solid #10b981 !important;
+    outline-offset: 2px !important;
+}
+/* Jobs readability: spacing scale, content measure, overflow guards */
+.st-key-modecard div[data-testid="stHorizontalBlock"] {
+    gap: 12px !important;
+}
+.st-key-modecard p, .ats-banner, .panel-hint {
+    overflow-wrap: break-word;
+}
+div[data-testid="stColumn"] {
+    min-width: 0 !important;
+}
+.platform-card, .st-key-modecard {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+/* ponytail: progressive columns — 5-up on wide desktop, wrap naturally as
+   space shrinks instead of squeezing cards; Streamlit stacks natively ~640px */
+@media (max-width: 1100px) {
+    .block-container {
+        padding-left: 1.25rem !important;
+        padding-right: 1.25rem !important;
+    }
+    .st-key-modecard div[data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap;
+    }
+    .st-key-modecard div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        flex: 1 1 220px !important;
+        min-width: 220px;
+    }
+}
+@media (max-width: 1024px) {
+    .platform-card { min-height: 0; }
+}
+@media (max-width: 640px) {
+    .st-key-modecard div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        flex: 1 1 100% !important;
+        min-width: 0;
+    }
+}
+@media (max-width: 640px) {
+    .confirm-card { padding: 16px; }
+    .confirm-title { font-size: 22px; }
+    .tw-name { font-size: 21px; }
+    .workspace-header { margin-top: 8px; margin-bottom: 10px; }
+    .st-key-modecard {
+        padding: 16px 14px !important;
+        margin: 10px 0 14px 0 !important;
+    }
+    .ats-banner, .panel-hint {
+        font-size: 14px !important;
+        max-width: 100% !important;
+    }
+    .platform-card { padding: 14px !important; }
+    .platform-name { font-size: 15px !important; }
+    .platform-desc { font-size: 13.5px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tw-active .tw-text::after { display: none; }
+}
+

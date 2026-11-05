@@ -19,8 +19,9 @@ APP_PATH = os.path.join(ROOT_DIR, "app.py")
 class TestNavbarLayout(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from ui.theme import load_css
         with open(APP_PATH, "r", encoding="utf-8") as f:
-            cls.src = f.read()
+            cls.src = f.read() + load_css()
 
     def test_top_navbar_container_present(self):
         self.assertIn('with st.container(key="top_navbar"):', self.src)

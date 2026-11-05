@@ -18,8 +18,9 @@ APP_PATH = os.path.join(ROOT_DIR, "app.py")
 class TestJobFitWorkflow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from ui.theme import load_css
         with open(APP_PATH, "r", encoding="utf-8") as f:
-            cls.src = f.read()
+            cls.src = f.read() + load_css()
 
     def test_css_classes_present(self):
         self.assertIn(".detected-card", self.src)

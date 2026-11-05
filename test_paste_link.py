@@ -159,8 +159,9 @@ class TestFetchJobFromUrl(unittest.TestCase):
 
 class TestDetectedJobFlowArchitecture(unittest.TestCase):
     def setUp(self):
+        from ui.theme import load_css
         with open(os.path.join(os.path.dirname(__file__), "app.py"), "r", encoding="utf-8") as f:
-            self.app_src = f.read()
+            self.app_src = f.read() + load_css()
 
     def test_detected_job_not_inside_platforms_tab_branch(self):
         # Verifies Issue 1: Detected Job & Tailoring Output Area is NOT indented under if _ft_idx == 2:

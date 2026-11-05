@@ -1,0 +1,845 @@
+/* --- Product Proposition & Split Onboarding Screen Styles (Intentional Hierarchy) --- */
+.st-key-onb_top_bar {
+    padding: clamp(2px, 0.4vh, 6px) 0 clamp(6px, 1vh, 12px) 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    margin-bottom: clamp(8px, 1.6vh, 16px) !important;
+}
+.app-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 20px;
+    font-weight: 850;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+}
+.brand-bolt {
+    color: #f59e0b;
+    font-size: 19px;
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.4));
+}
+.brand-name {
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 850;
+    letter-spacing: 0.02em;
+}
+.app-brand-badge {
+    font-size: 10px;
+    font-weight: 800;
+    color: #00c875;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+    margin-left: 2px;
+}
+.st-key-btn_top_demo_action button {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    padding: 6px 14px !important;
+    height: 38px !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-btn_top_demo_action button:hover {
+    border-color: #00c875 !important;
+    color: #00c875 !important;
+    background: rgba(0, 200, 117, 0.06) !important;
+}
+
+/* Left Proposition Column - Minimal & Clean */
+.prop-container {
+    padding-right: 1.5rem;
+    padding-top: 0.2rem;
+}
+.prop-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 200, 117, 0.08);
+    border: 1px solid rgba(0, 200, 117, 0.22);
+    color: #00c875;
+    font-size: 10.5px;
+    font-weight: 750;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: clamp(6px, 1vh, 12px);
+}
+.prop-eyebrow .eyebrow-dot {
+    font-size: 8px;
+    color: #00c875;
+}
+.prop-headline {
+    font-size: clamp(2.25rem, 5.5vh, 3.5rem) !important;
+    font-weight: 850;
+    letter-spacing: -0.035em;
+    color: #ffffff !important;
+    line-height: 1.08 !important;
+    margin: 0 0 clamp(8px, 1.4vh, 16px) 0 !important;
+}
+.prop-headline .prop-highlight {
+    color: #00c875 !important;
+}
+.prop-desc {
+    font-size: 14.5px;
+    color: #94a3b8;
+    line-height: 1.45;
+    margin-bottom: clamp(10px, 1.6vh, 18px);
+    max-width: 490px;
+}
+
+/* Minimal Spotlight Preview Card */
+.preview-card-wrap {
+    background: #0d131f;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: clamp(14px, 2vh, 22px) clamp(16px, 2.4vh, 28px);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+    max-width: 490px;
+}
+.preview-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 0.75rem;
+}
+.preview-job-title {
+    font-size: 17px;
+    font-weight: 750;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+.preview-job-meta {
+    font-size: 12px;
+    color: #8892b0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+.preview-job-meta .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.preview-score-badge {
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    color: #00c875;
+    font-size: 11.5px;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.preview-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 1rem;
+}
+.pchip {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-weight: 600;
+}
+.pchip.hit {
+    background: rgba(0, 200, 117, 0.12);
+    color: #00c875;
+    border: 1px solid rgba(0, 200, 117, 0.28);
+}
+.pchip.gap {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.28);
+}
+.preview-bar-track {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.preview-bar-fill {
+    height: 100%;
+    background: #00c875;
+    border-radius: 999px;
+    box-shadow: 0 0 10px rgba(0, 200, 117, 0.5);
+}
+
+/* Hero benefit points under the sample card */
+.prop-benefits {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4px, 0.8vh, 8px);
+    margin-top: clamp(8px, 1.4vh, 16px);
+    max-width: 490px;
+}
+.prop-benefit {
+    font-size: 12.5px;
+    color: #cbd5e1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    line-height: 1.5;
+}
+.prop-benefit .tick-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 200, 117, 0.16);
+    color: #00c875;
+    font-size: 10px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+/* Right Column: Clean Action Panel (legacy column selector kept for compat) */
+div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #0d131f !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+}
+/* Stable outer onboarding panel */
+.st-key-onboard_panel {
+    background: #0d131f !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
+    padding: clamp(14px, 2vh, 22px) clamp(16px, 2.4vh, 28px) !important;
+}
+.onboard-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.25rem;
+}
+.onboard-user-icon {
+    font-size: 18px;
+    color: #00c875;
+}
+.onboard-header-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+}
+.onboard-header-sub {
+    font-size: 12px;
+    color: #8892b0;
+    line-height: 1.5;
+    margin-bottom: 0.95rem;
+}
+
+/* Recruiter Tour Card inside Action Panel (legacy) */
+.recruiter-tour-card {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.tour-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-bottom: 0.45rem;
+}
+.tour-badge {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #00c875;
+    background: rgba(0, 200, 117, 0.12);
+    border: 1px solid rgba(0, 200, 117, 0.35);
+    padding: 2px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+.tour-meta-tag {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 500;
+    line-height: 1.2;
+}
+.tour-title {
+    font-size: 15.5px;
+    font-weight: 750;
+    color: #ffffff;
+    margin-bottom: 0.25rem;
+    line-height: 1.3;
+}
+.tour-desc {
+    font-size: 12px;
+    color: #8892b0;
+    line-height: 1.45;
+}
+.st-key-btn_recruiter_tour {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.st-key-btn_recruiter_tour button {
+    border-radius: 50% !important;
+    width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    max-width: 44px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #0d281e !important;
+    border: 1px solid rgba(0, 200, 117, 0.4) !important;
+    color: #00c875 !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-btn_recruiter_tour button:hover {
+    background: #00c875 !important;
+    color: #000000 !important;
+    border-color: #00c875 !important;
+    box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
+}
+
+/* Demo card — Interactive Developer Workspace */
+.st-key-onboard_demo {
+    background: #080e18 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    padding: clamp(14px, 2vh, 22px) clamp(16px, 2.4vh, 28px) !important;
+    box-sizing: border-box !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+    margin-bottom: clamp(4px, 0.8vh, 8px) !important;
+}
+.st-key-onboard_demo:hover {
+    border-color: rgba(0, 200, 117, 0.35) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Ensure inner elements flow cleanly with no scrollbars or overflows */
+.st-key-onboard_demo div[data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+/* Header row: Terminal Icon and LIVE DEMO badge aligned on one row */
+.demo-card-head {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-bottom: clamp(6px, 1vh, 10px) !important;
+}
+
+.demo-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 8px !important;
+    background: rgba(0, 200, 117, 0.1) !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    color: #00c875 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    line-height: 1 !important;
+    box-sizing: border-box !important;
+}
+
+.demo-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    background: rgba(0, 200, 117, 0.1) !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    color: #00c875 !important;
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    padding: 3px 9px !important;
+    border-radius: 999px !important;
+    white-space: nowrap !important;
+    line-height: 1.2 !important;
+}
+
+/* Title — clear hierarchy and high contrast */
+.demo-title {
+    font-size: 18.5px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    margin: 0 0 0.35rem 0 !important;
+    line-height: 1.3 !important;
+    letter-spacing: -0.01em !important;
+}
+
+/* Description — readable, clean spacing, high legibility */
+.demo-desc {
+    font-size: 13.5px !important;
+    color: #94a3b8 !important;
+    line-height: 1.45 !important;
+    margin: 0 0 clamp(8px, 1.2vh, 14px) 0 !important;
+    white-space: normal !important;
+}
+
+/* Explore Demo Button — left-aligned with content */
+.st-key-btn_welcome_demo {
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: flex-start !important;
+    width: auto !important;
+}
+
+.st-key-btn_welcome_demo button {
+    background: #03281e !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
+    color: #ffffff !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 18px !important;
+    width: auto !important;
+    min-width: 130px !important;
+    transition: all 0.15s ease !important;
+    box-shadow: none !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+}
+
+.st-key-btn_welcome_demo button:hover {
+    border-color: #00c875 !important;
+    background: #043a2a !important;
+    color: #00c875 !important;
+    box-shadow: 0 0 12px rgba(0, 200, 117, 0.25) !important;
+}
+
+.st-key-btn_welcome_demo button:active {
+    background: #022519 !important;
+    border-color: #00c875 !important;
+    transform: translateY(0.5px) !important;
+}
+
+.st-key-btn_welcome_demo button:focus-visible {
+    outline: 2px solid #00c875 !important;
+    outline-offset: 2px !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .st-key-onboard_demo {
+        padding: 1rem 1.15rem !important;
+    }
+    .demo-title {
+        font-size: 16.5px !important;
+    }
+    .demo-desc {
+        font-size: 13px !important;
+        line-height: 1.45 !important;
+        margin-bottom: 0.85rem !important;
+    }
+    .st-key-btn_welcome_demo {
+        width: 100% !important;
+    }
+    .st-key-btn_welcome_demo button {
+        width: 100% !important;
+        min-width: auto !important;
+    }
+}
+
+/* Top bar brand spacing */
+.st-key-onb_top_bar {
+    margin-bottom: clamp(6px, 1.2vh, 12px) !important;
+}
+
+/* Subtle divider between Tour and Upload */
+.or-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: clamp(6px, 1.2vh, 12px) 0 clamp(6px, 1vh, 10px) 0 !important;
+}
+.or-separator::before,
+.or-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.or-separator span {
+    padding: 0 12px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+/* Step 1 Dual Option Cards */
+.st-key-onb_card_upload {
+    background: #090e17 !important;
+    border: 1.5px solid #00c875 !important;
+    border-radius: 10px !important;
+    padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1.8vh, 16px) !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-onb_card_upload div[data-testid="stVerticalBlock"],
+.st-key-onb_card_manual div[data-testid="stVerticalBlock"] {
+    gap: clamp(4px, 0.8vh, 8px) !important;
+}
+.st-key-onb_card_upload .onb-path-header,
+.st-key-onb_card_manual .onb-path-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0.25rem;
+}
+.onb-path-icon {
+    font-size: 14px;
+}
+.onb-path-title {
+    font-size: 14px;
+    font-weight: 750;
+    color: #ffffff;
+}
+.onb-path-desc {
+    font-size: 11px;
+    color: #8892b0;
+    line-height: 1.4;
+    margin-bottom: clamp(4px, 0.8vh, 8px) !important;
+    min-height: 28px;
+}
+.st-key-btn_onb_goto_upload button {
+    background: #00c875 !important;
+    color: #000000 !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+    border-radius: 8px !important;
+    border: none !important;
+    height: 38px !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_onb_goto_upload button:hover {
+    background: #00df82 !important;
+    box-shadow: 0 4px 14px rgba(0, 200, 117, 0.4) !important;
+}
+.st-key-onb_card_manual {
+    background: #090e17 !important;
+    border: 1px solid #1e293b !important;
+    border-radius: 10px !important;
+    padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1.8vh, 16px) !important;
+    transition: all 0.2s ease !important;
+}
+.st-key-onb_card_manual:hover {
+    border-color: rgba(0, 200, 117, 0.4) !important;
+}
+.st-key-btn_onb_goto_manual button {
+    background: #121824 !important;
+    border: 1px solid #2a384c !important;
+    color: #cbd5e1 !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+    border-radius: 8px !important;
+    height: 38px !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_onb_goto_manual button:hover {
+    border-color: #00c875 !important;
+    color: #ffffff !important;
+    background: #182232 !important;
+}
+/* Step 1 clean end: hide disabled bottom footer on step 1 */
+.st-key-onboard_panel:has(.onb-step-1) .st-key-onboard_step_foot {
+    display: none !important;
+}
+.st-key-onboard_panel:has(.onb-step-1) {
+    height: auto !important;
+    max-height: none !important;
+}
+
+/* Row preservation for Topbar and Demo Card */
+.st-key-onb_top_bar div[data-testid="stHorizontalBlock"] {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+}
+.st-key-onb_top_bar div[data-testid="stColumn"]:first-child {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+.st-key-onb_top_bar div[data-testid="stColumn"]:last-child {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+/* onboard_demo columns cleanup (legacy) */
+
+/* Tablet & Mobile Stacking for Landing Page */
+@media (max-width: 1023px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
+        flex-direction: column !important;
+        gap: 1.5rem !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .prop-container {
+        padding-right: 0 !important;
+        margin-bottom: 1.5rem !important;
+    }
+    .prop-headline {
+        font-size: 2.6rem !important;
+    }
+}
+
+/* Short laptop screen optimization (1280x720 and similar) */
+@media (min-width: 1024px) and (max-height: 760px) {
+    .block-container {
+        padding-top: 10px !important;
+        padding-bottom: 12px !important;
+    }
+    .st-key-onb_top_bar {
+        padding: 2px 0 6px 0 !important;
+        margin-bottom: 8px !important;
+    }
+    .prop-eyebrow {
+        margin-bottom: 6px !important;
+        padding: 3px 8px !important;
+    }
+    .prop-headline {
+        font-size: 2.15rem !important;
+        line-height: 1.08 !important;
+        margin-bottom: 6px !important;
+    }
+    .prop-desc {
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+        margin-bottom: 10px !important;
+    }
+    .preview-card-wrap {
+        padding: 10px 14px !important;
+    }
+    .preview-chips-row {
+        margin-bottom: 8px !important;
+    }
+    .preview-title-row {
+        margin-bottom: 6px !important;
+    }
+    .prop-benefits {
+        margin-top: 8px !important;
+        gap: 4px !important;
+    }
+    .prop-benefit {
+        font-size: 11.5px !important;
+        line-height: 1.35 !important;
+    }
+    .st-key-onboard_demo {
+        padding: 10px 14px !important;
+        margin-bottom: 4px !important;
+    }
+    .demo-card-head {
+        margin-bottom: 4px !important;
+    }
+    .demo-icon {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+        font-size: 13px !important;
+    }
+    .demo-title {
+        font-size: 16px !important;
+        margin-bottom: 2px !important;
+    }
+    .demo-desc {
+        font-size: 12px !important;
+        line-height: 1.35 !important;
+        margin-bottom: 8px !important;
+    }
+    .st-key-btn_welcome_demo button {
+        height: 32px !important;
+        min-height: 32px !important;
+        font-size: 12.5px !important;
+    }
+    .or-separator {
+        margin: 5px 0 4px 0 !important;
+    }
+    .st-key-onboard_panel {
+        padding: 10px 14px !important;
+    }
+    .onboard-header-row {
+        margin-bottom: 2px !important;
+    }
+    .onboard-header-title {
+        font-size: 1.25rem !important;
+    }
+    .onboard-header-sub {
+        font-size: 11.5px !important;
+        margin-bottom: 6px !important;
+    }
+    .st-key-onb_card_upload,
+    .st-key-onb_card_manual {
+        padding: 8px 10px !important;
+    }
+    .onb-path-header {
+        margin-bottom: 2px !important;
+    }
+    .onb-path-desc {
+        font-size: 10.5px !important;
+        line-height: 1.3 !important;
+        margin-bottom: 6px !important;
+        min-height: 26px !important;
+    }
+    .st-key-btn_onb_goto_upload button,
+    .st-key-btn_onb_goto_manual button {
+        height: 32px !important;
+        font-size: 12px !important;
+    }
+}
+@media (max-width: 640px) {
+    .st-key-onboard_panel div[data-testid="stHorizontalBlock"] {
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+    }
+    .st-key-onboard_panel div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-onboard_panel div[data-testid="stColumn"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+    .prop-headline {
+        font-size: 2.1rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .prop-desc {
+        font-size: 13.5px !important;
+    }
+    .preview-card-wrap {
+        padding: 1rem !important;
+    }
+    .app-brand {
+        font-size: 16px !important;
+        gap: 6px !important;
+    }
+    .brand-bolt {
+        font-size: 16px !important;
+    }
+    .brand-name {
+        font-size: 16px !important;
+    }
+    .app-brand-badge {
+        font-size: 9px !important;
+        padding: 1px 5px !important;
+    }
+    .st-key-btn_top_demo_action button {
+        padding: 4px 10px !important;
+        font-size: 12px !important;
+        height: 32px !important;
+        white-space: nowrap !important;
+    }
+}
+
+/* Responsive Preview Job Card (320px - 360px screens) */
+@media (max-width: 360px) {
+    .preview-card-wrap {
+        padding: 12px !important;
+        box-sizing: border-box !important;
+        max-width: 100% !important;
+    }
+    .preview-title-row {
+        gap: 8px !important;
+        margin-bottom: 8px !important;
+    }
+    .preview-title-row > div {
+        min-width: 0 !important;
+    }
+    .preview-job-title {
+        font-size: 15px !important;
+        line-height: 1.2 !important;
+        margin-bottom: 4px !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+    }
+    .preview-score-badge {
+        font-size: 10.5px !important;
+        padding: 3px 7px !important;
+        flex-shrink: 0 !important;
+        align-self: flex-start !important;
+    }
+    .preview-job-meta {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        column-gap: 10px !important;
+        row-gap: 4px !important;
+        align-items: center !important;
+        font-size: 12px !important;
+    }
+    .preview-job-meta .meta-item {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        font-size: 12px !important;
+        line-height: 1.3 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+    .preview-job-meta .meta-icon {
+        width: 14px !important;
+        font-size: 12px !important;
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .preview-chips-row {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 5px !important;
+        margin-bottom: 0 !important;
+    }
+    .pchip {
+        font-size: 11px !important;
+        padding: 3px 7px !important;
+        line-height: 1.2 !important;
+        white-space: nowrap !important;
+    }
+    .preview-bar-track {
+        width: 100% !important;
+        margin-top: 8px !important;
+    }
+}
+

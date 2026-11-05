@@ -1,0 +1,920 @@
+/* Top Navbar Styling — Polished Premium SaaS Header */
+.st-key-top_navbar {
+    width: 100% !important;
+    min-height: 60px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    margin-bottom: 1.25rem !important;
+    background: #0b111e !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 12px !important;
+    padding: 0 16px !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+.st-key-top_navbar > div[data-testid="stVerticalBlock"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 58px !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Desktop navbar 3-region grid layout:
+   minmax(0, 1fr) for both outer regions guarantees that Left width == Right width,
+   so the middle 'auto' region is ALWAYS mathematically centered relative to the desktop viewport. */
+@media (min-width: 769px) {
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+        align-items: center !important;
+        align-content: center !important;
+        width: 100% !important;
+        height: 52px !important;
+        min-height: 52px !important;
+        max-height: 52px !important;
+        margin: auto 0 !important;
+        gap: 0 !important;
+    }
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        min-width: 0 !important;
+        width: 100% !important;
+        height: 52px !important;
+        min-height: 52px !important;
+        max-height: 52px !important;
+        display: flex !important;
+        align-items: center !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    /* Region 1: Brand (left-aligned) */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        height: 52px !important;
+    }
+    /* Region 2: Segmented Nav (centered) */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        height: 52px !important;
+        width: auto !important;
+    }
+    /* Region 3: Profile + Settings (right-aligned) */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        height: 52px !important;
+    }
+}
+
+/* Zone 1: Brand */
+.nav-brand-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 18px;
+    height: 44px;
+}
+.nav-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    user-select: none;
+    white-space: nowrap;
+}
+.brand-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    line-height: 1;
+    color: #fb923c;
+    filter: drop-shadow(0 0 6px rgba(251, 146, 60, 0.4));
+}
+.brand-title {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    line-height: 1;
+}
+.nav-v-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) div[data-testid="stElementContainer"],
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) .stMarkdown,
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) div[data-testid="stMarkdownContainer"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 44px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(1) div[data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.st-key-top_navbar div[data-testid="stColumn"]:nth-child(2) div[data-testid="stElementContainer"] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    height: 44px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Zone 2: Navbar Segmented Navigation */
+.st-key-main_nav_selector {
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+.st-key-main_nav_selector label[data-testid="stWidgetLabel"] {
+    display: none !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    width: fit-content !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    gap: 8px !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] > div,
+.st-key-main_nav_selector div[role="radiogroup"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    border-radius: 999px !important;
+    border: 1px solid transparent !important;
+    padding: 7px 16px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    background: transparent !important;
+    position: relative !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button p {
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+}
+
+/* Tab 1 Icon: Find & Tailor (Search outline) */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:nth-child(1) p::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* Tab 2 Icon: Applications (Folder/Document outline) */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:nth-child(2) p::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='16' y1='13' x2='8' y2='13'%3E%3C/line%3E%3Cline x1='16' y1='17' x2='8' y2='17'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='16' y1='13' x2='8' y2='13'%3E%3C/line%3E%3Cline x1='16' y1='17' x2='8' y2='17'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* Tab 3 Icon: My Resumes (Resume File outline) */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:nth-child(3) p::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 7px;
+    vertical-align: middle;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='12' y1='18' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='9' y1='15' x2='15' y2='15'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'%3E%3C/path%3E%3Cpolyline points='14 2 14 8 20 8'%3E%3C/polyline%3E%3Cline x1='12' y1='18' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='9' y1='15' x2='15' y2='15'%3E%3C/line%3E%3C/svg%3E") no-repeat center / contain;
+}
+
+/* Active Navigation State: Elegant subtle dark-teal pill background with thin emerald bottom underline */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="true"] {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    border-color: rgba(16, 185, 129, 0.25) !important;
+    border-bottom: 2px solid #10b981 !important;
+    box-shadow: inset 0 -2px 0 #10b981 !important;
+    padding: 7px 18px !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="true"] p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+/* Inactive Navigation State */
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"] {
+    color: #94a3b8 !important;
+    background: transparent !important;
+    font-weight: 500 !important;
+    border-color: transparent !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"] p {
+    color: #94a3b8 !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"]:hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button[aria-checked="false"]:hover p {
+    color: #ffffff !important;
+}
+.st-key-main_nav_selector div[data-testid="stButtonGroup"] button:focus-visible {
+    outline: 2px solid #10b981 !important;
+    outline-offset: 2px !important;
+}
+
+/* Zone 3: User Cluster (Profile Pill + Settings Button) */
+.st-key-nav_user_cluster,
+.st-key-nav_user_cluster > div[data-testid="stVerticalBlock"] {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 10px !important;
+    width: auto !important;
+    margin-left: auto !important;
+    height: 52px !important;
+}
+.st-key-nav_user_cluster div[data-testid="stElementContainer"] {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 52px !important;
+}
+.st-key-nav_user_cluster .stMarkdown,
+.st-key-nav_user_cluster div[data-testid="stMarkdownContainer"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 52px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 12px;
+}
+.st-key-nav_user_cluster div[data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* User pill styling: 44px height, balanced padding, clean avatar, readable name, location text */
+.user-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 4px 14px 4px 6px;
+    height: 44px;
+    max-height: 44px;
+    box-sizing: border-box;
+    margin: 0 !important;
+    line-height: 1.2;
+    color: #cbd5e1;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    min-width: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.user-pill:hover {
+    background: #131d35;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+.user-avatar-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #4f46e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.user-avatar { font-size: 14px; line-height: 1; color: #ffffff; }
+.user-info-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.2;
+}
+.user-name { font-weight: 600; color: #ffffff; font-size: 13px; white-space: nowrap !important; }
+.user-dot { color: #475569; flex-shrink: 0; }
+.user-loc {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+.user-loc svg {
+    color: #64748b;
+    flex-shrink: 0;
+}
+.user-chevron { color: #94a3b8; display: flex; align-items: center; margin-left: 2px; }
+
+/* Account / hamburger popover button — premium dark tool button */
+.st-key-top_settings_popover {
+    --menu-btn-size: 52px;
+    --menu-radius: 15px;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    width: var(--menu-btn-size) !important;
+    height: var(--menu-btn-size) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: var(--menu-btn-size) !important;
+    height: var(--menu-btn-size) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: var(--menu-btn-size) !important;
+    height: var(--menu-btn-size) !important;
+    min-width: var(--menu-btn-size) !important;
+    min-height: var(--menu-btn-size) !important;
+    max-width: var(--menu-btn-size) !important;
+    max-height: var(--menu-btn-size) !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: var(--menu-radius) !important;
+    background: rgba(15, 23, 42, 0.72) !important;
+    border: 1px solid #2a3a55 !important;
+    color: #e7edf7 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+    transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+                transform 160ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer !important;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button:hover,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button:hover {
+    background: #162033 !important;
+    border-color: #4f5f8a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12),
+                0 0 18px rgba(79, 70, 229, 0.18),
+                0 4px 14px rgba(0, 0, 0, 0.28) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"],
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] {
+    background: #141d30 !important;
+    border-color: rgba(129, 140, 248, 0.55) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.16),
+                0 0 20px rgba(79, 70, 229, 0.20),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button:active,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button:active {
+    transform: scale(0.96) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button:focus-visible,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button:focus-visible {
+    outline: 2px solid #a5b4fc !important;
+    outline-offset: 3px !important;
+}
+/* Hide Streamlit's auto-injected chevron; keep the label node for the accessible name */
+.st-key-top_settings_popover div[data-testid="stPopover"] button span[data-testid="stIconMaterial"],
+.st-key-top_settings_popover div[data-testid="stPopover"] button div[aria-hidden="true"] {
+    display: none !important;
+}
+/* Icon: three 2px lines drawn on the label node, morphing to an X when open */
+.st-key-top_settings_popover div[data-testid="stPopover"] button p,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p {
+    font-size: 0 !important;
+    line-height: 0 !important;
+    color: inherit !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 22px !important;
+    height: 16px !important;
+    position: relative !important;
+    display: block !important;
+    overflow: visible !important;
+    background-image: linear-gradient(currentColor, currentColor) !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 100% 2px !important;
+    transition: background-size 180ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::after,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::after {
+    content: "" !important;
+    position: absolute !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 2px !important;
+    background: currentColor !important;
+    border-radius: 2px !important;
+    transform-origin: center !important;
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::before {
+    top: 0 !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button p::after,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button p::after {
+    bottom: 0 !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"] p,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] p {
+    background-size: 0 2px !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"] p::before,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] p::before {
+    transform: translateY(7px) rotate(45deg) !important;
+}
+.st-key-top_settings_popover div[data-testid="stPopover"] button[aria-expanded="true"] p::after,
+.st-key-top_settings_popover div[data-testid="stPopover"] > button[aria-expanded="true"] p::after {
+    transform: translateY(-7px) rotate(-45deg) !important;
+}
+
+/* Popover dropdown container */
+div[data-testid="stPopoverBody"] {
+    background: #0f141f !important;
+    border: 1px solid #273449 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Responsive Adaptations */
+/* Tablet: 769px to 1024px: first reduce padding and gaps gracefully */
+@media (max-width: 1024px) {
+    .nav-v-divider {
+        display: none !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
+        padding: 0 12px !important;
+        font-size: 13.5px !important;
+    }
+    .user-pill {
+        padding: 5px 10px;
+        gap: 6px;
+        font-size: 13px;
+    }
+    .user-loc {
+        font-size: 12px;
+    }
+}
+
+/* Medium screens: 769px to 880px: hide secondary city label before mobile breakpoint */
+@media (max-width: 880px) and (min-width: 769px) {
+    .user-dot { display: none !important; }
+    .user-loc { display: none !important; }
+}
+
+/* Mobile: <= 768px: deliberate 2-row layout */
+@media (max-width: 768px) {
+    /* Keep the tablet row at its established 44px height; 52px is desktop-only */
+    .st-key-top_settings_popover {
+        --menu-btn-size: 44px;
+        --menu-radius: 13px;
+    }
+    .st-key-nav_user_cluster,
+    .st-key-nav_user_cluster > div[data-testid="stVerticalBlock"] {
+        height: 44px !important;
+    }
+    .st-key-nav_user_cluster div[data-testid="stElementContainer"] {
+        height: 44px !important;
+    }
+    .st-key-nav_user_cluster .stMarkdown,
+    .st-key-nav_user_cluster div[data-testid="stMarkdownContainer"] {
+        height: 44px !important;
+    }
+    .nav-v-divider {
+        display: none !important;
+    }
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        row-gap: 10px !important;
+        column-gap: 0 !important;
+    }
+    /* Brand: row 1 left */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) {
+        order: 1 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+    /* User cluster: row 1 right */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) {
+        order: 2 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 0 !important;
+        margin-left: auto !important;
+    }
+    /* Navigation: row 2 full-width centered */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {
+        order: 3 !important;
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    .brand-title { font-size: 17px; }
+    .brand-icon { font-size: 17px; }
+    .user-dot { display: none !important; }
+    .user-loc { display: none !important; }
+    .user-pill { padding: 5px 9px; font-size: 12.5px; height: 38px; }
+    .st-key-main_nav_selector {
+        width: 100% !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] {
+        width: 100% !important;
+        display: flex !important;
+        padding: 4px !important;
+        border-radius: 12px !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] > div,
+    .st-key-main_nav_selector div[role="radiogroup"] {
+        width: 100% !important;
+        display: flex !important;
+        gap: 4px !important;
+    }
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] button {
+        flex: 1 1 0px !important;
+        font-size: 13px !important;
+        padding: 0 4px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        border-radius: 8px !important;
+    }
+}
+
+/* Mobile: <= 700px (Standard, Compact & Narrow Mobile) */
+@media (max-width: 700px) {
+    /* 1. Navbar Container: 64-72px height, 16px padding, subtle border */
+    .st-key-top_navbar {
+        height: 68px !important;
+        min-height: 68px !important;
+        border-radius: 16px !important;
+        padding: 0 16px !important;
+        margin-bottom: 1.25rem !important;
+        background: #0b111e !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+    }
+    .st-key-top_navbar > div[data-testid="stVerticalBlock"] {
+        height: 100% !important;
+        min-height: 68px !important;
+        justify-content: center !important;
+    }
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        height: 68px !important;
+        min-height: 68px !important;
+        row-gap: 0 !important;
+    }
+    /* Hide desktop center segmented control */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {
+        display: none !important;
+    }
+    /* Brand on left */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(1) {
+        order: 1 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        height: 68px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    .nav-brand-wrap {
+        height: 68px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0 !important;
+    }
+    .nav-brand {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    .brand-icon {
+        font-size: 20px !important;
+        line-height: 1 !important;
+        color: #f59e0b !important;
+    }
+    .brand-title {
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        letter-spacing: -0.01em !important;
+    }
+    .nav-v-divider {
+        display: none !important;
+    }
+
+    /* Right cluster: Avatar + Hamburger Button */
+    .st-key-top_navbar div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(3) {
+        order: 2 !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        margin-left: auto !important;
+        height: 68px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+    }
+    .st-key-nav_user_cluster,
+    .st-key-nav_user_cluster > div[data-testid="stVerticalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 12px !important;
+        height: 68px !important;
+        width: auto !important;
+        margin: 0 !important;
+    }
+    /* Circular user avatar (38px) */
+    .user-pill {
+        padding: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        height: 38px !important;
+        width: 38px !important;
+        min-width: 38px !important;
+        max-width: 38px !important;
+        margin: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: none !important;
+    }
+    .user-avatar-badge {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
+        border: none !important;
+        box-shadow: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .user-avatar {
+        font-size: 15px !important;
+        line-height: 1 !important;
+        color: #ffffff !important;
+    }
+    .user-info-stack,
+    .user-chevron,
+    .user-dot {
+        display: none !important;
+    }
+
+    /* Hamburger menu button — 44×44 touch target, same dark tool language */
+    .st-key-top_settings_popover {
+        --menu-btn-size: 44px;
+        --menu-radius: 13px;
+        width: 44px !important;
+        height: 44px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .st-key-top_settings_popover div[data-testid="stPopover"] {
+        width: 44px !important;
+        height: 44px !important;
+    }
+}
+
+/* Popover mobile navigation menu styling */
+@media (min-width: 701px) {
+    .menu-user-card,
+    .mobile-nav-menu-box,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.st-key-m_nav_jobs),
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.st-key-m_nav_apps),
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.st-key-m_nav_resumes) {
+        display: none !important;
+    }
+}
+@media (max-width: 700px) {
+    div[data-testid="stPopoverBody"] {
+        background: #0b111e !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 16px !important;
+        padding: 14px !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6) !important;
+        min-width: 290px !important;
+        max-width: calc(100vw - 32px) !important;
+    }
+    .menu-user-card {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 10px 12px !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+    }
+    .menu-user-avatar {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%) !important;
+        border: 2px solid rgba(167, 139, 250, 0.4) !important;
+        box-shadow: 0 0 10px rgba(99, 102, 241, 0.3) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 18px !important;
+        color: #ffffff !important;
+        flex-shrink: 0 !important;
+    }
+    .menu-user-details {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+    }
+    .menu-user-name {
+        font-size: 14.5px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        letter-spacing: -0.01em !important;
+    }
+    .menu-user-loc {
+        font-size: 11.5px !important;
+        color: #94a3b8 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+    }
+    .mobile-nav-menu-box {
+        display: block !important;
+        margin-bottom: 2px !important;
+    }
+    .mobile-nav-menu-divider {
+        height: 1px !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        margin: 10px 0 !important;
+    }
+    div[data-testid="stPopoverBody"] button {
+        height: 44px !important;
+        min-height: 44px !important;
+        border-radius: 10px !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        color: #cbd5e1 !important;
+        font-size: 13.5px !important;
+        font-weight: 500 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        padding: 0 14px !important;
+        transition: all 0.15s ease !important;
+        margin-bottom: 6px !important;
+    }
+    div[data-testid="stPopoverBody"] button:hover {
+        background: #1e293b !important;
+        color: #ffffff !important;
+        border-color: rgba(255, 255, 255, 0.18) !important;
+    }
+    div[data-testid="stPopoverBody"] button::after {
+        content: "›" !important;
+        font-size: 20px !important;
+        line-height: 1 !important;
+        color: #64748b !important;
+        margin-left: auto !important;
+        font-weight: 400 !important;
+    }
+    div[data-testid="stPopoverBody"] .active-nav-btn button,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.active-nav-btn) button {
+        background: rgba(16, 185, 129, 0.12) !important;
+        border: 1px solid #10b981 !important;
+        color: #10b981 !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stPopoverBody"] .active-nav-btn button p,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.active-nav-btn) button p {
+        color: #10b981 !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stPopoverBody"] .active-nav-btn button::after,
+    div[data-testid="stPopoverBody"] div[data-testid="stElementContainer"]:has(.active-nav-btn) button::after {
+        color: #10b981 !important;
+    }
+}
+
+/* Ultra-narrow mobile: <= 340px */
+@media (max-width: 340px) {
+    .brand-title {
+        font-size: 16px !important;
+    }
+    .st-key-top_navbar {
+        padding: 0 12px !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .st-key-main_nav_selector div[data-testid="stButtonGroup"] button,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button,
+    .st-key-top_settings_popover div[data-testid="stPopover"] > button,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button p,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button p::before,
+    .st-key-top_settings_popover div[data-testid="stPopover"] button p::after {
+        transition: none !important;
+    }
+}
+
+/* Filter Pills styling (Concept 1: [ All 112 ] [ New 112 ] [ Strong 60 ] ...) */
+div[data-testid="stPills"] {
+    gap: 6px !important;
+}
+div[data-testid="stPills"] button {
+    border-radius: 999px !important;
+    padding: 4px 14px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    border: 1px solid #202738 !important;
+    background: #0f131d !important;
+    color: #94a3b8 !important;
+    transition: all 0.15s ease !important;
+}
+div[data-testid="stPills"] button:hover {
+    border-color: #334155 !important;
+    color: #ffffff !important;
+}
+div[data-testid="stPills"] button[aria-checked="true"] {
+    background: #10b981 !important;
+    color: #04130d !important;
+    font-weight: 750 !important;
+    border-color: #10b981 !important;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3) !important;
+}
+
