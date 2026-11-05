@@ -4361,14 +4361,190 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
     min-height: 0 !important;
 }
 @media (max-width: 640px) {
+    /* Global card safety & overflow prevention */
+    .st-key-onboard_panel * {
+        box-sizing: border-box !important;
+    }
+    .st-key-onboard_panel div[data-testid="stColumn"],
+    .st-key-onboard_panel div[data-testid="stLayoutWrapper"],
+    .st-key-onboard_panel div[data-testid="stVerticalBlock"],
+    .st-key-onboard_panel div[data-testid="stHorizontalBlock"] {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* Card/step container: unlock height and remove nested scrolling */
     .st-key-onboard_panel {
-        height: calc(100vh - 120px) !important;
-        height: calc(100dvh - 120px) !important;
-        max-height: 92vh !important;
-        max-height: 92dvh !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 12px 0 !important;
+        padding: 16px 16px 72px 16px !important;
+        flex: 0 0 auto !important;
+    }
+    .st-key-onboard_panel > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_body) {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
     }
     .st-key-onboard_step_body {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+        overflow-x: visible !important;
         min-height: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    /* Remember me + Duration selector row */
+    .st-key-onboard_head div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        row-gap: 10px !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_head div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    .st-key-onboard_head div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-onb_remember_duration,
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .st-key-onb_remember_duration div[role="radiogroup"],
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] div[role="radiogroup"],
+    .st-key-onb_remember_duration [data-testid="stSegmentedControl"] {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .st-key-onb_remember_duration button,
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] button,
+    .st-key-onb_remember_duration [role="radio"],
+    .st-key-onboard_head div[data-testid="stSegmentedControl"] [role="radio"] {
+        flex: 1 1 0% !important;
+        text-align: center !important;
+        min-height: 40px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 13px !important;
+    }
+
+    /* Dropzone styling */
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section {
+        padding: 16px !important;
+        box-sizing: border-box !important;
+        max-width: 100% !important;
+        border-radius: 12px !important;
+    }
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section > div,
+    .st-key-onboard_panel div[data-testid="stFileUploaderDropzone"] {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        text-align: center !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section button {
+        margin: 0 !important;
+        min-height: 40px !important;
+    }
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section span,
+    .st-key-onboard_panel div[data-testid="stFileUploader"] section small {
+        text-align: center !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        display: block !important;
+    }
+
+    /* Privacy caption */
+    .st-key-onboard_panel div[data-testid="stCaptionContainer"] {
+        font-size: 12px !important;
+        line-height: 1.4 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+
+    /* Location & Target Role column stack */
+    .st-key-onboard_step_body div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_step_body div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    .st-key-onboard_step_body div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+
+    /* All inputs: 100% width, min-height 44px, 16px font */
+    .st-key-onboard_panel div[data-testid="stTextInput"] input,
+    .st-key-onboard_panel div[data-testid="stTextArea"] textarea,
+    .st-key-onboard_panel div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 16px !important;
+        min-height: 44px !important;
+        box-sizing: border-box !important;
+    }
+    .st-key-onboard_panel div[data-testid="stTextInput"],
+    .st-key-onboard_panel div[data-testid="stTextArea"],
+    .st-key-onboard_panel div[data-testid="stFileUploader"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* Footer buttons */
+    .st-key-onboard_step_foot {
+        width: 100% !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+        padding-top: 12px !important;
+    }
+    .st-key-onboard_step_foot div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .st-key-onboard_step_foot div[data-testid="stColumn"],
+    .st-key-onboard_step_foot div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+    }
+    .st-key-onboard_step_foot div[data-testid="stButton"],
+    .st-key-onboard_step_foot div[data-testid="stButton"] button {
+        width: 100% !important;
+        min-height: 44px !important;
+        height: auto !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.3 !important;
+        padding: 10px 14px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
     }
 }
 
