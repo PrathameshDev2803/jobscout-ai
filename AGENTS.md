@@ -1,42 +1,11 @@
-# AGENTS.md
+# Rules
+- **Git**: Run add/commit/push origin main ONLY when message says "push" or "deploy"; otherwise leave changes uncommitted and report. Never commit `.env`, session keys, API secrets, or private data.
+- **Verification**: After editing `app.py`, run `python -m py_compile app.py` once and `git diff --stat` once. No repeated git status calls. Run unit tests (`.venv\Scripts\python.exe -m unittest`) only when requested or when logic (not markup/CSS) changes.
+- **CRLF & Editing**: `app.py` uses CRLF line endings. `edit_file` fails on multi-line matches, so use single-line anchors or one scripted replace on the first attempt. Never retry `edit_file` after a whitespace failure. Do not convert line endings.
+- **Investigation Limit**: For UI requests, limit investigation to 3 searches. If a stray element is not found by then, ask. Exclude `.venv`, `.git`, and `__pycache__`.
+- **Execution & Scope**: Edit only files named. Changes under ~50 lines: edit directly, summarize in 3 lines. Match existing styles/tokens without adding dependencies. Avoid `<` or `&` in `python -c`. Commands >60s stop.
 
-## Primary Directives for AI Agents
-
-### 1. Continuous Live Deployment (Push Live on Update)
-- **Mandatory Rule**: Whenever code, assets, or configuration updates are made and verified, immediately push them live to the remote repository.
-- **Workflow**:
-  1. Verify changes locally (syntax, imports, or test execution).
-  2. Stage modified files:
-     ```bash
-     git add <changed-files>
-     ```
-  3. Commit with a concise, descriptive semantic commit message:
-     ```bash
-     git commit -m "<type>: <brief description of changes>"
-     ```
-  4. Push directly to the live remote:
-     ```bash
-     git push origin main
-     ```
-- **Guardrails**:
-  - Never commit `.env`, session keys, API secrets, or private data.
-  - Verify `git status` to ensure only intended changes are staged and pushed.
-
-### 2. Risk-Based Execution Policy (Execution Efficiency)
-To prevent 10+ minute execution delays on small tasks, scale verification strictly to risk level:
-
-- **Tier 1: Low-Risk / Content-Only Changes** (copy, static labels, HTML text, docstrings):
-  - **Target**: Locate exact string/component directly. Never run unbounded recursive scans.
-  - **Verification**: Fast static check only (`python -m py_compile <file>`).
-  - **Guardrail**: Do NOT run full test discovery, do NOT launch browser sessions, and do NOT investigate unrelated backend/database schemas.
-- **Tier 2: Medium-Risk / Styling Changes** (CSS, layout adjustments, responsive classes):
-  - **Target**: Inspect only the affected component and its scoped styles.
-  - **Verification**: Check syntax and targeted DOM state for affected viewports only. Avoid unrelated browser exploration.
-- **Tier 3: High-Risk / Functional Changes** (business logic, state machines, DB schema, auth):
-  - **Target**: Inspect dependencies and affected workflows.
-  - **Verification**: Run targeted unit tests (`.venv\Scripts\python.exe -m unittest <test_file>.py`). Expand to full test discovery only when cross-cutting risk justifies it.
-
-### 3. Tool & Command Discipline
-- **Search Boundaries**: Always exclude `.venv`, `.git`, and `__pycache__` on filesystem searches.
-- **Test Runner**: Repository uses Python's standard `unittest` via `.venv\Scripts\python.exe` (not `pytest`).
-- **PowerShell Safety**: Avoid complex multi-line inline strings with `<` or `&` inside `python -c` commands.
+# Project Map (`app.py`)
+- Demo workspace card markup: ~lines 7530–7550 (`st-key-onboard_demo`)
+- Demo card CSS: ~lines 3615–3740 (`.st-key-onboard_demo`, `.demo-*`)
+- Responsive CSS: ~lines 3745–3770 (mobile layout/button) & lines 260–310 (screen padding)

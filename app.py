@@ -242,8 +242,10 @@ CSS = """
 /* Global page & canvas cleanup - Expanded scale */
 .block-container {
     max-width: 1360px !important;
-    padding-top: 0.85rem !important;
-    padding-bottom: 3.5rem !important;
+    min-height: 100dvh !important;
+    box-sizing: border-box !important;
+    padding-top: clamp(12px, 2vh, 24px) !important;
+    padding-bottom: clamp(12px, 2vh, 24px) !important;
     padding-left: 2rem !important;
     padding-right: 2rem !important;
 }
@@ -3295,9 +3297,9 @@ div[data-testid="stButton"].st-key-btn_regen_ai_summary button:hover {
 
 /* --- Product Proposition & Split Onboarding Screen Styles (Intentional Hierarchy) --- */
 .st-key-onb_top_bar {
-    padding: 0.2rem 0 0.8rem 0 !important;
+    padding: clamp(2px, 0.4vh, 6px) 0 clamp(6px, 1vh, 12px) 0 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    margin-bottom: 1.5rem !important;
+    margin-bottom: clamp(8px, 1.6vh, 16px) !important;
 }
 .app-brand {
     display: flex;
@@ -3364,19 +3366,19 @@ div[data-testid="stButton"].st-key-btn_regen_ai_summary button:hover {
     letter-spacing: 0.06em;
     padding: 4px 10px;
     border-radius: 999px;
-    margin-bottom: 1.1rem;
+    margin-bottom: clamp(6px, 1vh, 12px);
 }
 .prop-eyebrow .eyebrow-dot {
     font-size: 8px;
     color: #00c875;
 }
 .prop-headline {
-    font-size: 3.25rem;
+    font-size: clamp(2.25rem, 5.5vh, 3.5rem) !important;
     font-weight: 850;
     letter-spacing: -0.035em;
     color: #ffffff !important;
-    line-height: 1.15;
-    margin: 0 0 1rem 0;
+    line-height: 1.08 !important;
+    margin: 0 0 clamp(8px, 1.4vh, 16px) 0 !important;
 }
 .prop-headline .prop-highlight {
     color: #00c875 !important;
@@ -3384,8 +3386,8 @@ div[data-testid="stButton"].st-key-btn_regen_ai_summary button:hover {
 .prop-desc {
     font-size: 14.5px;
     color: #94a3b8;
-    line-height: 1.6;
-    margin-bottom: 1.6rem;
+    line-height: 1.45;
+    margin-bottom: clamp(10px, 1.6vh, 18px);
     max-width: 490px;
 }
 
@@ -3394,7 +3396,7 @@ div[data-testid="stButton"].st-key-btn_regen_ai_summary button:hover {
     background: #0d131f;
     border: 1px solid #1e293b;
     border-radius: 12px;
-    padding: 1.15rem 1.3rem;
+    padding: clamp(14px, 2vh, 22px) clamp(16px, 2.4vh, 28px);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
     max-width: 490px;
 }
@@ -3473,8 +3475,8 @@ div[data-testid="stButton"].st-key-btn_regen_ai_summary button:hover {
 .prop-benefits {
     display: flex;
     flex-direction: column;
-    gap: 9px;
-    margin-top: 1.3rem;
+    gap: clamp(4px, 0.8vh, 8px);
+    margin-top: clamp(8px, 1.4vh, 16px);
     max-width: 490px;
 }
 .prop-benefit {
@@ -3512,7 +3514,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 14px !important;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45) !important;
-    padding: 1.25rem 1.4rem !important;
+    padding: clamp(14px, 2vh, 22px) clamp(16px, 2.4vh, 28px) !important;
 }
 .onboard-header-row {
     display: flex;
@@ -3617,10 +3619,10 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     background: #080e18 !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 14px !important;
-    padding: 1.25rem 1.35rem !important;
+    padding: clamp(14px, 2vh, 22px) clamp(16px, 2.4vh, 28px) !important;
     box-sizing: border-box !important;
     transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-    margin-bottom: 0.5rem !important;
+    margin-bottom: clamp(4px, 0.8vh, 8px) !important;
 }
 .st-key-onboard_demo:hover {
     border-color: rgba(0, 200, 117, 0.35) !important;
@@ -3637,7 +3639,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     display: flex !important;
     align-items: center !important;
     gap: 10px !important;
-    margin-bottom: 0.75rem !important;
+    margin-bottom: clamp(6px, 1vh, 10px) !important;
 }
 
 .demo-icon {
@@ -3689,8 +3691,8 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 .demo-desc {
     font-size: 13.5px !important;
     color: #94a3b8 !important;
-    line-height: 1.55 !important;
-    margin: 0 0 1rem 0 !important;
+    line-height: 1.45 !important;
+    margin: 0 0 clamp(8px, 1.2vh, 14px) 0 !important;
     white-space: normal !important;
 }
 
@@ -3765,7 +3767,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 
 /* Top bar brand spacing */
 .st-key-onb_top_bar {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: clamp(6px, 1.2vh, 12px) !important;
 }
 
 /* Subtle divider between Tour and Upload */
@@ -3773,7 +3775,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     display: flex;
     align-items: center;
     text-align: center;
-    margin: 0.95rem 0 0.85rem 0;
+    margin: clamp(6px, 1.2vh, 12px) 0 clamp(6px, 1vh, 10px) 0 !important;
 }
 .or-separator::before,
 .or-separator::after {
@@ -3795,15 +3797,19 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     background: #090e17 !important;
     border: 1.5px solid #00c875 !important;
     border-radius: 10px !important;
-    padding: 0.95rem !important;
+    padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1.8vh, 16px) !important;
     transition: all 0.2s ease !important;
+}
+.st-key-onb_card_upload div[data-testid="stVerticalBlock"],
+.st-key-onb_card_manual div[data-testid="stVerticalBlock"] {
+    gap: clamp(4px, 0.8vh, 8px) !important;
 }
 .st-key-onb_card_upload .onb-path-header,
 .st-key-onb_card_manual .onb-path-header {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.25rem;
 }
 .onb-path-icon {
     font-size: 14px;
@@ -3816,9 +3822,9 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 .onb-path-desc {
     font-size: 11px;
     color: #8892b0;
-    line-height: 1.45;
-    margin-bottom: 0.8rem;
-    min-height: 32px;
+    line-height: 1.4;
+    margin-bottom: clamp(4px, 0.8vh, 8px) !important;
+    min-height: 28px;
 }
 .st-key-btn_onb_goto_upload button {
     background: #00c875 !important;
@@ -3838,7 +3844,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     background: #090e17 !important;
     border: 1px solid #1e293b !important;
     border-radius: 10px !important;
-    padding: 0.95rem !important;
+    padding: clamp(10px, 1.5vh, 15px) clamp(12px, 1.8vh, 16px) !important;
     transition: all 0.2s ease !important;
 }
 .st-key-onb_card_manual:hover {
@@ -3888,7 +3894,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 /* onboard_demo columns cleanup (legacy) */
 
 /* Tablet & Mobile Stacking for Landing Page */
-@media (max-width: 960px) {
+@media (max-width: 1023px) {
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
         flex-direction: column !important;
         gap: 1.5rem !important;
@@ -3906,6 +3912,111 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     }
     .prop-headline {
         font-size: 2.6rem !important;
+    }
+}
+
+/* Short laptop screen optimization (1280x720 and similar) */
+@media (min-width: 1024px) and (max-height: 760px) {
+    .block-container {
+        padding-top: 10px !important;
+        padding-bottom: 12px !important;
+    }
+    .st-key-onb_top_bar {
+        padding: 2px 0 6px 0 !important;
+        margin-bottom: 8px !important;
+    }
+    .prop-eyebrow {
+        margin-bottom: 6px !important;
+        padding: 3px 8px !important;
+    }
+    .prop-headline {
+        font-size: 2.15rem !important;
+        line-height: 1.08 !important;
+        margin-bottom: 6px !important;
+    }
+    .prop-desc {
+        font-size: 13px !important;
+        line-height: 1.4 !important;
+        margin-bottom: 10px !important;
+    }
+    .preview-card-wrap {
+        padding: 10px 14px !important;
+    }
+    .preview-chips-row {
+        margin-bottom: 8px !important;
+    }
+    .preview-title-row {
+        margin-bottom: 6px !important;
+    }
+    .prop-benefits {
+        margin-top: 8px !important;
+        gap: 4px !important;
+    }
+    .prop-benefit {
+        font-size: 11.5px !important;
+        line-height: 1.35 !important;
+    }
+    .st-key-onboard_demo {
+        padding: 10px 14px !important;
+        margin-bottom: 4px !important;
+    }
+    .demo-card-head {
+        margin-bottom: 4px !important;
+    }
+    .demo-icon {
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 30px !important;
+        min-height: 30px !important;
+        font-size: 13px !important;
+    }
+    .demo-title {
+        font-size: 16px !important;
+        margin-bottom: 2px !important;
+    }
+    .demo-desc {
+        font-size: 12px !important;
+        line-height: 1.35 !important;
+        margin-bottom: 8px !important;
+    }
+    .st-key-btn_welcome_demo button {
+        height: 32px !important;
+        min-height: 32px !important;
+        font-size: 12.5px !important;
+    }
+    .or-separator {
+        margin: 5px 0 4px 0 !important;
+    }
+    .st-key-onboard_panel {
+        padding: 10px 14px !important;
+    }
+    .onboard-header-row {
+        margin-bottom: 2px !important;
+    }
+    .onboard-header-title {
+        font-size: 1.25rem !important;
+    }
+    .onboard-header-sub {
+        font-size: 11.5px !important;
+        margin-bottom: 6px !important;
+    }
+    .st-key-onb_card_upload,
+    .st-key-onb_card_manual {
+        padding: 8px 10px !important;
+    }
+    .onb-path-header {
+        margin-bottom: 2px !important;
+    }
+    .onb-path-desc {
+        font-size: 10.5px !important;
+        line-height: 1.3 !important;
+        margin-bottom: 6px !important;
+        min-height: 26px !important;
+    }
+    .st-key-btn_onb_goto_upload button,
+    .st-key-btn_onb_goto_manual button {
+        height: 32px !important;
+        font-size: 12px !important;
     }
 }
 @media (max-width: 640px) {
@@ -4091,9 +4202,9 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
 
 /* Compact onboarding panel: single visible path, tighter vertical rhythm.
    Native focus indicators untouched (keyboard/a11y preserved). */
-.onboard-header-sub { margin-bottom: 0.6rem; }
+.onboard-header-sub { margin-bottom: clamp(4px, 0.8vh, 8px); }
 .recruiter-tour-card { padding: 0 !important; margin: 0 !important; }
-.or-separator { margin: 0.7rem 0 0.6rem 0; }
+.or-separator { margin: clamp(6px, 1.2vh, 12px) 0 clamp(6px, 1vh, 10px) 0; }
 .file-uploaded-card { padding: 8px 12px; }
 /* Clickable onboarding path cards (class added by JS bridge; buttons always work without it) */
 .onb-path-card { cursor: pointer; }
