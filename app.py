@@ -3537,15 +3537,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     margin-bottom: 0.95rem;
 }
 
-/* Recruiter Tour Card inside Action Panel */
-.st-key-onboard_demo {
-    background: #0d131f !important;
-    border: 1px solid rgba(0, 200, 117, 0.25) !important;
-    border-radius: 12px !important;
-    padding: 0.95rem 1.15rem !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
-    margin-bottom: 0.5rem !important;
-}
+/* Recruiter Tour Card inside Action Panel (legacy) */
 .recruiter-tour-card {
     background: transparent !important;
     border: none !important;
@@ -3620,110 +3612,96 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
 }
 
-/* Demo card — refined horizontal composition */
+/* Demo card — Interactive Developer Workspace */
 .st-key-onboard_demo {
-    background: #050a12 !important;
-    border: 1px solid #1e293b !important;
-    border-radius: 16px !important;
-    padding: 1.1rem 1.4rem !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 14px !important;
+    background: #080e18 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 14px !important;
+    padding: 1.25rem 1.35rem !important;
     box-sizing: border-box !important;
-    transition: border-color 0.2s ease !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+    margin-bottom: 0.5rem !important;
 }
 .st-key-onboard_demo:hover {
-    border-color: #334155 !important;
+    border-color: rgba(0, 200, 117, 0.35) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Zero out default Streamlit margins/padding on flex children */
-.st-key-onboard_demo > * {
-    margin: 0 !important;
-    padding: 0 !important;
+/* Ensure inner elements flow cleanly with no scrollbars or overflows */
+.st-key-onboard_demo div[data-testid="stVerticalBlock"] {
+    gap: 0 !important;
 }
 
-/* Icon — balanced square, aligned with content center */
+/* Header row: Terminal Icon and LIVE DEMO badge aligned on one row */
+.demo-card-head {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-bottom: 0.75rem !important;
+}
+
 .demo-icon {
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
-    border-radius: 10px !important;
-    background: #03281e !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 8px !important;
+    background: rgba(0, 200, 117, 0.1) !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 18px !important;
+    font-size: 15px !important;
     font-weight: 700 !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    display: flex !important;
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0 !important;
     line-height: 1 !important;
+    box-sizing: border-box !important;
 }
 
-/* Content — cohesive column, flexes to fill available width */
-.demo-info {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-}
-
-/* Badge — pill shaped, never stretched */
 .demo-badge {
     display: inline-flex !important;
-    width: fit-content !important;
     align-items: center !important;
-    gap: 4px !important;
-    background: #03281e !important;
+    background: rgba(0, 200, 117, 0.1) !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 11.5px !important;
-    font-weight: 750 !important;
+    font-size: 10.5px !important;
+    font-weight: 700 !important;
     letter-spacing: 0.05em !important;
-    padding: 3px 10px !important;
+    padding: 3px 9px !important;
     border-radius: 999px !important;
     white-space: nowrap !important;
+    line-height: 1.2 !important;
 }
 
-/* Heading — improved weight and line-height, wraps gracefully */
+/* Title — clear hierarchy and high contrast */
 .demo-title {
-    font-size: 19px !important;
+    font-size: 18.5px !important;
     font-weight: 700 !important;
     color: #ffffff !important;
-    margin: 0 !important;
-    line-height: 1.2 !important;
+    margin: 0 0 0.35rem 0 !important;
+    line-height: 1.3 !important;
     letter-spacing: -0.01em !important;
 }
 
-/* Description — comfortable line length, readable contrast */
+/* Description — readable, clean spacing, high legibility */
 .demo-desc {
-    font-size: 13px !important;
-    color: #8892b0 !important;
-    line-height: 1.5 !important;
-    margin: 0 !important;
-    max-width: 34ch !important;
+    font-size: 13.5px !important;
+    color: #94a3b8 !important;
+    line-height: 1.55 !important;
+    margin: 0 0 1rem 0 !important;
+    white-space: normal !important;
 }
 
-/* Divider — subtle vertical rule, centered with the content group */
-.demo-divider {
-    width: 1px !important;
-    height: 44px !important;
-    background: rgba(255, 255, 255, 0.06) !important;
-    flex-shrink: 0 !important;
-    margin: 0 2px !important;
-}
-
-/* CTA — pushed to the right edge, balanced padding */
+/* Explore Demo Button — left-aligned with content */
 .st-key-btn_welcome_demo {
     margin: 0 !important;
-    margin-left: auto !important;
+    display: flex !important;
+    justify-content: flex-start !important;
     width: auto !important;
-    min-width: 0 !important;
-    flex-shrink: 0 !important;
 }
+
 .st-key-btn_welcome_demo button {
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
@@ -3731,11 +3709,11 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     font-size: 13.5px !important;
     font-weight: 600 !important;
     border-radius: 8px !important;
-    height: 36px !important;
-    min-height: 36px !important;
+    height: 38px !important;
+    min-height: 38px !important;
     padding: 0 18px !important;
     width: auto !important;
-    min-width: 115px !important;
+    min-width: 130px !important;
     transition: all 0.15s ease !important;
     box-shadow: none !important;
     white-space: nowrap !important;
@@ -3744,118 +3722,50 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     justify-content: center !important;
     gap: 6px !important;
 }
+
 .st-key-btn_welcome_demo button:hover {
     border-color: #00c875 !important;
     background: #043a2a !important;
+    color: #00c875 !important;
+    box-shadow: 0 0 12px rgba(0, 200, 117, 0.25) !important;
 }
+
 .st-key-btn_welcome_demo button:active {
     background: #022519 !important;
     border-color: #00c875 !important;
     transform: translateY(0.5px) !important;
 }
+
 .st-key-btn_welcome_demo button:focus-visible {
     outline: 2px solid #00c875 !important;
     outline-offset: 2px !important;
 }
 
-/* Tablet: tighter spacing */
-@media (max-width: 1024px) and (min-width: 769px) {
+/* Responsive adjustments */
+@media (max-width: 600px) {
     .st-key-onboard_demo {
-        padding: 1rem 1.25rem !important;
-        gap: 12px !important;
-    }
-    .demo-divider {
-        margin: 0 2px !important;
-    }
-    .demo-desc {
-        max-width: 30ch !important;
-    }
-}
-
-/* Mobile: stack vertically, hide divider, full-width CTA */
-@media (max-width: 768px) {
-    .st-key-onboard_demo {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 12px !important;
-        padding: 1rem 1.25rem !important;
-    }
-    .demo-divider { display: none !important; }
-    .demo-info {
-        width: 100% !important;
+        padding: 1rem 1.15rem !important;
     }
     .demo-title {
-        white-space: normal !important;
+        font-size: 16.5px !important;
     }
     .demo-desc {
-        white-space: normal !important;
-        max-width: none !important;
+        font-size: 13px !important;
+        line-height: 1.45 !important;
+        margin-bottom: 0.85rem !important;
+    }
+    .st-key-btn_welcome_demo {
+        width: 100% !important;
     }
     .st-key-btn_welcome_demo button {
         width: 100% !important;
         min-width: auto !important;
-        justify-content: center !important;
     }
 }
 
 /* Top bar brand spacing */
 .st-key-onb_top_bar {
     margin-bottom: 0.5rem !important;
-}
-
-/* Mobile responsive for welcome screen */
-@media (max-width: 768px) {
-    .demo-card {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 1rem !important;
-        padding: 1rem 1.25rem !important;
-    }
-    .demo-wrap {
-        flex-direction: row !important;
-        align-items: center !important;
-        width: 100% !important;
-        gap: 12px !important;
-    }
-    .demo-divider {
-        width: 1px !important;
-        height: 36px !important;
-        margin: 0 12px !important;
-    }
-    .demo-title {
-        white-space: normal !important;
-    }
-    .demo-desc {
-        white-space: normal !important;
-        max-width: none !important;
-    }
-    .demo-cta {
-        width: 100% !important;
-        display: flex !important;
-        justify-content: flex-start !important;
-        margin-top: 8px !important;
-    }
-    .st-key-btn_welcome_demo button {
-        width: 100% !important;
-        min-width: auto !important;
-    }
-}
-
-/* Tablet: tighter spacing */
-@media (max-width: 1024px) and (min-width: 769px) {
-    .demo-card {
-        padding: 1rem 1.25rem !important;
-        gap: 0 !important;
-    }
-    .demo-icon {
-        margin-right: 12px !important;
-    }
-    .demo-divider {
-        margin: 0 12px !important;
-    }
-    .demo-desc {
-        max-width: 260px !important;
-    }
 }
 
 /* Subtle divider between Tour and Upload */
@@ -3975,33 +3885,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     width: auto !important;
     min-width: 0 !important;
 }
-.st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    gap: 12px !important;
-}
-.st-key-onboard_demo div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"],
-.st-key-onboard_demo div[data-testid="stColumn"] {
-    min-width: 0 !important;
-}
-.st-key-onboard_demo div[data-testid="stColumn"]:first-child {
-    flex: 1 1 auto !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 0 !important;
-}
-.st-key-onboard_demo div[data-testid="stColumn"]:last-child {
-    flex: 0 0 auto !important;
-    width: auto !important;
-    max-width: 48px !important;
-    min-width: 44px !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-}
+/* onboard_demo columns cleanup (legacy) */
 
 /* Tablet & Mobile Stacking for Landing Page */
 @media (max-width: 960px) {
@@ -4009,31 +3893,12 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
         flex-direction: column !important;
         gap: 1.5rem !important;
     }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"],
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] {
         width: 100% !important;
         max-width: 100% !important;
         flex: 1 1 100% !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"] {
-        width: 100% !important;
-        max-width: 100% !important;
-        flex: 1 1 100% !important;
-    }
-    .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-    }
-    .st-key-onboard_demo div[data-testid="stColumn"]:first-child {
-        width: auto !important;
-        max-width: none !important;
-        flex: 1 1 auto !important;
-        min-width: 0 !important;
-    }
-    .st-key-onboard_demo div[data-testid="stColumn"]:last-child {
-        width: auto !important;
-        max-width: 48px !important;
-        flex: 0 0 auto !important;
-        min-width: 44px !important;
     }
     .prop-container {
         padding-right: 0 !important;
@@ -4062,26 +3927,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
         font-size: 2.1rem !important;
         line-height: 1.2 !important;
     }
-    .st-key-onboard_demo {
-        padding: 0.85rem 0.95rem !important;
-    }
-    .st-key-onboard_demo div[data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 10px !important;
-    }
-    .st-key-onboard_demo div[data-testid="stColumn"]:first-child {
-        width: auto !important;
-        max-width: none !important;
-        flex: 1 1 auto !important;
-        min-width: 0 !important;
-    }
-    .st-key-onboard_demo div[data-testid="stColumn"]:last-child {
-        width: auto !important;
-        max-width: 48px !important;
-        flex: 0 0 auto !important;
-        min-width: 44px !important;
-    }
+
     .prop-desc {
         font-size: 13.5px !important;
     }
@@ -7684,19 +7530,15 @@ def render_welcome_screen():
         # design language — dark surface, subtle border, restrained emerald
         # accent, horizontal layout on desktop, stacked on mobile.
         with st.container(border=False, key="onboard_demo"):
-            # Icon — fixed column
-            st.markdown('<div class="demo-icon">&gt;_</div>', unsafe_allow_html=True)
-            # Content — flexible column (badge, heading, description)
             st.markdown("""
-            <div class="demo-info">
+            <div class="demo-card-head">
+                <div class="demo-icon">&gt;_</div>
                 <div class="demo-badge">LIVE DEMO</div>
-                <div class="demo-title">Interactive Developer Workspace</div>
-                <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
             </div>
+            <div class="demo-title">Interactive Developer Workspace</div>
+            <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
             """, unsafe_allow_html=True)
-            # Vertical divider — fixed 1px column
-            st.markdown('<div class="demo-divider"></div>', unsafe_allow_html=True)
-            # CTA — auto column, rendered by Streamlit button as 4th grid item
+            # CTA — auto column, rendered by Streamlit button as 3rd grid item
             if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
                 _start_demo()
 
