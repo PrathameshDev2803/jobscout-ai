@@ -2950,7 +2950,10 @@ def render_welcome_screen():
                     <span class="onboard-user-icon">👤</span>
                     <span class="onboard-header-title">Launch Workspace</span>
                 </div>
-                <div class="onboard-header-sub">Personalize with your resume. {_sub_text}</div>
+                <div class="onboard-header-sub">
+                    <span class="onboard-sub-text">Personalize with your resume.</span>
+                    <span class="onboard-step-badge">{_sub_text}</span>
+                </div>
                 """, unsafe_allow_html=True)
                 remember_me = True
                 dur_label = "1 Month"
