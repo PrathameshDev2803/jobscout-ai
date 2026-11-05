@@ -11,3 +11,12 @@ def load_css() -> str:
         with open(f, "r", encoding="utf-8") as fp:
             parts.append(fp.read())
     return "\n<style>\n" + "".join(parts) + "</style>\n"
+
+
+def load_js(name: str) -> str:
+    """Load a JavaScript asset by name from assets/js/."""
+    if not name.endswith(".js"):
+        name = f"{name}.js"
+    js_path = Path(__file__).resolve().parent.parent / "assets" / "js" / name
+    with open(js_path, "r", encoding="utf-8") as fp:
+        return fp.read()

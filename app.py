@@ -237,7 +237,7 @@ def _render_owner_login():
                 st.session_state["owner_last_fail"] = time.time()
                 st.error("Incorrect password.")
 
-from ui.theme import load_css
+from ui.theme import load_css, load_js
 CSS = load_css()
 st.markdown(CSS, unsafe_allow_html=True)
 
@@ -500,73 +500,7 @@ EXCLUDED_PORTFOLIO_DOMAINS = {
 }
 
 
-def unwrap_text_urls(text: str) -> str:
-    """Fix URLs broken across line breaks in PDF column layouts."""
-    if not text:
-        return ""
-    # Pattern 1: URL ending with hyphen broken across lines (e.g., https://.../foo-\nbar)
-    text = re.sub(r'((?:https?://|www\.|[a-zA-Z0-9_\-\.]+\.(?:com|in|io|dev|me|app)/)[^\s\n]*)-\s*\n\s*([a-zA-Z0-9_\-\./]+)', r'\1\2', text)
-    # Pattern 2: URL ending with slash broken across line (e.g., https://linkedin.com/in/\nusername or github.com/\nuser)
-    text = re.sub(r'((?:https?://|www\.|(?:linkedin\.com/in|github\.com)/)[^\s\n]*?/\s*)\n\s*([a-zA-Z0-9_\-]+)', r'\1\2', text)
-    # Pattern 3: Domain broken across dot (e.g., https://github.\ncom/user)
-    text = re.sub(r'((?:https?://|www\.)[a-zA-Z0-9_\-]+\.\s*)\n\s*([a-zA-Z0-9_\-\./]+)', r'\1\2', text)
-    return text
-
-
-def sanitize_url(raw_url: str) -> str | None:
-    """Sanitize and validate extracted URL. Rejects dangerous schemes and prompt injection."""
-    if not raw_url or not isinstance(raw_url, str):
-        return None
-    url = raw_url.strip()
-    # Strip quotes, brackets, angle brackets, commas, trailing punctuation
-    url = re.sub(r'^[\s"\'\(<\[]+|[\s"\'\)>\]\,\.]+$', '', url)
-
-    # Reject dangerous schemes and control chars
-    if any(ctrl in url for ctrl in ['\r', '\n', '\t', '\0', '`', '<', '>']):
-        return None
-    low = url.lower()
-    if any(low.startswith(bad) for bad in ['javascript:', 'data:', 'file:', 'vbscript:', 'blob:', 'mailto:']):
-        return None
-    if len(url) > 250:
-        return None
-
-    # Auto-prepend https:// if missing
-    if not (low.startswith("http://") or low.startswith("https://")):
-        if re.match(r'^(?:[a-zA-Z0-9_\-]+\.)+[a-zA-Z]{2,}(?:/.*)?$', url):
-            url = f"https://{url}"
-        else:
-            return None
-
-    try:
-        parsed = urllib.parse.urlparse(url)
-        if parsed.scheme not in ('http', 'https'):
-            return None
-        netloc = parsed.netloc.lower()
-        if not netloc or "." not in netloc or "localhost" in netloc or netloc.startswith("127."):
-            return None
-
-        # Clean tracking query parameters
-        cleaned_query = []
-        if parsed.query:
-            qs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=False)
-            for k, v in qs:
-                k_low = k.lower()
-                if not any(k_low.startswith(prefix) for prefix in ['utm_', 'trk', 'ref', 'source', 'locale', 'fbclid', 'gclid']):
-                    cleaned_query.append((k, v))
-        new_query = urllib.parse.urlencode(cleaned_query)
-        path = parsed.path.rstrip('/')
-
-        clean_url = urllib.parse.urlunparse((
-            parsed.scheme,
-            parsed.netloc,
-            path,
-            parsed.params,
-            new_query,
-            ''
-        ))
-        return clean_url
-    except Exception:
-        return None
+from core.url_utils import sanitize_url, unwrap_text_urls
 
 
 def classify_links(links: list, raw_text: str = "") -> dict:
@@ -2724,39 +2658,7 @@ def onb_path_cards_script():
     buttons work unchanged. Cards get role=button, tabindex, aria-label
     and a visible focus ring.
     """
-    return """<script>
-(function () {
-  try {
-    var doc = window.parent.document;
-    var targets = [
-      {marker: "upload", match: "Upload Resume", label: "I have a resume — Upload Resume"},
-      {marker: "manual", match: "Answer Questions", label: "I will build my profile — Answer Questions"}
-    ];
-    targets.forEach(function (t) {
-      var mark = doc.querySelector('span[data-onb-card="' + t.marker + '"]');
-      if (!mark || mark.dataset.onbWired) return;
-      var card = mark.closest('div[data-testid="stVerticalBlock"]') || mark.parentElement;
-      if (!card) return;
-      var btns = Array.prototype.slice.call(card.querySelectorAll("button"));
-      var btn = null;
-      for (var i = 0; i < btns.length; i++) {
-        if ((btns[i].textContent || "").indexOf(t.match) !== -1) { btn = btns[i]; break; }
-      }
-      if (!btn) return;
-      mark.dataset.onbWired = "1";
-      card.dataset.onbWired = "1"; btn.dataset.onbWired = "1";
-      card.classList.add("onb-path-card");
-      card.setAttribute("role", "button");
-      card.setAttribute("tabindex", "0");
-      card.setAttribute("aria-label", t.label);
-      card.addEventListener("click", function (e) { if (e.target !== btn) btn.click(); });
-      card.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); }
-      });
-    });
-  } catch (e) { /* enhancement only — buttons keep working */ }
-})();
-</script>"""
+    return load_js("onb_path_cards.js")
 
 
 WELCOME_PROP_HTML = """<div class="prop-container">
@@ -3159,29 +3061,7 @@ def render_welcome_screen():
                     tw_html.append("</div>")
                     st.markdown("\n".join(tw_html), unsafe_allow_html=True)
                     if not animated and reveal:
-                        st.html("""
-                        <script>
-                        (function() {
-                            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-                            var root = document.getElementById('confirm-reveal');
-                            if (!root) return;
-                            var els = Array.prototype.slice.call(root.querySelectorAll('.tw-text'));
-                            var full = els.map(function(el) { return el.textContent; });
-                            var total = full.join('').length || 1;
-                            var perChar = Math.max(8, Math.min(42, 4200 / total));
-                            var li = 0, ci = 0;
-                            els.forEach(function(el) { el.textContent = ''; });
-                            function step() {
-                                if (li >= els.length) return;
-                                var el = els[li], txt = full[li], line = el.parentElement;
-                                line.classList.add('tw-active');
-                                if (ci <= txt.length) { el.textContent = txt.slice(0, ci); ci++; setTimeout(step, perChar); }
-                                else { line.classList.remove('tw-active'); li++; ci = 0; setTimeout(step, 200); }
-                            }
-                            step();
-                        })();
-                        </script>
-                        """, unsafe_allow_javascript=True)
+                        st.html(load_js("typewriter_reveal.js"), unsafe_allow_javascript=True)
                     st.session_state["confirm_animated"] = True
 
                     # --- Static section cards (only non-empty sections) ---
@@ -4746,42 +4626,7 @@ with st.container(key="top_navbar"):
 # ponytail: Streamlit's popover button ships without type/aria-label and its
 # dialog has no id. Progressive enhancement only — the menu works if this never runs.
 st.html(
-    """
-    <script>
-    (function () {
-      try {
-        var doc = window.parent.document;
-        function patchMenuButton() {
-          var btn = doc.querySelector('.st-key-top_settings_popover button');
-          if (!btn) return;
-          if (btn.getAttribute('type') !== 'button') btn.setAttribute('type', 'button');
-          var expanded = btn.getAttribute('aria-expanded') === 'true';
-          var label = expanded ? 'Close menu' : 'Open menu';
-          if (btn.getAttribute('aria-label') !== label) btn.setAttribute('aria-label', label);
-          var body = expanded ? doc.querySelector('div[data-testid="stPopoverBody"][aria-label="Menu"]') : null;
-          if (body) {
-            if (!body.id) body.id = 'jobscout-account-menu';
-            if (btn.getAttribute('aria-controls') !== body.id) btn.setAttribute('aria-controls', body.id);
-          } else if (btn.hasAttribute('aria-controls')) {
-            btn.removeAttribute('aria-controls');
-          }
-        }
-        if (window.parent.__jobscoutMenuA11y) {
-          window.parent.__jobscoutMenuA11y();
-          return;
-        }
-        window.parent.__jobscoutMenuA11y = patchMenuButton;
-        patchMenuButton();
-        new MutationObserver(patchMenuButton).observe(doc.body, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['aria-expanded']
-        });
-      } catch (e) {}
-    })();
-    </script>
-    """,
+    load_js("menu_a11y.js"),
     unsafe_allow_javascript=True,
 )
 

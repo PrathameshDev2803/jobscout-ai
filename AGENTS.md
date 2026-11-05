@@ -6,3 +6,4 @@
 - **Execution & Scope**: Edit only files named. Changes under ~50 lines: edit directly, summarize in 3 lines. Match existing styles/tokens without adding dependencies. Avoid `<` or `&` in `python -c`. Commands >60s stop.
 
 CSS lives in assets/styles/, loaded by ui/theme.py. Line numbers in app.py are not tracked.
+JS lives in assets/js/, loaded by ui/theme.py.

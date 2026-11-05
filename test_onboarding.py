@@ -13,6 +13,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import app as A
+from test_support import app_source
 
 
 def answers(**kw):
@@ -115,8 +116,7 @@ class TestOnboardingPathState(unittest.TestCase):
 
     def test_no_duplicate_widget_keys_across_panes(self):
         import re
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+        src = app_source()
         keys = re.findall(r'key="(onb_[^"]+|btn_onb_[^"]+)"', src)
         onboard_keys = [k for k in keys if k.startswith(("onb_q_", "onb_name", "onb_city",
                                                          "onb_role", "onb_file", "onb_pasted",
@@ -172,16 +172,13 @@ class TestOnboardingPolish(unittest.TestCase):
         self.assertEqual(A.onb_card_label(A.ONB_PATHS[1], A.ONB_PATHS[1], "X"), "✓ X")
 
     def test_benefits_present(self):
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+        src = app_source()
         for bit in ("prop-benefit", "stack-fit scoring", "live links extracted", "ATS resume tailor"):
             self.assertIn(bit, src)
 
     def test_demo_entry_preserved_but_demoted(self):
         import re
-        from ui.theme import load_css
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read() + load_css()
+        src = app_source()
         flat = re.sub(r"\s+", " ", src)
         # demo CTA lives in the compact live-demo card only (top-bar entry removed per redesign)
         self.assertIn('key="btn_welcome_demo"', flat)
@@ -196,9 +193,7 @@ class TestOnboardingPolish(unittest.TestCase):
         # the inner body scrolls (flex:1 + min-height:0 + overflow-y:auto).
         # Demo lives outside the card; review renders inside the same card.
         import re
-        from ui.theme import load_css
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read() + load_css()
+        src = app_source()
         flat = re.sub(r"\s+", " ", src)
         self.assertIn('with st.container(border=True, key="onboard_panel"):', flat)
         self.assertNotIn("height=620", flat)
@@ -245,24 +240,19 @@ class TestClickableCards(unittest.TestCase):
         self.assertIn('span[data-onb-card="', script)
 
     def test_markers_present_in_both_cards(self):
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read()
+        src = app_source()
         self.assertIn('<span data-onb-card="upload">', src)
         self.assertIn('<span data-onb-card="manual">', src)
 
     def test_card_css_states(self):
-        from ui.theme import load_css
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read() + load_css()
+        src = app_source()
         for bit in (".onb-path-card:hover", ".onb-path-card:focus-visible",
                     "outline: 2px solid #10b981", "cursor: pointer"):
             self.assertIn(bit, src)
 
     def test_bridge_wired_after_cards(self):
         import re
-        from ui.theme import load_css
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "app.py"), encoding="utf-8").read() + load_css()
+        src = app_source()
         flat = re.sub(r"\s+", " ", src)
         self.assertIn("st.html(onb_path_cards_script(), unsafe_allow_javascript=True)", flat)
 
