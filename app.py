@@ -3689,7 +3689,7 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     white-space: nowrap !important;
 }
 
-/* Heading — single line on desktop */
+/* Heading — single line on desktop, no truncation */
 .demo-title {
     font-size: 20px !important;
     font-weight: 700 !important;
@@ -3698,11 +3698,11 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     line-height: 1.25 !important;
     letter-spacing: -0.01em !important;
     white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
 }
 
-/* Description — no truncation on desktop, uses available width */
+/* Description — wraps naturally, no truncation */
 .demo-desc {
     font-size: 14px !important;
     color: #8892b0 !important;
@@ -3728,8 +3728,8 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     min-width: 0 !important;
 }
 .st-key-btn_welcome_demo button {
-    background: #00c875 !important;
-    border: 1px solid #00c875 !important;
+    background: #03281e !important;
+    border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #ffffff !important;
     font-size: 14px !important;
     font-weight: 600 !important;
@@ -3744,8 +3744,8 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     white-space: nowrap !important;
 }
 .st-key-btn_welcome_demo button:hover {
-    border-color: #00df82 !important;
-    background: #00df82 !important;
+    border-color: #00c875 !important;
+    background: #043a2a !important;
 }
 .st-key-btn_welcome_demo button:focus-visible {
     outline: 2px solid #00c875 !important;
