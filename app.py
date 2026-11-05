@@ -3620,17 +3620,15 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     box-shadow: 0 0 15px rgba(0, 200, 117, 0.4) !important;
 }
 
-/* Demo card — matches reference image precisely */
+/* Demo card — refined horizontal composition */
 .st-key-onboard_demo {
     background: #050a12 !important;
     border: 1px solid #1e293b !important;
     border-radius: 16px !important;
-    padding: 1.25rem 1.5rem !important;
-    display: grid !important;
-    grid-template-columns: 48px 1fr 1px auto !important;
+    padding: 1.1rem 1.4rem !important;
+    display: flex !important;
     align-items: center !important;
-    gap: 16px !important;
-    column-gap: 16px !important;
+    gap: 14px !important;
     box-sizing: border-box !important;
     transition: border-color 0.2s ease !important;
 }
@@ -3638,23 +3636,23 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     border-color: #334155 !important;
 }
 
-/* Zero out default Streamlit margins/padding on grid children */
+/* Zero out default Streamlit margins/padding on flex children */
 .st-key-onboard_demo > * {
     margin: 0 !important;
     padding: 0 !important;
 }
 
-/* Icon — fixed-width column */
+/* Icon — balanced square, aligned with content center */
 .demo-icon {
-    width: 48px !important;
-    height: 48px !important;
-    min-width: 48px !important;
-    min-height: 48px !important;
-    border-radius: 12px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    border-radius: 10px !important;
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 20px !important;
+    font-size: 18px !important;
     font-weight: 700 !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
     display: flex !important;
@@ -3664,15 +3662,16 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     line-height: 1 !important;
 }
 
-/* Content — flexible column */
+/* Content — cohesive column, flexes to fill available width */
 .demo-info {
     display: flex !important;
     flex-direction: column !important;
-    gap: 6px !important;
+    gap: 8px !important;
+    flex: 1 1 auto !important;
     min-width: 0 !important;
 }
 
-/* Badge — fit-content, pill shaped, never stretched */
+/* Badge — pill shaped, never stretched */
 .demo-badge {
     display: inline-flex !important;
     width: fit-content !important;
@@ -3681,82 +3680,103 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #00c875 !important;
-    font-size: 12px !important;
+    font-size: 11.5px !important;
     font-weight: 750 !important;
     letter-spacing: 0.05em !important;
-    padding: 4px 12px !important;
+    padding: 3px 10px !important;
     border-radius: 999px !important;
     white-space: nowrap !important;
 }
 
-/* Heading — single line on desktop, no truncation */
+/* Heading — improved weight and line-height, wraps gracefully */
 .demo-title {
-    font-size: 20px !important;
+    font-size: 19px !important;
     font-weight: 700 !important;
     color: #ffffff !important;
     margin: 0 !important;
-    line-height: 1.25 !important;
+    line-height: 1.2 !important;
     letter-spacing: -0.01em !important;
-    white-space: nowrap !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
 }
 
-/* Description — wraps naturally, no truncation */
+/* Description — comfortable line length, readable contrast */
 .demo-desc {
-    font-size: 14px !important;
+    font-size: 13px !important;
     color: #8892b0 !important;
-    line-height: 1.45 !important;
+    line-height: 1.5 !important;
     margin: 0 !important;
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
+    max-width: 34ch !important;
 }
 
-/* Divider — fixed 1px column, stretched vertically */
+/* Divider — subtle vertical rule, centered with the content group */
 .demo-divider {
     width: 1px !important;
-    height: 40px !important;
-    background: rgba(255, 255, 255, 0.08) !important;
+    height: 44px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
     flex-shrink: 0 !important;
+    margin: 0 2px !important;
 }
 
-/* CTA button — inside the grid, auto-sized column */
+/* CTA — pushed to the right edge, balanced padding */
 .st-key-btn_welcome_demo {
     margin: 0 !important;
+    margin-left: auto !important;
     width: auto !important;
     min-width: 0 !important;
+    flex-shrink: 0 !important;
 }
 .st-key-btn_welcome_demo button {
     background: #03281e !important;
     border: 1px solid rgba(0, 200, 117, 0.35) !important;
     color: #ffffff !important;
-    font-size: 14px !important;
+    font-size: 13.5px !important;
     font-weight: 600 !important;
-    border-radius: 10px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    padding: 0 24px !important;
+    border-radius: 8px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 18px !important;
     width: auto !important;
-    min-width: 130px !important;
+    min-width: 115px !important;
     transition: all 0.15s ease !important;
     box-shadow: none !important;
     white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
 }
 .st-key-btn_welcome_demo button:hover {
     border-color: #00c875 !important;
     background: #043a2a !important;
+}
+.st-key-btn_welcome_demo button:active {
+    background: #022519 !important;
+    border-color: #00c875 !important;
+    transform: translateY(0.5px) !important;
 }
 .st-key-btn_welcome_demo button:focus-visible {
     outline: 2px solid #00c875 !important;
     outline-offset: 2px !important;
 }
 
+/* Tablet: tighter spacing */
+@media (max-width: 1024px) and (min-width: 769px) {
+    .st-key-onboard_demo {
+        padding: 1rem 1.25rem !important;
+        gap: 12px !important;
+    }
+    .demo-divider {
+        margin: 0 2px !important;
+    }
+    .demo-desc {
+        max-width: 30ch !important;
+    }
+}
+
 /* Mobile: stack vertically, hide divider, full-width CTA */
 @media (max-width: 768px) {
     .st-key-onboard_demo {
-        grid-template-columns: 1fr !important;
-        column-gap: 0 !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
         gap: 12px !important;
         padding: 1rem 1.25rem !important;
     }
@@ -3766,17 +3786,15 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
     }
     .demo-title {
         white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
     }
     .demo-desc {
         white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
+        max-width: none !important;
     }
     .st-key-btn_welcome_demo button {
         width: 100% !important;
         min-width: auto !important;
+        justify-content: center !important;
     }
 }
 
