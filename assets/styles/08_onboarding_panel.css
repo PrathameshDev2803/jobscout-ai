@@ -1244,7 +1244,7 @@ div[data-testid="stColumn"] {
 
 /* 1. The bordered card (dropzone in uploaded state): wraps the row tightly
       with even padding, vertically centered, killing leftover fixed height. */
-.st-key-onb_file_input section[data-testid="stFileUploaderDropzone"],
+.st-key-onb_file_input section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
 .st-key-onb_file_input:has([data-testid="stFileChips"]) section,
 .st-key-onboard_panel div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
 .st-key-onboard_panel div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
@@ -1253,56 +1253,61 @@ div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
 [data-testid="stFileUploader"] section:has([data-testid="stFileChips"]) {
   min-height: 0 !important;
   height: auto !important;
+  max-height: none !important;
   padding: 14px 16px !important;
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
   justify-content: space-between !important;
   box-sizing: border-box !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  background: rgba(16, 185, 129, 0.04) !important;
+  border-radius: 10px !important;
 }
 
-/* Collapse any intermediate wrappers so the card bounds match its content */
+/* 2. Collapse all intermediate wrappers (section > div, stFileChips, ul, li)
+      so the card bounds match its content tightly with zero leftover height. */
+[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section > div,
 .st-key-onboard_panel [data-testid="stFileUploader"] *:has([data-testid="stFileChips"]),
-[data-testid="stFileUploader"] *:has([data-testid="stFileChips"]) {
-  min-height: 0 !important;
-  height: auto !important;
-}
-
-/* 2. Direct wrapper of the chips: fill card width, zero extra padding, content centered. */
-.st-key-onboard_panel div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section > div,
-[data-testid="stFileUploader"] div:has(> [data-testid="stFileChips"]) {
-  display: flex !important;
-  align-items: center !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  width: 100% !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  height: auto !important;
-  flex: 1 1 100% !important;
-  box-sizing: border-box !important;
-}
-
-/* 3. Make the chip row fill the full card width. */
+[data-testid="stFileUploader"] *:has([data-testid="stFileChips"]),
 [data-testid="stFileChips"],
-[data-testid="stFileChips"] > div,
-[data-testid="stFileChips"] > div > div {
+[data-testid="stFileChips"] ul,
+[data-testid="stFileChips"] li {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex: 1 1 100% !important;
+  box-sizing: border-box !important;
+  list-style: none !important;
+  overflow: visible !important;
 }
 
-/* 4. The row itself: icon | name + meta | Remove, all on one centre line. */
+/* 3. The row itself: icon | name + meta | Remove, all on one centre line. */
 [data-testid="stFileChip"] {
   display: flex !important;
+  flex-direction: row !important;
   align-items: center !important;
   gap: 14px !important;
   width: 100% !important;
+  max-width: 100% !important;
   min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
   background: transparent !important;
   border: 0 !important;
+  box-sizing: border-box !important;
 }
 
 /* Icon box: fixed size, never squashed or clipped. */
@@ -1310,6 +1315,8 @@ div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
   flex: 0 0 44px !important;
   width: 44px !important;
   height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1324,14 +1331,50 @@ div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
   flex-direction: column !important;
   justify-content: center !important;
   gap: 2px !important;
+  overflow: hidden !important;
 }
 
-/* Filename: stem truncates with an ellipsis, extension always stays visible. */
+/* Filename: show the full name; only truncate with an ellipsis when it truly doesn't fit */
 [data-testid="stFileChipName"] {
-  display: flex !important;
+  display: block !important;
   min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
   overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+[data-testid="stFileChipName"]::before {
+  content: attr(title) !important;
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  color: #f8fafc !important;
+  letter-spacing: -0.01em !important;
   white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* If .file-stem / .file-ext spans are present in DOM, support their layout */
+[data-testid="stFileChipName"]:has(.file-stem) {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  font-size: 13.5px !important;
+  line-height: 1.3 !important;
+  color: #f8fafc !important;
+  white-space: nowrap !important;
+}
+[data-testid="stFileChipName"]:has(.file-stem)::before {
+  content: none !important;
+  display: none !important;
 }
 [data-testid="stFileChipName"] .file-stem {
   flex: 0 1 auto !important;
@@ -1339,10 +1382,16 @@ div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  color: #f8fafc !important;
 }
 [data-testid="stFileChipName"] .file-ext {
   flex: 0 0 auto !important;
   white-space: nowrap !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  color: #cbd5e1 !important;
 }
 
 /* Meta line (type and size): smaller, wraps instead of overflowing. */
@@ -1359,21 +1408,23 @@ div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
 [data-testid="stFileChipDeleteBtn"] {
   flex: 0 0 auto !important;
   margin: 0 0 0 auto !important;
+  margin-left: auto !important;
   display: flex !important;
   align-items: center !important;
+  align-self: center !important;
 }
 [data-testid="stFileChipDeleteBtn"] button {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   gap: 8px !important;
-  min-height: 44px !important;
+  min-height: 38px !important;
   white-space: nowrap !important;
 }
 
-/* 5. Narrow screens: keep one row, shrink the icon, Remove becomes icon-only. */
+/* 4. Narrow screens: keep one row, shrink the icon, Remove becomes icon-only. */
 @media (max-width: 480px) {
-  .st-key-onb_file_input section[data-testid="stFileUploaderDropzone"],
+  .st-key-onb_file_input section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
   .st-key-onb_file_input:has([data-testid="stFileChips"]) section,
   .st-key-onboard_panel div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
   .st-key-onboard_panel div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
@@ -1391,13 +1442,15 @@ div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
     flex-basis: 40px !important;
     width: 40px !important;
     height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
   }
   [data-testid="stFileChipDeleteBtn"]::after,
   [data-testid="stFileChipDeleteBtn"] button::after {
     display: none !important;
   }
   [data-testid="stFileChipDeleteBtn"] button {
-    min-width: 44px !important;
-    padding-inline: 10px !important;
+    min-width: 40px !important;
+    padding-inline: 8px !important;
   }
 }
