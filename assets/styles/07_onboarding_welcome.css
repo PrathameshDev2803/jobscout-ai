@@ -612,48 +612,163 @@ div[data-testid="stColumn"]:nth-child(2) div[data-testid="stVerticalBlockBorderW
 }
 /* onboard_demo columns cleanup (legacy) */
 
-/* Tablet Layout: Preserve balanced 2-column layout with wider form (60%) and compact left intro (40%) */
-@media (min-width: 768px) and (max-width: 1023px) {
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
-        flex-direction: row !important;
-        gap: 1rem !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"]:first-child,
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"]:first-child {
-        flex: 0 0 40% !important;
-        max-width: 40% !important;
-        width: 40% !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"]:last-child,
-    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"]:last-child {
-        flex: 0 0 60% !important;
-        max-width: 60% !important;
-        width: 60% !important;
-    }
-    .prop-headline {
-        font-size: 2.2rem !important;
-    }
-}
+/* ==========================================================================
+   Responsive Architecture for Welcome / Onboarding Screen
+   - 320–480px: Single-column mobile layout
+   - 481–767px: Wider single-column mobile/tablet layout
+   - 768–900px: Tablet-optimized layout using available horizontal space
+   - 901–1199px: Balanced two-column layout
+   - 1200px+: Full desktop layout
+   ========================================================================== */
 
-/* Mobile Stacking for Landing Page */
-@media (max-width: 767px) {
+/* Tablet & Mobile Stacked Layout (<= 900px) */
+@media (max-width: 900px) {
+    /* Stack hero intro and workspace vertically, centered in viewport */
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
         flex-direction: column !important;
-        gap: 1.25rem !important;
+        gap: 1.5rem !important;
+        align-items: center !important;
+        width: 100% !important;
     }
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"],
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"],
     div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] {
         width: 100% !important;
-        max-width: 100% !important;
-        flex: 1 1 100% !important;
+        max-width: 720px !important;
+        flex: 0 0 auto !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        box-sizing: border-box !important;
     }
+
+    /* Top bar aligns with the centered 720px content column */
+    .st-key-onb_top_bar {
+        max-width: 720px !important;
+        width: 100% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    /* Hero section expands to use available tablet width */
     .prop-container {
         padding-right: 0 !important;
-        margin-bottom: 1.25rem !important;
+        margin-bottom: 0.5rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .prop-desc {
+        max-width: 100% !important;
+        font-size: 15px !important;
+        line-height: 1.5 !important;
+    }
+    .preview-card-wrap {
+        max-width: 100% !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .prop-benefits {
+        max-width: 100% !important;
+    }
+
+    /* Demo card & Onboard panel match width and stay centered */
+    .st-key-onboard_demo {
+        width: 100% !important;
+        max-width: 720px !important;
+        box-sizing: border-box !important;
+    }
+    .st-key-onboard_panel {
+        width: 100% !important;
+        max-width: 720px !important;
+        box-sizing: border-box !important;
+    }
+}
+
+/* Tablet Specific Typography & Rhythm (768px - 900px) */
+@media (min-width: 768px) and (max-width: 900px) {
+    .block-container {
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+        padding-top: 1rem !important;
+        padding-bottom: 2.5rem !important;
     }
     .prop-headline {
-        font-size: 2.2rem !important;
+        font-size: 2.6rem !important;
+        line-height: 1.12 !important;
+        letter-spacing: -0.03em !important;
+    }
+    .preview-card-wrap {
+        padding: 18px 24px !important;
+    }
+    .preview-title-row {
+        margin-bottom: 0.65rem !important;
+    }
+    .preview-chips-row {
+        gap: 8px !important;
+        margin-bottom: 0.85rem !important;
+    }
+    .pchip {
+        font-size: 12px !important;
+        padding: 4px 10px !important;
+    }
+    .st-key-onboard_panel {
+        padding: 22px 24px !important;
+        border-radius: 14px !important;
+    }
+}
+
+/* Compact Mobile Specific Typography & Spacing (<= 480px) */
+@media (max-width: 480px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"] > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"],
+    .st-key-onb_top_bar,
+    .st-key-onboard_demo,
+    .st-key-onboard_panel {
+        max-width: 100% !important;
+    }
+    .prop-headline {
+        font-size: 2.05rem !important;
+        line-height: 1.15 !important;
+    }
+}
+
+/* Balanced Two-Column Tablet Landscape / Compact Desktop (901px - 1199px) */
+@media (min-width: 901px) and (max-width: 1199px) {
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 1.5rem !important;
+        align-items: flex-start !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"]:first-child,
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"]:first-child {
+        flex: 0 0 calc(45% - 0.75rem) !important;
+        max-width: calc(45% - 0.75rem) !important;
+        width: calc(45% - 0.75rem) !important;
+        min-width: 0 !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stColumn"]:last-child,
+    div[data-testid="stHorizontalBlock"]:has(.st-key-onboard_panel) > div[data-testid="stLayoutWrapper"]:last-child {
+        flex: 0 0 calc(55% - 0.75rem) !important;
+        max-width: calc(55% - 0.75rem) !important;
+        width: calc(55% - 0.75rem) !important;
+        min-width: 0 !important;
+    }
+    .prop-container {
+        padding-right: 0.5rem !important;
+    }
+    .prop-headline {
+        font-size: clamp(2.1rem, 3.2vw, 2.6rem) !important;
+        line-height: 1.1 !important;
+    }
+    .prop-desc {
+        max-width: 100% !important;
+    }
+    .preview-card-wrap {
+        max-width: 100% !important;
+    }
+    .prop-benefits {
+        max-width: 100% !important;
     }
 }
 

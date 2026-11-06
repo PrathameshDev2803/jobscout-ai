@@ -360,13 +360,22 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
     border-radius: 8px !important;
     padding: 2px !important;
 }
+.st-key-onb_remember_duration div[data-baseweb="segmented-control"],
+.st-key-onb_remember_duration div[role="radiogroup"] {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+}
 .st-key-onb_remember_duration button,
 .st-key-onb_remember_duration [role="radio"] {
     min-height: 30px !important;
     height: 30px !important;
-    padding: 2px 12px !important;
+    padding: 2px 10px !important;
     font-size: 12px !important;
     font-weight: 500 !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
 }
 
 /* Footer buttons balanced layout */
