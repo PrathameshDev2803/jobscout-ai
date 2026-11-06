@@ -3227,6 +3227,38 @@ def render_welcome_screen():
                                "Do not upload documents you do not want processed.")
 
                     if onb_file is not None:
+                        _fname = onb_file.name or ""
+                        _stem, _ext = os.path.splitext(_fname)
+                        st.html(f"""<script>
+                        (function() {{
+                            try {{
+                                var doc = window.parent.document;
+                                function splitFilename() {{
+                                    var chip = doc.querySelector('div[data-testid="stFileChipName"]');
+                                    if (!chip) return;
+                                    if (chip.dataset.fileName === {json.dumps(_fname)}) return;
+                                    var sSpan = doc.createElement("span");
+                                    sSpan.className = "file-stem";
+                                    sSpan.textContent = {json.dumps(_stem)};
+                                    var eSpan = doc.createElement("span");
+                                    eSpan.className = "file-ext";
+                                    eSpan.textContent = {json.dumps(_ext)};
+                                    if (chip.replaceChildren) {{
+                                        chip.replaceChildren(sSpan, eSpan);
+                                    }} else {{
+                                        chip.textContent = "";
+                                        chip.appendChild(sSpan);
+                                        chip.appendChild(eSpan);
+                                    }}
+                                    chip.dataset.fileName = {json.dumps(_fname)};
+                                }}
+                                splitFilename();
+                                var obs = new MutationObserver(splitFilename);
+                                obs.observe(doc.body, {{ childList: true, subtree: true }});
+                                setTimeout(function() {{ obs.disconnect(); }}, 2500);
+                            }} catch(e) {{}}
+                        }})();
+                        </script>""", unsafe_allow_javascript=True)
                         f_size_kb = round(len(onb_file.getvalue()) / 1024, 1)
                         f_ext = onb_file.name.split(".")[-1].upper() if "." in onb_file.name else "FILE"
                         st.markdown(f"""

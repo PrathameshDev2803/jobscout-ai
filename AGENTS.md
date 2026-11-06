@@ -1,9 +1,41 @@
-# Rules
-- **Git**: Run add/commit/push origin main ONLY when message says "push" or "deploy"; otherwise leave changes uncommitted and report. Never commit `.env`, session keys, API secrets, or private data.
-- **Verification**: After editing `app.py`, run `python -m py_compile app.py` once and `git diff --stat` once. No repeated git status calls. Run unit tests (`.venv\Scripts\python.exe -m unittest`) only when requested or when logic (not markup/CSS) changes.
-- **CRLF & Editing**: `app.py` uses CRLF line endings. `edit_file` fails on multi-line matches, so use single-line anchors or one scripted replace on the first attempt. Never retry `edit_file` after a whitespace failure. Do not convert line endings.
-- **Investigation Limit**: For UI requests, limit investigation to 3 searches. If a stray element is not found by then, ask. Exclude `.venv`, `.git`, and `__pycache__`.
-- **Execution & Scope**: Edit only files named. Changes under ~50 lines: edit directly, summarize in 3 lines. Match existing styles/tokens without adding dependencies. Avoid `<` or `&` in `python -c`. Commands >60s stop.
+# AGENTS.md — JobScout (project-specific)
 
-CSS lives in assets/styles/, loaded by ui/theme.py. Line numbers in app.py are not tracked.
-JS lives in assets/js/, loaded by ui/theme.py.
+Global rules already apply (modes, budgets, verification ladder, safety). This file adds only what is specific to JobScout.
+
+## Stack and commands
+
+- Streamlit app, Python 3.10, Windows, `.venv`. Use `.venv\Scripts\python`.
+- Dev server: `http://localhost:8501`. Reuse it if it is already running.
+- Tier 0: `python -m py_compile <changed .py files>`
+- Tier 1: `python -m unittest test_<module> -v` (only the module covering the change)
+- Tier 3: `python -m unittest discover`. Baseline: 146 tests, 1 skip (`python-jobspy` not installed). Any new failure must be explained.
+
+## Project map (update after each restructure step)
+
+- `app.py` — main app, still large (≈6,400 lines). Never open whole; search, then read ±40 lines.
+- `assets/styles/` — 9 CSS files extracted from the old inline string. All styling changes go here.
+- `assets/js/` — 3 JS files.
+- `ui/theme.py` — loads CSS/JS assets.
+- `test_support.py` — `app_source()` helper used by tests.
+- `test_*.py` (repo root) — unittest suite.
+- `core/resume/` — planned home for pure resume-parsing code (in progress).
+
+## Protected — do not modify unless the task says so
+
+- Upload processing, file validation, 200MB limit, accepted formats (PDF, DOCX, TXT)
+- Session state keys and logic; widget `key=` values and call order
+- Resume parsing, profile load/save, backend processing
+- Gemini integration and the privacy disclaimer text
+- Existing remove-file handler
+
+## Streamlit rules
+
+- Native widgets (e.g. `st.file_uploader`) can't be conditionally removed without resetting state. Prefer restyling with CSS (`[data-testid="..."]`, `:has()`) over replacing the widget.
+- Don't rely on `.st-emotion-cache-*` class names. Use `data-testid` or stable wrappers.
+- Assume a rerun on every interaction; don't add heavy work to the main script path.
+- No new large inline CSS/JS strings in `app.py`.
+
+## Design
+
+- Dark theme with green accents. Reuse the existing CSS variables/tokens.
+- Visual checks (Tier 2): 320px and 1440px, empty → filled → remove → empty restored.
