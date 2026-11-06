@@ -90,16 +90,17 @@ div[data-testid="stFileUploaderDropzone"] button[kind="borderlessIcon"]:not([ari
 }
 
 /* ==========================================================================
-   Redesigned Uploaded Resume File Card
-   Layout, one row: [icon 44px fixed] [filename + meta, min-width:0] [Remove, right edge]
+   Uploaded Resume File Card (Consolidated)
+   One row: [icon 44px fixed] [filename + meta, min-width:0] [Remove, right edge]
    ========================================================================== */
 
-/* Compact horizontal card transformation when file is attached */
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section,
+/* 1. Card container: Dropzone with file attached */
+.st-key-onboard_panel section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
 .st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section {
     min-height: 0 !important;
     height: auto !important;
-    padding: 10px 14px !important;
+    max-height: none !important;
+    padding: 14px 16px !important;
     border: 1px solid rgba(16, 185, 129, 0.35) !important;
     border-style: solid !important;
     background: rgba(16, 185, 129, 0.04) !important;
@@ -118,63 +119,67 @@ div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section,
     margin: 4px 0 2px 0 !important;
 }
 
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section:hover,
+.st-key-onboard_panel section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]):hover,
 .st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section:hover {
     border-color: rgba(16, 185, 129, 0.55) !important;
     background: rgba(16, 185, 129, 0.06) !important;
 }
 
-/* Ensure all intermediate wrappers span 100% full width in row layout */
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section > div,
+/* 2. Intermediate wrappers: collapsed so bounds match content tightly */
+.st-key-onboard_panel section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]) > div,
 .st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section > div,
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"],
-.st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"],
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"] > *,
-.st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"] > *,
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"] ul,
-.st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"] ul,
-div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"] li,
-.st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) div[data-testid="stFileChips"] li {
+.st-key-onboard_panel div[data-testid="stFileChips"],
+.st-key-onboard_panel [data-testid="stFileChips"],
+.st-key-onboard_panel [data-testid="stFileChips"] ul,
+.st-key-onboard_panel [data-testid="stFileChips"] li {
     width: 100% !important;
     max-width: 100% !important;
-    flex: 1 1 100% !important;
     min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    list-style: none !important;
+    flex: 1 1 100% !important;
     box-sizing: border-box !important;
+    list-style: none !important;
+    overflow: visible !important;
 }
 
-/* stFileChip: The single horizontal row */
-div[data-testid="stFileChip"],
-.st-key-onboard_panel div[data-testid="stFileChip"] {
+/* 3. Row stFileChip */
+.st-key-onboard_panel div[data-testid="stFileChip"],
+.st-key-onboard_panel [data-testid="stFileChip"] {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 14px !important;
     width: 100% !important;
     max-width: 100% !important;
-    flex: 1 1 100% !important;
     min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: 1 1 100% !important;
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
     margin: 0 !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 12px !important;
     box-sizing: border-box !important;
 }
 
-/* 1. File icon: 44px fixed, vertically centered, no clipping */
-div[data-testid="stFileChip"] > div:first-child {
+/* 4. Icon box: 44px fixed, centered, no clipping */
+.st-key-onboard_panel [data-testid="stFileChip"] > div:first-child {
+    flex: 0 0 44px !important;
     width: 44px !important;
     height: 44px !important;
     min-width: 44px !important;
     min-height: 44px !important;
     max-width: 44px !important;
     max-height: 44px !important;
-    flex: 0 0 44px !important;
     border-radius: 8px !important;
     background: rgba(16, 185, 129, 0.12) !important;
     border: 1px solid rgba(16, 185, 129, 0.3) !important;
@@ -188,12 +193,14 @@ div[data-testid="stFileChip"] > div:first-child {
     padding: 0 !important;
     margin: 0 !important;
 }
-div[data-testid="stFileChip"] > div:first-child::before,
-div[data-testid="stFileChip"] > div:first-child::after {
+
+.st-key-onboard_panel [data-testid="stFileChip"] > div:first-child::before,
+.st-key-onboard_panel [data-testid="stFileChip"] > div:first-child::after {
     content: none !important;
     display: none !important;
 }
-div[data-testid="stFileChip"] > div:first-child svg {
+
+.st-key-onboard_panel [data-testid="stFileChip"] > div:first-child svg {
     width: 22px !important;
     height: 22px !important;
     fill: currentColor !important;
@@ -203,26 +210,28 @@ div[data-testid="stFileChip"] > div:first-child svg {
     flex-shrink: 0 !important;
 }
 
-/* Distinct file-type accent colors for PDF, DOCX, TXT */
-div[data-testid="stFileChip"]:has([title*=".pdf" i]) > div:first-child {
+/* File-type variants for icon box (PDF, DOCX, TXT) */
+.st-key-onboard_panel [data-testid="stFileChip"]:has([title*=".pdf" i]) > div:first-child {
     background: rgba(16, 185, 129, 0.12) !important;
     border-color: rgba(16, 185, 129, 0.35) !important;
     color: #10b981 !important;
 }
-div[data-testid="stFileChip"]:has([title*=".docx" i]) > div:first-child {
+
+.st-key-onboard_panel [data-testid="stFileChip"]:has([title*=".docx" i]) > div:first-child {
     background: rgba(59, 130, 246, 0.12) !important;
     border-color: rgba(59, 130, 246, 0.35) !important;
     color: #60a5fa !important;
 }
-div[data-testid="stFileChip"]:has([title*=".txt" i]) > div:first-child {
+
+.st-key-onboard_panel [data-testid="stFileChip"]:has([title*=".txt" i]) > div:first-child {
     background: rgba(245, 158, 11, 0.12) !important;
     border-color: rgba(245, 158, 11, 0.35) !important;
     color: #fbbf24 !important;
 }
 
-/* 2. Middle text block: Filename on top, File size below, takes remaining space */
-div[data-testid="stFileChip"] > div:nth-child(2) {
-    flex: 1 1 0% !important;
+/* 5. Middle text block: Filename on top, File size below */
+.st-key-onboard_panel [data-testid="stFileChip"] > div:nth-child(2) {
+    flex: 1 1 auto !important;
     min-width: 0 !important;
     max-width: 100% !important;
     display: flex !important;
@@ -235,14 +244,16 @@ div[data-testid="stFileChip"] > div:nth-child(2) {
     margin: 0 !important;
     padding: 0 !important;
 }
-div[data-testid="stFileChip"] > div:nth-child(2)::before,
-div[data-testid="stFileChip"] > div:nth-child(2)::after {
+
+.st-key-onboard_panel [data-testid="stFileChip"] > div:nth-child(2)::before,
+.st-key-onboard_panel [data-testid="stFileChip"] > div:nth-child(2)::after {
     content: none !important;
     display: none !important;
 }
 
-/* Filename text with stem ellipsis and visible extension */
-div[data-testid="stFileChipName"] {
+/* 6. Filename: single line, FULL name; stem truncates with ellipsis, ext stays visible */
+.st-key-onboard_panel div[data-testid="stFileChipName"],
+.st-key-onboard_panel [data-testid="stFileChipName"] {
     display: flex !important;
     flex-direction: row !important;
     align-items: baseline !important;
@@ -260,30 +271,39 @@ div[data-testid="stFileChipName"] {
     white-space: nowrap !important;
     text-overflow: ellipsis !important;
 }
-div[data-testid="stFileChipName"]::before,
-div[data-testid="stFileChipName"]::after {
+
+.st-key-onboard_panel [data-testid="stFileChipName"]::before,
+.st-key-onboard_panel [data-testid="stFileChipName"]::after {
     content: none !important;
     display: none !important;
 }
-div[data-testid="stFileChipName"] .file-stem {
+
+.st-key-onboard_panel [data-testid="stFileChipName"] .file-stem {
+    min-width: 0 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
-    min-width: 0 !important;
     flex: 0 1 auto !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    color: #f8fafc !important;
 }
-div[data-testid="stFileChipName"] .file-ext {
+
+.st-key-onboard_panel [data-testid="stFileChipName"] .file-ext {
+    flex: 0 0 auto !important;
     flex-shrink: 0 !important;
     white-space: nowrap !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
     color: #cbd5e1 !important;
 }
 
-/* Meta line: file type appears ONLY here ("PDF · 14.9KB") */
-div[data-testid="stFileChip"] > div:nth-child(2) > div:not([data-testid="stFileChipName"]) {
+/* 7. Meta line: file type prefix appears here ("PDF · 14.9KB") */
+.st-key-onboard_panel [data-testid="stFileChip"] > div:nth-child(2) > div:not([data-testid="stFileChipName"]) {
     font-size: 11.5px !important;
     color: #94a3b8 !important;
     font-weight: 500 !important;
-    line-height: 1.25 !important;
+    line-height: 1.3 !important;
     letter-spacing: 0.02em !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -292,33 +312,38 @@ div[data-testid="stFileChip"] > div:nth-child(2) > div:not([data-testid="stFileC
     align-items: center !important;
     flex-wrap: wrap !important;
 }
-div[data-testid="stFileChip"]:has([title*=".pdf" i]) > div:nth-child(2) > div:not([data-testid="stFileChipName"])::before {
+
+.st-key-onboard_panel [data-testid="stFileChip"]:has([title*=".pdf" i]) > div:nth-child(2) > div:not([data-testid="stFileChipName"])::before {
     content: "PDF · ";
     font-weight: 700;
     color: #10b981;
 }
-div[data-testid="stFileChip"]:has([title*=".docx" i]) > div:nth-child(2) > div:not([data-testid="stFileChipName"])::before {
+
+.st-key-onboard_panel [data-testid="stFileChip"]:has([title*=".docx" i]) > div:nth-child(2) > div:not([data-testid="stFileChipName"])::before {
     content: "DOCX · ";
     font-weight: 700;
     color: #60a5fa;
 }
-div[data-testid="stFileChip"]:has([title*=".txt" i]) > div:nth-child(2) > div:not([data-testid="stFileChipName"])::before {
+
+.st-key-onboard_panel [data-testid="stFileChip"]:has([title*=".txt" i]) > div:nth-child(2) > div:not([data-testid="stFileChipName"])::before {
     content: "TXT · ";
     font-weight: 700;
     color: #fbbf24;
 }
 
-/* 3. Remove button: Sitting at the right edge, vertically centered */
-small[data-testid="stFileChipDeleteBtn"] {
+/* 8. Remove button: Sitting at the right edge, vertically centered */
+.st-key-onboard_panel small[data-testid="stFileChipDeleteBtn"],
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] {
+    flex: 0 0 auto !important;
     margin-left: auto !important;
-    flex-shrink: 0 !important;
     display: flex !important;
     align-items: center !important;
     align-self: center !important;
 }
-small[data-testid="stFileChipDeleteBtn"] button {
-    min-height: 34px !important;
-    height: 34px !important;
+
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button {
+    min-height: 38px !important;
+    height: 38px !important;
     padding: 0 12px !important;
     border-radius: 7px !important;
     background: rgba(255, 255, 255, 0.05) !important;
@@ -327,14 +352,16 @@ small[data-testid="stFileChipDeleteBtn"] button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 6px !important;
+    gap: 8px !important;
     cursor: pointer !important;
     transition: all 0.15s ease !important;
     box-sizing: border-box !important;
     align-self: center !important;
     position: relative !important;
+    white-space: nowrap !important;
 }
-small[data-testid="stFileChipDeleteBtn"] button::before {
+
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button::before {
     content: "" !important;
     position: absolute !important;
     top: 50% !important;
@@ -346,24 +373,28 @@ small[data-testid="stFileChipDeleteBtn"] button::before {
     height: 100% !important;
     pointer-events: auto !important;
 }
-small[data-testid="stFileChipDeleteBtn"] button:hover {
+
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button:hover {
     background: rgba(239, 68, 68, 0.12) !important;
     border-color: rgba(239, 68, 68, 0.45) !important;
     color: #f87171 !important;
     box-shadow: 0 0 10px rgba(239, 68, 68, 0.2) !important;
 }
-small[data-testid="stFileChipDeleteBtn"] button:focus-visible {
+
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button:focus-visible {
     outline: 2px solid #10b981 !important;
     outline-offset: 2px !important;
 }
-small[data-testid="stFileChipDeleteBtn"] button::after {
-    content: "Remove";
+
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button::after {
+    content: "Remove" !important;
     font-size: 12px !important;
     font-weight: 600 !important;
     color: inherit !important;
     letter-spacing: 0.01em !important;
 }
-small[data-testid="stFileChipDeleteBtn"] button svg {
+
+.st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button svg {
     width: 14px !important;
     height: 14px !important;
     fill: currentColor !important;
@@ -371,24 +402,37 @@ small[data-testid="stFileChipDeleteBtn"] button svg {
     flex-shrink: 0 !important;
 }
 
-/* Responsive: 320px screen width support */
+/* 9. Responsive: 320px screen width support */
 @media (max-width: 480px) {
-    div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section,
+    .st-key-onboard_panel section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
     .st-key-onboard_panel div[data-testid="stFileUploader"]:has(div[data-testid="stFileChips"]) section {
-        padding: 8px 10px !important;
+        padding: 10px 12px !important;
     }
-    div[data-testid="stFileChip"],
-    .st-key-onboard_panel div[data-testid="stFileChip"] {
-        gap: 8px !important;
+    .st-key-onboard_panel div[data-testid="stFileChip"],
+    .st-key-onboard_panel [data-testid="stFileChip"] {
+        gap: 10px !important;
     }
-    small[data-testid="stFileChipDeleteBtn"] button::after {
+    .st-key-onboard_panel [data-testid="stFileChip"] > div:first-child {
+        flex: 0 0 40px !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        max-width: 40px !important;
+        max-height: 40px !important;
+    }
+    .st-key-onboard_panel small[data-testid="stFileChipDeleteBtn"]::after,
+    .st-key-onboard_panel [data-testid="stFileChipDeleteBtn"]::after,
+    .st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button::after {
         display: none !important;
     }
-    small[data-testid="stFileChipDeleteBtn"] button {
+    .st-key-onboard_panel small[data-testid="stFileChipDeleteBtn"] button,
+    .st-key-onboard_panel [data-testid="stFileChipDeleteBtn"] button {
         padding: 0 !important;
-        width: 34px !important;
-        min-width: 34px !important;
-        height: 34px !important;
+        width: 38px !important;
+        min-width: 38px !important;
+        height: 38px !important;
+        min-height: 38px !important;
     }
 }
 
@@ -1232,225 +1276,4 @@ div[data-testid="stColumn"] {
 }
 @media (prefers-reduced-motion: reduce) {
     .tw-active .tw-text::after { display: none; }
-}
-
-
-
-/* ==========================================================================
-   Resume upload: compact file card (uploaded state)
-   Append this block at the END of assets/styles/08_onboarding_panel.css
-   Targets Streamlit's own file chip, so upload and remove logic are untouched.
-   ========================================================================== */
-
-/* 1. The bordered card (dropzone in uploaded state): wraps the row tightly
-      with even padding, vertically centered, killing leftover fixed height. */
-.st-key-onb_file_input section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
-.st-key-onb_file_input:has([data-testid="stFileChips"]) section,
-.st-key-onboard_panel div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
-.st-key-onboard_panel div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
-div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
-[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) [data-testid="stFileUploaderDropzone"],
-[data-testid="stFileUploader"] section:has([data-testid="stFileChips"]) {
-  min-height: 0 !important;
-  height: auto !important;
-  max-height: none !important;
-  padding: 14px 16px !important;
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  box-sizing: border-box !important;
-  border: 1px solid rgba(16, 185, 129, 0.35) !important;
-  background: rgba(16, 185, 129, 0.04) !important;
-  border-radius: 10px !important;
-}
-
-/* 2. Collapse all intermediate wrappers (section > div, stFileChips, ul, li)
-      so the card bounds match its content tightly with zero leftover height. */
-[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section > div,
-.st-key-onboard_panel [data-testid="stFileUploader"] *:has([data-testid="stFileChips"]),
-[data-testid="stFileUploader"] *:has([data-testid="stFileChips"]),
-[data-testid="stFileChips"],
-[data-testid="stFileChips"] ul,
-[data-testid="stFileChips"] li {
-  min-height: 0 !important;
-  height: auto !important;
-  max-height: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  flex: 1 1 100% !important;
-  box-sizing: border-box !important;
-  list-style: none !important;
-  overflow: visible !important;
-}
-
-/* 3. The row itself: icon | name + meta | Remove, all on one centre line. */
-[data-testid="stFileChip"] {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: 14px !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-width: 0 !important;
-  height: auto !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-sizing: border-box !important;
-}
-
-/* Icon box: fixed size, never squashed or clipped. */
-[data-testid="stFileChip"] > div:first-child {
-  flex: 0 0 44px !important;
-  width: 44px !important;
-  height: 44px !important;
-  min-width: 44px !important;
-  min-height: 44px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  overflow: hidden !important;
-}
-
-/* Text block: takes all remaining space, can shrink, name above meta. */
-[data-testid="stFileChip"] > div:nth-child(2) {
-  flex: 1 1 auto !important;
-  min-width: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: center !important;
-  gap: 2px !important;
-  overflow: hidden !important;
-}
-
-/* Filename: show the full name; only truncate with an ellipsis when it truly doesn't fit */
-[data-testid="stFileChipName"] {
-  display: block !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  width: 100% !important;
-  font-size: 0 !important;
-  line-height: 0 !important;
-  color: transparent !important;
-  overflow: hidden !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-[data-testid="stFileChipName"]::before {
-  content: attr(title) !important;
-  display: block !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  font-size: 13.5px !important;
-  font-weight: 600 !important;
-  line-height: 1.3 !important;
-  color: #f8fafc !important;
-  letter-spacing: -0.01em !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-/* If .file-stem / .file-ext spans are present in DOM, support their layout */
-[data-testid="stFileChipName"]:has(.file-stem) {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: baseline !important;
-  font-size: 13.5px !important;
-  line-height: 1.3 !important;
-  color: #f8fafc !important;
-  white-space: nowrap !important;
-}
-[data-testid="stFileChipName"]:has(.file-stem)::before {
-  content: none !important;
-  display: none !important;
-}
-[data-testid="stFileChipName"] .file-stem {
-  flex: 0 1 auto !important;
-  min-width: 0 !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  font-size: 13.5px !important;
-  font-weight: 600 !important;
-  color: #f8fafc !important;
-}
-[data-testid="stFileChipName"] .file-ext {
-  flex: 0 0 auto !important;
-  white-space: nowrap !important;
-  font-size: 13.5px !important;
-  font-weight: 600 !important;
-  color: #cbd5e1 !important;
-}
-
-/* Meta line (type and size): smaller, wraps instead of overflowing. */
-[data-testid="stFileChip"] > div:nth-child(2) > div:last-child {
-  font-size: 0.8rem !important;
-  line-height: 1.3 !important;
-  white-space: normal !important;
-}
-[data-testid="stFileChip"] > div:nth-child(2) > div:last-child::before {
-  margin-right: 0.35em;
-}
-
-/* Remove: pinned to the right edge, centred, comfortable tap target. */
-[data-testid="stFileChipDeleteBtn"] {
-  flex: 0 0 auto !important;
-  margin: 0 0 0 auto !important;
-  margin-left: auto !important;
-  display: flex !important;
-  align-items: center !important;
-  align-self: center !important;
-}
-[data-testid="stFileChipDeleteBtn"] button {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  min-height: 38px !important;
-  white-space: nowrap !important;
-}
-
-/* 4. Narrow screens: keep one row, shrink the icon, Remove becomes icon-only. */
-@media (max-width: 480px) {
-  .st-key-onb_file_input section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
-  .st-key-onb_file_input:has([data-testid="stFileChips"]) section,
-  .st-key-onboard_panel div[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]),
-  .st-key-onboard_panel div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
-  div[data-testid="stFileUploader"]:has([data-testid="stFileChips"]) section,
-  [data-testid="stFileUploader"]:has([data-testid="stFileChips"]) [data-testid="stFileUploaderDropzone"],
-  [data-testid="stFileUploader"] section:has([data-testid="stFileChips"]) {
-    padding: 10px 12px !important;
-    min-height: 0 !important;
-    height: auto !important;
-  }
-  [data-testid="stFileChip"] {
-    gap: 10px !important;
-  }
-  [data-testid="stFileChip"] > div:first-child {
-    flex-basis: 40px !important;
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
-  }
-  [data-testid="stFileChipDeleteBtn"]::after,
-  [data-testid="stFileChipDeleteBtn"] button::after {
-    display: none !important;
-  }
-  [data-testid="stFileChipDeleteBtn"] button {
-    min-width: 40px !important;
-    padding-inline: 8px !important;
-  }
 }
