@@ -13,7 +13,9 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-SESSION_DB = os.path.join(BASE, "sessions.db")
+DATA_DIR = os.path.abspath(os.environ.get("JOBS_DATA_DIR") or BASE)
+os.makedirs(DATA_DIR, exist_ok=True)
+SESSION_DB = os.path.join(DATA_DIR, "sessions.db")
 MARKER_KEY = "_onboarded_at"
 
 
