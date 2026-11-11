@@ -56,9 +56,11 @@ _PUBLIC_AI_LOCK = threading.Lock()
 _PUBLIC_AI_GLOBAL_CALLS = []
 load_dotenv(ENV_FILE, override=True)
 
-DB = os.path.join(BASE, "jobs.db")
-PROFILE = os.path.join(BASE, "profile.json")
-RESUME_TXT = os.path.join(BASE, "resume.txt")
+DATA_DIR = os.path.abspath(os.getenv("JOBS_DATA_DIR") or BASE)
+os.makedirs(DATA_DIR, exist_ok=True)
+DB = os.path.join(DATA_DIR, "jobs.db")
+PROFILE = os.path.join(DATA_DIR, "profile.json")
+RESUME_TXT = os.path.join(DATA_DIR, "resume.txt")
 
 
 def _server_secret(name):
@@ -4358,7 +4360,7 @@ if _owner_logged_in():
         # First owner visit: create/load the local profile instead of the public wizard.
         st.session_state["user_profile"] = load_profile()
         st.session_state["onboarded"] = True
-    DB = os.path.join(BASE, "jobs.db")
+    DB = os.path.join(DATA_DIR, "jobs.db")
 else:
     # Demo: example profile only, isolated scratch DB, no owner key, no disk writes.
     if not st.session_state.get("user_profile"):
