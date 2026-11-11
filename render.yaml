@@ -3,22 +3,12 @@ services:
     name: jobscout-ai
     runtime: docker
     region: singapore
-    plan: 0.5c-512mb
+    plan: free
     branch: main
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /_stcore/health
     autoDeployTrigger: commit
-    disk:
-      name: jobscout-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: JOBS_DATA_DIR
-        value: /var/data
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_PUBLIC_API_KEY
-        sync: false
-      - key: OWNER_PASSWORD
-        sync: false
+        value: /tmp/jobscout
