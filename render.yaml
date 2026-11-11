@@ -12,3 +12,5 @@ services:
     envVars:
       - key: JOBS_DATA_DIR
         value: /tmp/jobscout
+      - key: GEMINI_PUBLIC_API_KEY
+        sync: false
