@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: jobscout-ai
+    runtime: python
+    region: singapore
+    plan: 0.5c-512mb
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+    healthCheckPath: /_stcore/health
+    autoDeployTrigger: commit
+    disk:
+      name: jobscout-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: JOBS_DATA_DIR
+        value: /var/data
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_PUBLIC_API_KEY
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
