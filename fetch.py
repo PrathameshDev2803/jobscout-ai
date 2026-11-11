@@ -18,8 +18,10 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
-DB = os.path.join(os.path.dirname(__file__), "jobs.db")
-RESUME_DIR = os.path.join(os.path.dirname(__file__), "generated_resumes")
+DATA_DIR = os.path.abspath(os.getenv("JOBS_DATA_DIR") or os.path.dirname(__file__))
+os.makedirs(DATA_DIR, exist_ok=True)
+DB = os.path.join(DATA_DIR, "jobs.db")
+RESUME_DIR = os.path.join(DATA_DIR, "generated_resumes")
 
 # ponytail: tracker statuses are a closed set; keep in one place so the
 # Applications UI and any future importer share the same vocabulary.
