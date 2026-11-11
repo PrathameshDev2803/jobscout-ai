@@ -1,12 +1,12 @@
 services:
   - type: web
     name: jobscout-ai
-    runtime: python
+    runtime: docker
     region: singapore
     plan: 0.5c-512mb
     branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /_stcore/health
     autoDeployTrigger: commit
     disk:
