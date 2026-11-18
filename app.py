@@ -510,13 +510,13 @@ EXCLUDED_PORTFOLIO_DOMAINS = {
 
 from core.url_utils import sanitize_url, unwrap_text_urls, is_url_grounded, normalize_url
 try:
-    from ui.link_review import render_link_review, get_links_tab_label
+    from ui.link_review import render_link_review, get_links_tab_label, count_link_warnings
 except ImportError:
     try:
         import importlib
         import ui.link_review
         importlib.reload(ui.link_review)
-        from ui.link_review import render_link_review, get_links_tab_label
+        from ui.link_review import render_link_review, get_links_tab_label, count_link_warnings
     except Exception:
         try:
             from ui.link_review import render_link_review
@@ -525,6 +525,8 @@ except ImportError:
                 return profile
         def get_links_tab_label(profile: dict) -> str:
             return "Links"
+        def count_link_warnings(profile: dict) -> int:
+            return 0
 
 
 def classify_links(links: list, raw_text: str = "") -> dict:
@@ -2690,6 +2692,15 @@ def onb_step_label(step, path=""):
     return f"Step 2 of 3 — {path}" if str(path).strip() else "Step 2 of 3 — Complete the selected path."
 
 
+def clamp_review_step(step) -> int:
+    """Clamp review wizard step index to valid 0..3 range."""
+    try:
+        s = int(step)
+    except (TypeError, ValueError):
+        s = 0
+    return max(0, min(3, s))
+
+
 def onb_card_label(current, path, base):
     """Selected-state prefix for path cards: ✓ on the previously chosen path, else plain."""
     return ("✓ " if current == path else "") + base
@@ -2902,7 +2913,7 @@ def _apply_onb_autofill(profile):
 
 
 def _clear_onb_upload_state(clear_autofill=False):
-    for key in ("onb_upload_hash", "onb_upload_profile", "onb_upload_engine", "onb_upload_error"):
+    for key in ("onb_upload_hash", "onb_upload_profile", "onb_upload_engine", "onb_upload_error", "review_step"):
         try:
             st.session_state.pop(key, None)
         except Exception:
@@ -2949,41 +2960,43 @@ def render_welcome_screen():
     st.write("")
 
     # 2. Split screen: Left = value prop showcase, Right = single clean action card
+    _pending_raw = st.session_state.get("pending_profile")
+    _is_review = isinstance(_pending_raw, dict) and bool(_pending_raw)
+
     col_prop, col_onboard = st.columns([0.44, 0.56], gap="medium")
 
     with col_prop:
         st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
     with col_onboard:
-        # ponytail: Compact demo card matching the Launch Workspace card
-        # design language — dark surface, subtle border, restrained emerald
-        # accent, horizontal layout on desktop, stacked on mobile.
-        with st.container(border=False, key="onboard_demo"):
-            st.markdown("""
-            <div class="demo-card-head">
-                <div class="demo-icon">&gt;_</div>
-                <div class="demo-badge">LIVE DEMO</div>
-            </div>
-            <div class="demo-title">Interactive Developer Workspace</div>
-            <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
-            """, unsafe_allow_html=True)
-            # CTA — auto column, rendered by Streamlit button as 3rd grid item
-            if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
-                _start_demo()
+        if not _is_review:
+            # ponytail: Compact demo card matching the Launch Workspace card
+            # design language — dark surface, subtle border, restrained emerald
+            # accent, horizontal layout on desktop, stacked on mobile.
+            with st.container(border=False, key="onboard_demo"):
+                st.markdown("""
+                <div class="demo-card-head">
+                    <div class="demo-icon">&gt;_</div>
+                    <div class="demo-badge">LIVE DEMO</div>
+                </div>
+                <div class="demo-title">Interactive Developer Workspace</div>
+                <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
+                """, unsafe_allow_html=True)
+                # CTA — auto column, rendered by Streamlit button as 3rd grid item
+                if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
+                    _start_demo()
 
-        st.markdown("""
-        <div class="or-separator">
-            <span>Or personalize with your resume</span>
-        </div>
-        """, unsafe_allow_html=True)
+            st.markdown("""
+            <div class="or-separator">
+                <span>Or personalize with your resume</span>
+            </div>
+            """, unsafe_allow_html=True)
 
         # ponytail: fixed wizard — Step 3 review renders INSIDE this same card
         # (pending_profile only switches body/footer content, never the page).
         # Guided steps: cards (1) → single form (2) → review (3). Each branch
         # mounts only its step's widgets (no duplicates, no stale state);
         # drafts preserve typed data across step/path switches.
-        _pending_raw = st.session_state.get("pending_profile")
-        _is_review = isinstance(_pending_raw, dict) and bool(_pending_raw)
         _step = onb_go_step(st.session_state, st.session_state.get("onb_step", 1))
         _path = st.session_state.get("onb_path", ONB_PATHS[0])
         if _path not in ONB_PATHS:
@@ -3068,150 +3081,172 @@ def render_welcome_screen():
                     loc = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
                     edit_mode = st.session_state.get("confirm_edit", False)
 
-                    if edit_mode:
-                        with st.container(border=True, key="onb_edit_box"):
-                            st.markdown("### Edit details")
-                            e_name = st.text_input("Full name", value=str(p.get("name") or ""), key="cedit_name")
-                            e_role = st.text_input("Professional title", value=str(p.get("base_role") or ""), key="cedit_role")
-                            c1, c2 = st.columns(2)
-                            with c1:
-                                e_city = st.text_input("Location", value=str(loc.get("city") or ""), key="cedit_city")
-                                e_email = st.text_input("Email", value=str(p.get("email") or ""), key="cedit_email")
-                                e_linkedin = st.text_input("LinkedIn", value=str(p.get("linkedin") or ""), key="cedit_linkedin")
-                            with c2:
-                                e_phone = st.text_input("Phone", value=str(p.get("phone") or ""), key="cedit_phone")
-                                e_github = st.text_input("GitHub", value=str(p.get("github") or ""), key="cedit_github")
-                                e_portfolio = st.text_input("Portfolio", value=str(p.get("portfolio") or ""), key="cedit_portfolio")
-                            skills = [s for s in (p.get("skills") or []) if str(s).strip()]
-                            e_skills = st.text_area("Skills (comma separated)", value=", ".join(str(s) for s in skills), height=70, key="cedit_skills")
-                            exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
-                            e0 = exps[0] if exps else {}
-                            ec1, ec2, ec3 = st.columns(3)
-                            with ec1:
-                                e_xrole = st.text_input("Job title", value=str(e0.get("role") or ""), key="cedit_xrole")
-                            with ec2:
-                                e_xco = st.text_input("Company", value=str(e0.get("company") or ""), key="cedit_xco")
-                            with ec3:
-                                e_xper = st.text_input("Dates", value=str(e0.get("period") or ""), key="cedit_xper")
-                            e_xbul = st.text_area("Role bullets (one per line)", value="\n".join(str(b) for b in (e0.get("bullets") or [])), height=90, key="cedit_xbul")
-                            edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
-                            if edus:
-                                d0 = edus[0]
-                                ed1, ed2, ed3 = st.columns(3)
-                                with ed1:
-                                    e_ddeg = st.text_input("Degree", value=str(d0.get("degree") or ""), key="cedit_ddeg")
-                                with ed2:
-                                    e_dinst = st.text_input("Institution", value=str(d0.get("institution") or ""), key="cedit_dinst")
-                                with ed3:
-                                    e_dyr = st.text_input("Year", value=str(d0.get("year") or ""), key="cedit_dyr")
-                            else:
-                                e_ddeg = e_dinst = e_dyr = ""
-                    else:
-                        # 1. Compact summary line at top
-                        name = (p.get("name") or "").strip() or "Candidate"
-                        role = (p.get("base_role") or "").strip()
-                        try:
-                            ey = float(p.get("experience_years") or 0)
-                        except (TypeError, ValueError):
-                            ey = 0
-                        ey_txt = f"{int(ey) if float(ey).is_integer() else ey} yrs exp" if ey > 0 else ""
-                        city = str(loc.get("city") or "").strip() if isinstance(loc, dict) else ""
-                        summary_bits = [b for b in [role, ey_txt, city] if b]
-                        summary_meta = f" <span class='onb-summary-meta'>({ ' · '.join(summary_bits) })</span>" if summary_bits else ""
-                        st.markdown(
-                            f"<div class='onb-review-summary-bar'><span class='onb-summary-name'>{html.escape(name)}</span>{summary_meta}</div>",
-                            unsafe_allow_html=True
-                        )
+                    review_step = clamp_review_step(st.session_state.get("review_step", 0))
+                    st.session_state["review_step"] = review_step
 
-                        # 2. Tabs: Overview, Experience, Projects, Links
-                        tab_overview, tab_exp, tab_proj, tab_links = st.tabs([
-                            "Overview", "Experience", "Projects", get_links_tab_label(p)
-                        ])
+                    warn_count = count_link_warnings(p)
+                    step_titles = [
+                        "Summary",
+                        "Experience",
+                        "Projects",
+                        f"Verify links ⚠ {warn_count}" if warn_count > 0 else "Verify links"
+                    ]
+                    curr_step_title = step_titles[review_step]
+                    progress_pct = int((review_step + 1) * 25)
 
-                        with tab_overview:
-                            c_left, c_right = st.columns(2)
-                            with c_left:
-                                contact_bits = []
-                                if p.get("phone"):
-                                    contact_bits.append(f"<div class='confirm-link'><span>Phone · </span>{html.escape(str(p['phone']))}</div>")
-                                if p.get("email"):
-                                    contact_bits.append(f"<div class='confirm-link'><span>Email · </span>{html.escape(str(p['email']))}</div>")
-                                for k, label in (("linkedin", "LinkedIn"), ("github", "GitHub"), ("portfolio", "Portfolio")):
-                                    if p.get(k):
-                                        contact_bits.append(f"<div class='confirm-link'><span>{label} · </span>{html.escape(str(p[k]))}</div>")
-                                if contact_bits:
-                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Contact & Links</h3>{''.join(contact_bits)}</div>", unsafe_allow_html=True)
+                    # Top progress indicator (Step N of 4 · <step name>)
+                    st.markdown(f"""
+                    <div class="onb-wizard-header">
+                        <div class="onb-wizard-step-label">
+                            <span>Step {review_step + 1} of 4 · {html.escape(curr_step_title)}</span>
+                        </div>
+                        <div class="onb-wizard-track">
+                            <div class="onb-wizard-bar" style="width: {progress_pct}%;"></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
+                    with st.container(border=False, key="onb_review_content"):
+                        if edit_mode:
+                            with st.container(border=True, key="onb_edit_box"):
+                                st.markdown("### Edit details")
+                                e_name = st.text_input("Full name", value=str(p.get("name") or ""), key="cedit_name")
+                                e_role = st.text_input("Professional title", value=str(p.get("base_role") or ""), key="cedit_role")
+                                c1, c2 = st.columns(2)
+                                with c1:
+                                    e_city = st.text_input("Location", value=str(loc.get("city") or ""), key="cedit_city")
+                                    e_email = st.text_input("Email", value=str(p.get("email") or ""), key="cedit_email")
+                                    e_linkedin = st.text_input("LinkedIn", value=str(p.get("linkedin") or ""), key="cedit_linkedin")
+                                with c2:
+                                    e_phone = st.text_input("Phone", value=str(p.get("phone") or ""), key="cedit_phone")
+                                    e_github = st.text_input("GitHub", value=str(p.get("github") or ""), key="cedit_github")
+                                    e_portfolio = st.text_input("Portfolio", value=str(p.get("portfolio") or ""), key="cedit_portfolio")
+                                skills = [s for s in (p.get("skills") or []) if str(s).strip()]
+                                e_skills = st.text_area("Skills (comma separated)", value=", ".join(str(s) for s in skills), height=70, key="cedit_skills")
+                                exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
+                                e0 = exps[0] if exps else {}
+                                ec1, ec2, ec3 = st.columns(3)
+                                with ec1:
+                                    e_xrole = st.text_input("Job title", value=str(e0.get("role") or ""), key="cedit_xrole")
+                                with ec2:
+                                    e_xco = st.text_input("Company", value=str(e0.get("company") or ""), key="cedit_xco")
+                                with ec3:
+                                    e_xper = st.text_input("Dates", value=str(e0.get("period") or ""), key="cedit_xper")
+                                e_xbul = st.text_area("Role bullets (one per line)", value="\n".join(str(b) for b in (e0.get("bullets") or [])), height=90, key="cedit_xbul")
                                 edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
                                 if edus:
-                                    rows = []
-                                    for e in edus[:3]:
-                                        deg, inst, yr = html.escape(str(e.get("degree") or "")), html.escape(str(e.get("institution") or "")), html.escape(str(e.get("year") or ""))
-                                        rows.append(f"<div class='confirm-exp-role'>{deg}</div><div class='confirm-exp-sub'>{' · '.join(x for x in (inst, yr) if x)}</div>")
-                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Education</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+                                    d0 = edus[0]
+                                    ed1, ed2, ed3 = st.columns(3)
+                                    with ed1:
+                                        e_ddeg = st.text_input("Degree", value=str(d0.get("degree") or ""), key="cedit_ddeg")
+                                    with ed2:
+                                        e_dinst = st.text_input("Institution", value=str(d0.get("institution") or ""), key="cedit_dinst")
+                                    with ed3:
+                                        e_dyr = st.text_input("Year", value=str(d0.get("year") or ""), key="cedit_dyr")
+                                else:
+                                    e_ddeg = e_dinst = e_dyr = ""
+                        else:
+                            if review_step == 0:
+                                # Step 0: Summary (compact header + 2-col contact, education & skills)
+                                name = (p.get("name") or "").strip() or "Candidate"
+                                role = (p.get("base_role") or "").strip()
+                                try:
+                                    ey = float(p.get("experience_years") or 0)
+                                except (TypeError, ValueError):
+                                    ey = 0
+                                ey_txt = f"{int(ey) if float(ey).is_integer() else ey} yrs exp" if ey > 0 else ""
+                                city = str(loc.get("city") or "").strip() if isinstance(loc, dict) else ""
+                                summary_bits = [b for b in [role, ey_txt, city] if b]
+                                summary_meta = f" <span class='onb-summary-meta'>({ ' · '.join(summary_bits) })</span>" if summary_bits else ""
+                                st.markdown(
+                                    f"<div class='onb-review-summary-bar'><span class='onb-summary-name'>{html.escape(name)}</span>{summary_meta}</div>",
+                                    unsafe_allow_html=True
+                                )
 
-                            with c_right:
-                                cats = p.get("skills_categorized") or {}
-                                skills = [s for s in (p.get("skills") or []) if str(s).strip()]
-                                if isinstance(cats, dict) and any(cats.values()):
-                                    parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3>"]
-                                    for cat, val in cats.items():
-                                        items = [s.strip() for s in str(val).split(",") if s.strip()][:12]
-                                        if items:
-                                            parts.append(f"<div class='confirm-exp-sub'>{html.escape(str(cat))}</div>")
-                                            parts.append("<div>" + "".join(f"<span class='chip'>{html.escape(s)}</span>" for s in items) + "</div>")
+                                c_left, c_right = st.columns(2)
+                                with c_left:
+                                    contact_bits = []
+                                    if p.get("phone"):
+                                        contact_bits.append(f"<div class='confirm-link'><span>Phone · </span>{html.escape(str(p['phone']))}</div>")
+                                    if p.get("email"):
+                                        contact_bits.append(f"<div class='confirm-link'><span>Email · </span>{html.escape(str(p['email']))}</div>")
+                                    for k, label in (("linkedin", "LinkedIn"), ("github", "GitHub"), ("portfolio", "Portfolio")):
+                                        if p.get(k):
+                                            contact_bits.append(f"<div class='confirm-link'><span>{label} · </span>{html.escape(str(p[k]))}</div>")
+                                    if contact_bits:
+                                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Contact & Links</h3>{''.join(contact_bits)}</div>", unsafe_allow_html=True)
+
+                                    edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
+                                    if edus:
+                                        rows = []
+                                        for e in edus[:3]:
+                                            deg, inst, yr = html.escape(str(e.get("degree") or "")), html.escape(str(e.get("institution") or "")), html.escape(str(e.get("year") or ""))
+                                            rows.append(f"<div class='confirm-exp-role'>{deg}</div><div class='confirm-exp-sub'>{' · '.join(x for x in (inst, yr) if x)}</div>")
+                                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Education</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+
+                                with c_right:
+                                    cats = p.get("skills_categorized") or {}
+                                    skills = [s for s in (p.get("skills") or []) if str(s).strip()]
+                                    if isinstance(cats, dict) and any(cats.values()):
+                                        parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3>"]
+                                        for cat, val in cats.items():
+                                            items = [s.strip() for s in str(val).split(",") if s.strip()][:12]
+                                            if items:
+                                                parts.append(f"<div class='confirm-exp-sub'>{html.escape(str(cat))}</div>")
+                                                parts.append("<div>" + "".join(f"<span class='chip'>{html.escape(s)}</span>" for s in items) + "</div>")
+                                        parts.append("</div>")
+                                        st.markdown("".join(parts), unsafe_allow_html=True)
+                                    elif skills:
+                                        chips = "".join(f"<span class='chip'>{html.escape(str(s))}</span>" for s in skills[:30])
+                                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3><div>{chips}</div></div>", unsafe_allow_html=True)
+
+                            elif review_step == 1:
+                                # Step 1: Experience (roles with bullets)
+                                exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
+                                if exps:
+                                    parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3>"]
+                                    for e in exps[:4]:
+                                        er, ec, ep = html.escape(str(e.get("role") or "")), html.escape(str(e.get("company") or "")), html.escape(str(e.get("period") or ""))
+                                        head = f"{er} — {ec}" if er and ec else (er or ec)
+                                        parts.append(f"<div class='confirm-exp-role'>{head}</div>")
+                                        if ep:
+                                            parts.append(f"<div class='confirm-exp-sub'>{ep}</div>")
+                                        bullets = [b for b in (e.get("bullets") or []) if str(b).strip()][:4]
+                                        if bullets:
+                                            parts.append("<ul class='confirm-exp-bullets'>" + "".join(f"<li>{html.escape(str(b))}</li>" for b in bullets) + "</ul>")
                                     parts.append("</div>")
                                     st.markdown("".join(parts), unsafe_allow_html=True)
-                                elif skills:
-                                    chips = "".join(f"<span class='chip'>{html.escape(str(s))}</span>" for s in skills[:30])
-                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3><div>{chips}</div></div>", unsafe_allow_html=True)
+                                elif p.get("experience_unverified"):
+                                    st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>⚠️ No work block detected in resume — add it via <b>Edit details</b> below. Nothing invented on your behalf.</div></div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>No experience entries recorded. Add roles via <b>Edit details</b>.</div></div>", unsafe_allow_html=True)
 
-                        with tab_exp:
-                            exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
-                            if exps:
-                                parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3>"]
-                                for e in exps[:4]:
-                                    er, ec, ep = html.escape(str(e.get("role") or "")), html.escape(str(e.get("company") or "")), html.escape(str(e.get("period") or ""))
-                                    head = f"{er} — {ec}" if er and ec else (er or ec)
-                                    parts.append(f"<div class='confirm-exp-role'>{head}</div>")
-                                    if ep:
-                                        parts.append(f"<div class='confirm-exp-sub'>{ep}</div>")
-                                    bullets = [b for b in (e.get("bullets") or []) if str(b).strip()][:4]
-                                    if bullets:
-                                        parts.append("<ul class='confirm-exp-bullets'>" + "".join(f"<li>{html.escape(str(b))}</li>" for b in bullets) + "</ul>")
-                                parts.append("</div>")
-                                st.markdown("".join(parts), unsafe_allow_html=True)
-                            elif p.get("experience_unverified"):
-                                st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>⚠️ No work block detected in resume — add it via <b>Edit details</b> below. Nothing invented on your behalf.</div></div>", unsafe_allow_html=True)
-                            else:
-                                st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>No experience entries recorded.</div></div>", unsafe_allow_html=True)
+                            elif review_step == 2:
+                                # Step 2: Projects (project cards with repo/live links)
+                                projs = [e for e in (p.get("projects") or []) if isinstance(e, dict)]
+                                if projs:
+                                    rows = []
+                                    for pr in projs[:4]:
+                                        nm, st_ = html.escape(str(pr.get("name") or "")), html.escape(str(pr.get("stack") or ""))
+                                        rows.append(f"<div class='confirm-exp-role'>{nm}</div>")
+                                        if st_:
+                                            rows.append(f"<div class='confirm-exp-sub'>{st_}</div>")
+                                        b0 = (pr.get("bullets") or [None])[0]
+                                        if b0:
+                                            rows.append(f"<div class='confirm-exp-sub'>{html.escape(str(b0))}</div>")
+                                        for lbl, key in (("GitHub", "repo_url"), ("Live", "live_url")):
+                                            u = str(pr.get(key) or "").strip()
+                                            if u:
+                                                rows.append(f"<div class='confirm-exp-sub'>{lbl} · {html.escape(u)}</div>")
+                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3><div class='confirm-exp-sub'>No projects detected. Add projects via <b>Edit details</b>.</div></div>", unsafe_allow_html=True)
 
-                        with tab_proj:
-                            projs = [e for e in (p.get("projects") or []) if isinstance(e, dict)]
-                            if projs:
-                                rows = []
-                                for pr in projs[:4]:
-                                    nm, st_ = html.escape(str(pr.get("name") or "")), html.escape(str(pr.get("stack") or ""))
-                                    rows.append(f"<div class='confirm-exp-role'>{nm}</div>")
-                                    if st_:
-                                        rows.append(f"<div class='confirm-exp-sub'>{st_}</div>")
-                                    b0 = (pr.get("bullets") or [None])[0]
-                                    if b0:
-                                        rows.append(f"<div class='confirm-exp-sub'>{html.escape(str(b0))}</div>")
-                                    for lbl, key in (("GitHub", "repo_url"), ("Live", "live_url")):
-                                        u = str(pr.get(key) or "").strip()
-                                        if u:
-                                            rows.append(f"<div class='confirm-exp-sub'>{lbl} · {html.escape(u)}</div>")
-                                st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
-                            else:
-                                st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3><div class='confirm-exp-sub'>No projects detected. Add projects via <b>Edit details</b>.</div></div>", unsafe_allow_html=True)
+                            elif review_step == 3:
+                                # Step 3: Verify your links
+                                p = render_link_review(p)
+                                st.session_state["pending_profile"] = p
 
-                        with tab_links:
-                            p = render_link_review(p)
-
-                    # ponytail: message slot at the end of the scroll body — every
-                    # validation/status message below renders HERE so the outer
-                    # card never grows and nothing is clipped.
                     body_msg = st.empty()
                 elif _step == 1:
                     # --- Step 1: Choose your path (no form fields here) ---
@@ -3443,18 +3478,45 @@ def render_welcome_screen():
             with st.container(border=False, key="onboard_step_foot"):
                 if _is_review:
                     if not edit_mode:
-                        _f_back, _f_edit, _f_go = st.columns([1, 1, 1.6], vertical_alignment="center")
-                        with _f_back:
-                            if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
-                                for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary"):
-                                    st.session_state.pop(k, None)
-                                _clear_onb_upload_state(clear_autofill=True)
-                                st.rerun()
-                        with _f_edit:
-                            if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
-                                confirm_edit_toggle = True
-                        with _f_go:
-                            confirm_go = st.button("Confirm & Continue →", type="primary", key="btn_confirm_go", use_container_width=True)
+                        if review_step == 0:
+                            _f_back, _f_edit, _f_next = st.columns([1, 1, 1.2], vertical_alignment="center")
+                            with _f_back:
+                                if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
+                                    for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary", "review_step"):
+                                        st.session_state.pop(k, None)
+                                    _clear_onb_upload_state(clear_autofill=True)
+                                    st.rerun()
+                            with _f_edit:
+                                if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
+                                    confirm_edit_toggle = True
+                            with _f_next:
+                                if st.button("Next →", key="btn_review_next", type="primary", use_container_width=True):
+                                    st.session_state["review_step"] = 1
+                                    st.rerun()
+                        elif review_step in (1, 2):
+                            _f_back, _f_edit, _f_next = st.columns([1, 1, 1.2], vertical_alignment="center")
+                            with _f_back:
+                                if st.button("← Back", key="btn_review_back", use_container_width=True):
+                                    st.session_state["review_step"] = review_step - 1
+                                    st.rerun()
+                            with _f_edit:
+                                if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
+                                    confirm_edit_toggle = True
+                            with _f_next:
+                                if st.button("Next →", key="btn_review_next", type="primary", use_container_width=True):
+                                    st.session_state["review_step"] = review_step + 1
+                                    st.rerun()
+                        else:  # review_step == 3
+                            _f_back, _f_edit, _f_go = st.columns([1, 1, 1.6], vertical_alignment="center")
+                            with _f_back:
+                                if st.button("← Back", key="btn_review_back", use_container_width=True):
+                                    st.session_state["review_step"] = 2
+                                    st.rerun()
+                            with _f_edit:
+                                if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
+                                    confirm_edit_toggle = True
+                            with _f_go:
+                                confirm_go = st.button("Confirm & Continue →", type="primary", key="btn_confirm_go", use_container_width=True)
                     else:
                         _f_cancel, _f_save = st.columns([1, 1.6], vertical_alignment="center")
                         with _f_cancel:
@@ -3540,6 +3602,7 @@ def render_welcome_screen():
                     st.toast("Enter at least one target job role — details are in the panel.", icon="⚠️")
                 else:
                     st.session_state["pending_profile"] = build_manual_profile(answers)
+                    st.session_state["review_step"] = 0
                     st.session_state["pending_remember"] = bool(remember_me)
                     st.session_state["pending_dur_months"] = dur_months
                     st.session_state["confirm_edit"] = False
@@ -3599,6 +3662,7 @@ def render_welcome_screen():
                     status.write("Using the extracted profile")
                     time.sleep(0.2)
                     st.session_state["pending_profile"] = parsed_p
+                    st.session_state["review_step"] = 0
                     st.session_state["pending_remember"] = bool(remember_me)
                     st.session_state["pending_dur_months"] = dur_months
                     st.session_state["confirm_edit"] = False
@@ -3617,7 +3681,7 @@ def render_welcome_screen():
                     save_active_profile(p, merge=True)
                     st.session_state["onboarded"] = True
                     st.session_state["demo_mode"] = True
-                    for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary"):
+                    for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary", "review_step"):
                         st.session_state.pop(k, None)
                     st.toast(f"Welcome, {p.get('name', 'Developer')}!", icon="🚀")
                     st.rerun()

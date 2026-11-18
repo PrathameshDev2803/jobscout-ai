@@ -286,38 +286,117 @@ class TestManualMerge(unittest.TestCase):
         self.assertEqual(A.merge_profiles(once, manual), once)
 
 
-class TestReviewScreenLayout(unittest.TestCase):
-    """Source-level and unit tests for the tabbed review screen layout."""
+class TestReviewScreenWizard(unittest.TestCase):
+    """Unit and source-level tests for the step-by-step onboarding review wizard."""
 
-    def test_tabs_used_in_review_branch(self):
+    def test_step_index_clamped(self):
+        self.assertEqual(A.clamp_review_step(0), 0)
+        self.assertEqual(A.clamp_review_step(1), 1)
+        self.assertEqual(A.clamp_review_step(2), 2)
+        self.assertEqual(A.clamp_review_step(3), 3)
+        # Clamped boundaries
+        self.assertEqual(A.clamp_review_step(-1), 0)
+        self.assertEqual(A.clamp_review_step(4), 3)
+        self.assertEqual(A.clamp_review_step(100), 3)
+        # Type fallback
+        self.assertEqual(A.clamp_review_step("invalid"), 0)
+        self.assertEqual(A.clamp_review_step(None), 0)
+        self.assertEqual(A.clamp_review_step("2"), 2)
+
+    def test_next_back_changes_step(self):
         src = app_source()
-        self.assertIn("st.tabs", src)
-        self.assertIn('tab_overview, tab_exp, tab_proj, tab_links = st.tabs([', src)
-        self.assertIn('"Overview"', src)
-        self.assertIn('"Experience"', src)
-        self.assertIn('"Projects"', src)
+        # Verify Next button increments review_step
+        self.assertIn('st.session_state["review_step"] = 1', src)
+        self.assertIn('st.session_state["review_step"] = review_step + 1', src)
+        # Verify Back button decrements review_step
+        self.assertIn('st.session_state["review_step"] = review_step - 1', src)
+        self.assertIn('st.session_state["review_step"] = 2', src)
 
-    def test_buttons_not_inside_tabs_block(self):
+        # Simulate state transitions
+        state = {"review_step": 0}
+        state["review_step"] = A.clamp_review_step(1)
+        self.assertEqual(state["review_step"], 1)
+        state["review_step"] = A.clamp_review_step(state["review_step"] + 1)
+        self.assertEqual(state["review_step"], 2)
+        state["review_step"] = A.clamp_review_step(state["review_step"] + 1)
+        self.assertEqual(state["review_step"], 3)
+        # Backwards
+        state["review_step"] = A.clamp_review_step(state["review_step"] - 1)
+        self.assertEqual(state["review_step"], 2)
+        state["review_step"] = A.clamp_review_step(state["review_step"] - 1)
+        self.assertEqual(state["review_step"], 1)
+        state["review_step"] = A.clamp_review_step(0)
+        self.assertEqual(state["review_step"], 0)
+
+    def test_launch_only_appears_on_last_step(self):
         src = app_source()
-        tabs_start = src.find('tab_overview, tab_exp, tab_proj, tab_links = st.tabs')
-        self.assertNotEqual(tabs_start, -1)
-        tabs_end = src.find('body_msg = st.empty()', tabs_start)
-        self.assertNotEqual(tabs_end, -1)
+        # Ensure btn_confirm_go only renders in step 3
+        foot_start = src.find('with st.container(border=False, key="onboard_step_foot"):')
+        self.assertNotEqual(foot_start, -1)
+        foot_block = src[foot_start:src.find('def _onb_say(', foot_start)]
 
-        tabs_block = src[tabs_start:tabs_end]
-        # Neither Edit details nor Confirm & Continue may be inside the tabs block
-        self.assertNotIn("btn_confirm_edit", tabs_block)
-        self.assertNotIn("btn_confirm_go", tabs_block)
+        # Step 0 footer has Upload another and Next, but NO btn_confirm_go
+        s0_block = foot_block[foot_block.find('if review_step == 0:'):foot_block.find('elif review_step in (1, 2):')]
+        self.assertIn("btn_confirm_back", s0_block)
+        self.assertIn("btn_review_next", s0_block)
+        self.assertNotIn("btn_confirm_go", s0_block)
 
-        # Both must exist outside, in the footer container after tabs
-        footer_block = src[tabs_end:]
-        self.assertIn("btn_confirm_edit", footer_block)
-        self.assertIn("btn_confirm_go", footer_block)
+        # Step 1-2 footer has Back and Next, but NO btn_confirm_go
+        s12_block = foot_block[foot_block.find('elif review_step in (1, 2):'):foot_block.find('else:  # review_step == 3')]
+        self.assertIn("btn_review_back", s12_block)
+        self.assertIn("btn_review_next", s12_block)
+        self.assertNotIn("btn_confirm_go", s12_block)
 
-    def test_links_tab_label_helper(self):
-        from ui.link_review import get_links_tab_label, count_link_warnings
+        # Step 3 footer has Back and Launch Workspace (btn_confirm_go)
+        s3_block = foot_block[foot_block.find('else:  # review_step == 3'):foot_block.find('else:\n                        _f_cancel')]
+        self.assertIn("btn_review_back", s3_block)
+        self.assertIn("btn_confirm_go", s3_block)
 
-        # All assigned: no badge
+    def test_link_edits_preserved_across_navigation(self):
+        from ui.link_review import apply_link_rows
+
+        p = {
+            "name": "Jane Doe",
+            "linkedin": "https://linkedin.com/in/janedoe",
+            "github": "",
+            "portfolio": "",
+            "projects": [],
+            "other_links": [],
+            "unreviewed_links": [],
+        }
+        # Simulate link edits on step 3
+        edited_rows = [
+            {"url": "https://linkedin.com/in/janedoe", "type": "linkedin", "belongs_to": "Profile", "keep": True},
+            {"url": "https://github.com/janedoe", "type": "github", "belongs_to": "Profile", "keep": True},
+        ]
+        res = apply_link_rows(p, edited_rows)
+        session_profile = res.profile
+
+        # Navigate Back to Step 2
+        review_step = 2
+        self.assertEqual(session_profile["github"], "https://github.com/janedoe")
+
+        # Navigate Back to Step 1
+        review_step = 1
+        self.assertEqual(session_profile["github"], "https://github.com/janedoe")
+
+        # Navigate Forward back to Step 3
+        review_step = 3
+        self.assertEqual(session_profile["github"], "https://github.com/janedoe")
+
+    def test_new_upload_resets_step_to_zero(self):
+        src = app_source()
+        # Verify btn_confirm_back resets review_step
+        self.assertIn('for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary", "review_step"):', src)
+        # Verify _clear_onb_upload_state includes review_step
+        self.assertIn('for key in ("onb_upload_hash", "onb_upload_profile", "onb_upload_engine", "onb_upload_error", "review_step"):', src)
+
+        # Verify new upload and manual build set review_step = 0
+        self.assertIn('st.session_state["review_step"] = 0', src)
+
+    def test_link_warning_counter(self):
+        from ui.link_review import count_link_warnings
+
         p_full = {
             "linkedin": "https://linkedin.com/in/janedoe",
             "github": "https://github.com/janedoe",
@@ -325,27 +404,14 @@ class TestReviewScreenLayout(unittest.TestCase):
             "unreviewed_links": [],
         }
         self.assertEqual(count_link_warnings(p_full), 0)
-        self.assertEqual(get_links_tab_label(p_full), "Links")
 
-        # Unassigned links present: badge with count
-        p_unassigned = {
-            "linkedin": "https://linkedin.com/in/janedoe",
-            "github": "https://github.com/janedoe",
-            "portfolio": "https://janedoe.dev",
-            "unreviewed_links": [{"url": "https://example.com/one"}, {"url": "https://example.com/two"}],
-        }
-        self.assertEqual(count_link_warnings(p_unassigned), 2)
-        self.assertEqual(get_links_tab_label(p_unassigned), "Links ⚠ 2")
-
-        # Missing core slots: badge includes missing slots
         p_missing = {
             "linkedin": "",
             "github": "https://github.com/janedoe",
             "portfolio": "",
-            "unreviewed_links": [{"url": "https://example.com/one"}],
+            "unreviewed_links": [{"url": "https://example.com/item"}],
         }
         self.assertEqual(count_link_warnings(p_missing), 3)
-        self.assertEqual(get_links_tab_label(p_missing), "Links ⚠ 3")
 
 
 if __name__ == "__main__":

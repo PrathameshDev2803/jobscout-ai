@@ -1279,8 +1279,35 @@ div[data-testid="stColumn"] {
 }
 
 /* ==========================================================================
-   Review Mode Layout Constraints (Prevent Full Page Scroll on 1280x720 / 1366x768)
+   Review Wizard Layout Constraints (Step-by-step Flow, No Page Scroll)
    ========================================================================== */
+.onb-wizard-header {
+    margin-bottom: 12px;
+}
+.onb-wizard-step-label {
+    font-size: 13.5px;
+    font-weight: 750;
+    color: #10b981;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.onb-wizard-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.onb-wizard-bar {
+    height: 100%;
+    background: #10b981;
+    border-radius: 999px;
+    transition: width 0.25s ease;
+}
+
 .onb-review-summary-bar {
     display: flex;
     align-items: center;
@@ -1304,36 +1331,52 @@ div[data-testid="stColumn"] {
 
 /* Constrain review panel height so the outer window never needs page scrolling */
 .st-key-onboard_panel:has(.onb-review-mode) {
-    max-height: calc(100vh - 65px) !important;
+    height: calc(100vh - 68px) !important;
+    max-height: calc(100vh - 68px) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
 }
 
+.st-key-onboard_panel:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:has(> .st-key-onboard_step_body) {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
 .st-key-onboard_panel:has(.onb-review-mode) .st-key-onboard_step_body {
     flex: 1 1 auto !important;
     min-height: 0 !important;
-    overflow: visible !important;
+    height: 100% !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
-/* Tab panels scroll internally: only the tab panel scrolls, never the page */
-.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] [role="tabpanel"],
-.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] div[data-baseweb="tab-panel"] {
-    max-height: calc(100vh - 290px) !important;
-    min-height: 200px !important;
+/* Dedicated review scroll area: scrolls internally if content exceeds available height */
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_review_content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 245px) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
-    padding-right: 8px !important;
-    padding-top: 4px !important;
+    padding-right: 6px !important;
+    box-sizing: border-box !important;
 }
 
 /* Edit mode inline form scrollable area */
-.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box,
-.st-key-onboard_panel:has(.onb-review-mode) .onb-edit-box {
-    max-height: calc(100vh - 270px) !important;
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box {
+    max-height: calc(100vh - 250px) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
-    padding-right: 8px !important;
+    padding-right: 6px !important;
 }
 
 /* Review mode compact cards */
@@ -1342,16 +1385,14 @@ div[data-testid="stColumn"] {
     margin-bottom: 10px !important;
 }
 
-/* Custom scrollbars for constrained tab panels */
-.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] [role="tabpanel"]::-webkit-scrollbar,
-.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] div[data-baseweb="tab-panel"]::-webkit-scrollbar,
+/* Custom scrollbars */
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_review_content::-webkit-scrollbar,
 .st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box::-webkit-scrollbar {
     width: 6px;
 }
-.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] [role="tabpanel"]::-webkit-scrollbar-thumb,
-.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] div[data-baseweb="tab-panel"]::-webkit-scrollbar-thumb,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_review_content::-webkit-scrollbar-thumb,
 .st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.16);
     border-radius: 999px;
 }
 
