@@ -1623,131 +1623,174 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
 .st-key-onb_candidate_card_wrap {
     background: #111821 !important;
     border: 1px solid #27313D !important;
-    border-radius: 11px !important;
-    height: 66px !important;
-    min-height: 66px !important;
-    max-height: 66px !important;
-    padding: 0 16px !important;
+    border-radius: 14px !important;
+    height: 92px !important;
+    min-height: 92px !important;
+    max-height: 92px !important;
+    padding: 0 24px !important;
     margin-bottom: 20px !important;
     display: flex !important;
     align-items: center !important;
     box-sizing: border-box !important;
     width: 100% !important;
 }
-.st-key-onb_candidate_card_wrap > div[data-testid="stHorizontalBlock"] {
-    align-items: center !important;
-    width: 100% !important;
+
+/* Ensure all intermediate Streamlit wrappers stretch to full height and center their flex contents */
+.st-key-onb_candidate_card_wrap div[data-testid="stLayoutWrapper"],
+.st-key-onb_candidate_card_wrap div[data-testid="stVerticalBlock"] {
     height: 100% !important;
     min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
+
+.st-key-onb_candidate_card_wrap div[data-testid="stHorizontalBlock"] {
+    height: 100% !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
 .st-key-onb_candidate_card_wrap div[data-testid="stColumn"] {
     display: flex !important;
     align-items: center !important;
     min-height: 0 !important;
+    height: 100% !important;
 }
+
+.st-key-onb_candidate_card_wrap div[data-testid="stMarkdownContainer"] {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+.st-key-onb_candidate_card_wrap div[data-testid="stMarkdownContainer"] p {
+    margin: 0 !important;
+}
+
 .candidate-profile-flex {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    width: 100%;
-    min-width: 0;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
 }
+
 .candidate-avatar {
-    width: 42px !important;
-    height: 42px !important;
-    min-width: 42px !important;
-    max-width: 42px !important;
-    min-height: 42px !important;
-    max-height: 42px !important;
-    flex: 0 0 42px !important;
-    border-radius: 9px !important;
+    width: 56px !important;
+    height: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    flex: 0 0 56px !important;
+    border-radius: 12px !important;
     background: #10B981 !important;
     color: #0B1017 !important;
-    font-size: 16px !important;
-    font-weight: 700 !important;
+    font-size: 21px !important;
+    font-weight: 800 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     letter-spacing: 0.3px !important;
 }
+
 .candidate-divider {
     width: 1px !important;
-    height: 42px !important;
+    height: 52px !important;
     background: #27313D !important;
-    margin: 0 18px !important;
+    margin: 0 20px !important;
     flex-shrink: 0 !important;
+    align-self: center !important;
 }
+
 .candidate-info {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-width: 0;
-    flex: 1;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    min-width: 0 !important;
+    flex: 1 !important;
 }
+
 .candidate-name {
-    font-size: 14px !important;
-    font-weight: 600 !important;
+    font-size: 19px !important;
+    font-weight: 700 !important;
     color: #F1F5F9 !important;
-    line-height: 1.2 !important;
-    margin: 0 0 3px 0 !important;
+    line-height: 1.25 !important;
+    margin: 0 0 4px 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
+
 .candidate-meta {
-    font-size: 10px !important;
+    font-size: 13px !important;
     color: #A0AEC0 !important;
     font-weight: 500 !important;
     display: flex !important;
     align-items: center !important;
-    gap: 4px !important;
+    gap: 6px !important;
     white-space: nowrap !important;
     flex-wrap: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    line-height: 1.2 !important;
+    line-height: 1.25 !important;
 }
+
 .st-key-btn_prof_card_edit {
     display: flex !important;
     justify-content: flex-end !important;
     align-items: center !important;
     width: 100% !important;
+    height: 100% !important;
 }
+
 .st-key-btn_prof_card_edit button {
     background: #111821 !important;
     border: 1px solid #27313D !important;
     color: #F1F5F9 !important;
-    border-radius: 7px !important;
-    font-size: 10px !important;
+    border-radius: 8px !important;
+    font-size: 12.5px !important;
     font-weight: 500 !important;
-    min-height: 26px !important;
-    height: 26px !important;
-    max-height: 26px !important;
-    padding: 0 6px !important;
-    width: 82px !important;
-    min-width: 82px !important;
-    max-width: 82px !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    max-height: 34px !important;
+    padding: 0 14px !important;
+    width: 116px !important;
+    min-width: 116px !important;
+    max-width: 120px !important;
     float: right !important;
     margin-left: auto !important;
     white-space: nowrap !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 4px !important;
+    gap: 6px !important;
     line-height: 1 !important;
     transition: all 0.15s ease !important;
 }
+
 .st-key-btn_prof_card_edit button p {
-    font-size: 10px !important;
+    font-size: 12.5px !important;
     font-weight: 500 !important;
     line-height: 1 !important;
     margin: 0 !important;
     white-space: nowrap !important;
 }
+
 .st-key-btn_prof_card_edit button span[data-testid="stIconMaterial"] {
-    font-size: 11px !important;
+    font-size: 15px !important;
     line-height: 1 !important;
 }
+
 .st-key-btn_prof_card_edit button:hover {
     border-color: #10B981 !important;
     color: #FFFFFF !important;
@@ -1965,27 +2008,30 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
         gap: 0 !important;
     }
     .st-key-onb_candidate_card_wrap {
-        padding: 0 12px !important;
+        padding: 0 16px !important;
         height: auto !important;
-        min-height: 60px !important;
+        min-height: 80px !important;
         max-height: none !important;
     }
     .candidate-avatar {
-        width: 36px !important;
-        height: 36px !important;
-        min-width: 36px !important;
-        max-width: 36px !important;
-        min-height: 36px !important;
-        max-height: 36px !important;
-        flex: 0 0 36px !important;
-        font-size: 14px !important;
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        min-height: 48px !important;
+        max-height: 48px !important;
+        flex: 0 0 48px !important;
+        font-size: 18px !important;
     }
     .candidate-divider {
-        height: 36px !important;
-        margin: 0 12px !important;
+        height: 44px !important;
+        margin: 0 16px !important;
     }
     .candidate-name {
-        font-size: 13px !important;
+        font-size: 16px !important;
+    }
+    .candidate-meta {
+        font-size: 12px !important;
     }
 }
 @media (max-width: 600px) {
@@ -1994,20 +2040,21 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
     }
     .st-key-onb_candidate_card_wrap {
         height: auto !important;
+        min-height: 0 !important;
         max-height: none !important;
-        padding: 10px 12px !important;
+        padding: 14px 16px !important;
     }
     .candidate-profile-flex {
         flex-direction: column !important;
         align-items: flex-start !important;
-        gap: 8px !important;
+        gap: 10px !important;
     }
     .candidate-divider {
         display: none !important;
     }
     .st-key-btn_prof_card_edit {
         justify-content: flex-start !important;
-        margin-top: 6px !important;
+        margin-top: 10px !important;
     }
     .st-key-btn_prof_card_edit button {
         float: none !important;
