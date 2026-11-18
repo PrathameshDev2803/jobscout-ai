@@ -501,9 +501,12 @@ class TestReviewSummaryRedesign(unittest.TestCase):
 
     def test_step1_layout_elements_present_in_app(self):
         src = app_source()
-        # Candidate card container and edit button
+        # Candidate card container, divider, and edit button
         self.assertIn('key="onb_candidate_card_wrap"', src)
         self.assertIn('key="btn_prof_card_edit"', src)
+        self.assertIn('candidate-divider', src)
+        self.assertIn('loc_svg =', src)
+        self.assertIn('st.columns([0.85, 0.15]', src)
         # Dedicated column wrapper container
         self.assertIn('key="onb_review_columns_wrap"', src)
         # Sidebar integration
@@ -514,6 +517,17 @@ class TestReviewSummaryRedesign(unittest.TestCase):
         # Footer buttons on step 0
         self.assertIn('key="btn_confirm_back"', src)
         self.assertIn('key="btn_review_next"', src)
+
+        # Verify outer panel is made transparent/borderless in review mode
+        from ui.theme import load_css
+        css = load_css()
+        self.assertIn('.st-key-onb_review_columns_wrap .st-key-onboard_panel', css)
+        self.assertIn('background: transparent !important;', css)
+        # Verify typography and component dimensions matching reference
+        self.assertIn('font-size: 40px !important;', css)
+        self.assertIn('width: 80px !important;', css)
+        self.assertIn('width: 155px !important;', css)
+        self.assertIn('padding: 0 48px !important;', css)
 
     def test_html_generators_have_zero_indented_lines(self):
         """Guard against CommonMark 4-space code block glitch in st.markdown."""

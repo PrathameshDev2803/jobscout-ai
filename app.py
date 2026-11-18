@@ -3378,16 +3378,18 @@ def render_welcome_screen():
                                 if role:
                                     meta_parts.append(html.escape(role))
                                 if city:
-                                    meta_parts.append(f"📍 {html.escape(city)}")
+                                    loc_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A0AEC0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>'
+                                    meta_parts.append(f"{loc_svg}{html.escape(city)}")
                                 meta_line = " • ".join(meta_parts) if meta_parts else "Software Developer"
 
                                 # Horizontal Candidate Profile Card
                                 with st.container(border=False, key="onb_candidate_card_wrap"):
-                                    col_cinfo, col_cbtn = st.columns([0.80, 0.20], vertical_alignment="center")
+                                    col_cinfo, col_cbtn = st.columns([0.85, 0.15], vertical_alignment="center")
                                     with col_cinfo:
                                         st.markdown(_clean_html(f"""
                                         <div class="candidate-profile-flex">
                                             <div class="candidate-avatar">{html.escape(initials)}</div>
+                                            <div class="candidate-divider"></div>
                                             <div class="candidate-info">
                                                 <div class="candidate-name">{html.escape(name)}</div>
                                                 <div class="candidate-meta">{meta_line}</div>
