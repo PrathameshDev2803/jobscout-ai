@@ -413,6 +413,19 @@ class TestReviewScreenWizard(unittest.TestCase):
         }
         self.assertEqual(count_link_warnings(p_missing), 3)
 
+    def test_step2_upload_does_not_render_full_profile_preview_cards(self):
+        """Step 2 should not dump sprawling _render_profile_preview cards under the uploader."""
+        src = app_source()
+        welcome_start = src.find("def render_welcome_screen():")
+        self.assertNotEqual(welcome_start, -1)
+        welcome_block = src[welcome_start:src.find("def clean_job_title", welcome_start)]
+
+        # Verify _render_profile_preview is not invoked in render_welcome_screen
+        self.assertNotIn("_render_profile_preview(", welcome_block)
+
+        # Verify instant transition to pending_profile upon extraction
+        self.assertIn('st.session_state["pending_profile"] = copy.deepcopy(_upload_profile)', welcome_block)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

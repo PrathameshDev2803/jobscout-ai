@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import threading
 import time
 import urllib.parse
@@ -37,6 +38,8 @@ from session_store import (clear_onboard_marker, delete_user_session,
                            set_onboard_marker)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
+if BASE not in sys.path:
+    sys.path.insert(0, BASE)
 ENV_FILE = os.path.join(BASE, ".env")
 from core.config import (
     ACCENT,
@@ -511,7 +514,7 @@ EXCLUDED_PORTFOLIO_DOMAINS = {
 from core.url_utils import sanitize_url, unwrap_text_urls, is_url_grounded, normalize_url
 try:
     from ui.link_review import render_link_review, get_links_tab_label, count_link_warnings
-except ImportError:
+except (ImportError, Exception):
     try:
         import importlib
         import ui.link_review
@@ -3381,6 +3384,14 @@ def render_welcome_screen():
                             _upload_profile = st.session_state.get("onb_upload_profile")
                             _upload_engine = st.session_state.get("onb_upload_engine", "")
                             _upload_error = st.session_state.get("onb_upload_error", "")
+                            if isinstance(_upload_profile, dict) and _upload_profile and not _is_review:
+                                st.session_state["pending_profile"] = copy.deepcopy(_upload_profile)
+                                st.session_state["review_step"] = 0
+                                st.session_state["pending_remember"] = bool(remember_me)
+                                st.session_state["pending_dur_months"] = dur_months
+                                st.session_state["confirm_edit"] = False
+                                st.session_state["confirm_animated"] = False
+                                st.rerun()
                         else:
                             with st.status("Reading your resume...", expanded=False) as upload_status:
                                 document = extract_resume_document(onb_file)
@@ -3425,21 +3436,23 @@ def render_welcome_screen():
                                     st.session_state["onb_upload_profile"] = _upload_profile
                                     st.session_state["onb_upload_engine"] = _upload_engine
                                     st.session_state["onb_upload_error"] = ""
-                                    for key in ("pending_profile", "pending_remember", "pending_dur_months",
-                                                "confirm_edit", "confirm_animated"):
-                                        st.session_state.pop(key, None)
                                     _apply_onb_autofill(_upload_profile)
                                     _draft_u = st.session_state.get("onb_draft_upload") or {}
                                     upload_status.update(
-                                        label="Resume categorized - review the extracted profile below",
+                                        label="Resume categorized — loading preview...",
                                         state="complete", expanded=False)
+                                    if isinstance(_upload_profile, dict) and _upload_profile:
+                                        st.session_state["pending_profile"] = copy.deepcopy(_upload_profile)
+                                        st.session_state["review_step"] = 0
+                                        st.session_state["pending_remember"] = bool(remember_me)
+                                        st.session_state["pending_dur_months"] = dur_months
+                                        st.session_state["confirm_edit"] = False
+                                        st.session_state["confirm_animated"] = False
+                                        st.toast("Profile ready for review!", icon="🚀")
+                                        st.rerun()
 
                         if _upload_error:
                             st.error(f"⚠️ {_upload_error}")
-                        elif isinstance(_upload_profile, dict) and _upload_profile:
-                            st.caption("Extraction source: Gemini categorization"
-                                       if _upload_engine == "ai" else
-                                       "Extraction source: local fallback (review the fields below)")
                     else:
                         if st.session_state.get("onb_upload_hash"):
                             _clear_onb_upload_state(clear_autofill=True)
@@ -3447,25 +3460,18 @@ def render_welcome_screen():
                         if _draft_u.get("filename"):
                             st.caption(f"Previously attached: {_draft_u.get('filename')} — re-attach to continue with the file.")
 
-                    onb_name = st.text_input("Full Name (Optional)", value=_onb_val(_draft_u, "name"),
-                                             placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
-
-                    c_loc, c_role = st.columns(2)
-                    with c_loc:
-                        onb_city = st.text_input("Location", value=_onb_val(_draft_u, "city"),
-                                                 placeholder="e.g. Mumbai or Remote", key="onb_city_input")
-                    with c_role:
-                        onb_role = st.text_input("Target Role", value=_onb_val(_draft_u, "role"),
-                                                 placeholder="e.g. Data Analyst", key="onb_role_input")
-
-                    if isinstance(_upload_profile, dict) and _upload_profile:
-                        _effective_profile = _apply_onb_form_overrides(
-                            _upload_profile, onb_name, onb_city, onb_role)
-                        _render_profile_preview(_effective_profile, _upload_engine)
-
                     with st.expander("Or paste plain text resume directly"):
                         onb_pasted = st.text_area("Paste plain resume text", value=_onb_val(_draft_u, "pasted"),
                                                  key="onb_pasted_area", height=90, placeholder="Paste your resume content here...")
+                        onb_name = st.text_input("Full Name (Optional)", value=_onb_val(_draft_u, "name"),
+                                                 placeholder="e.g. Prathamesh Jadhav", key="onb_name_input")
+                        c_loc, c_role = st.columns(2)
+                        with c_loc:
+                            onb_city = st.text_input("Location", value=_onb_val(_draft_u, "city"),
+                                                     placeholder="e.g. Mumbai or Remote", key="onb_city_input")
+                        with c_role:
+                            onb_role = st.text_input("Target Role", value=_onb_val(_draft_u, "role"),
+                                                     placeholder="e.g. Data Analyst", key="onb_role_input")
 
                     st.session_state["onb_draft_upload"] = {
                         "name": onb_name or "", "city": onb_city or "", "role": onb_role or "",
@@ -3485,6 +3491,7 @@ def render_welcome_screen():
                                     for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary", "review_step"):
                                         st.session_state.pop(k, None)
                                     _clear_onb_upload_state(clear_autofill=True)
+                                    st.session_state.pop("onb_file_input", None)
                                     st.rerun()
                             with _f_edit:
                                 if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
@@ -3683,6 +3690,7 @@ def render_welcome_screen():
                     st.session_state["demo_mode"] = True
                     for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary", "review_step"):
                         st.session_state.pop(k, None)
+                    st.session_state.pop("onb_file_input", None)
                     st.toast(f"Welcome, {p.get('name', 'Developer')}!", icon="🚀")
                     st.rerun()
 
