@@ -9,6 +9,7 @@ import os
 import re
 import sqlite3
 import sys
+import textwrap
 import threading
 import time
 import urllib.parse
@@ -2767,6 +2768,13 @@ def get_categorized_skills_for_preview(profile: dict) -> dict:
     return result
 
 
+def _clean_html(raw_html: str) -> str:
+    """Strip leading and trailing indentation from each line so Markdown never treats HTML as code blocks."""
+    if not raw_html:
+        return ""
+    return "\n".join(line.strip() for line in raw_html.splitlines() if line.strip())
+
+
 def _review_sidebar_html(review_step: int = 0) -> str:
     """Render the fixed left sidebar for the SaaS onboarding review screen."""
     steps_data = [
@@ -2781,20 +2789,20 @@ def _review_sidebar_html(review_step: int = 0) -> str:
         is_done = (i < review_step)
         active_cls = "active" if is_active else ("completed" if is_done else "")
         badge_content = "✓" if is_done else str(i + 1)
-        step_items_html.append(f"""
-        <div class="onb-sidebar-step {active_cls}">
-            <div class="onb-step-badge">{badge_content}</div>
-            <div class="onb-step-text">
-                <div class="onb-step-title">{html.escape(title)}</div>
-                <div class="onb-step-desc">{html.escape(desc)}</div>
-            </div>
-        </div>
-        """)
+        step_items_html.append(
+            f'<div class="onb-sidebar-step {active_cls}">'
+            f'<div class="onb-step-badge">{badge_content}</div>'
+            f'<div class="onb-step-text">'
+            f'<div class="onb-step-title">{html.escape(title)}</div>'
+            f'<div class="onb-step-desc">{html.escape(desc)}</div>'
+            f'</div>'
+            f'</div>'
+        )
         if i < len(steps_data) - 1:
             conn_cls = "completed" if i < review_step else ""
             step_items_html.append(f'<div class="onb-step-connector {conn_cls}"></div>')
 
-    return f"""
+    return _clean_html(f"""
     <div class="onb-sidebar-container">
         <div class="onb-sidebar-logo">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2809,7 +2817,7 @@ def _review_sidebar_html(review_step: int = 0) -> str:
             {''.join(step_items_html)}
         </div>
     </div>
-    """
+    """)
 
 
 def _contact_links_card_html(profile: dict) -> str:
@@ -2843,20 +2851,20 @@ def _contact_links_card_html(profile: dict) -> str:
         for ltype, ltitle, lurl, ldisp in links:
             icon_svg = svg_icons.get(ltype, svg_icons["website"])
             safe_url = sanitize_url(lurl) or lurl
-            rows_html.append(f"""
-            <a href="{html.escape(safe_url)}" target="_blank" rel="noopener noreferrer" class="contact-link-item">
-                <div class="contact-link-icon-box">{icon_svg}</div>
-                <div class="contact-link-text">
-                    <div class="contact-link-title">{html.escape(ltitle)}</div>
-                    <div class="contact-link-url">{html.escape(ldisp)}</div>
-                </div>
-                <div class="contact-link-ext">{ext_svg}</div>
-            </a>
-            """)
+            rows_html.append(
+                f'<a href="{html.escape(safe_url)}" target="_blank" rel="noopener noreferrer" class="contact-link-item">'
+                f'<div class="contact-link-icon-box">{icon_svg}</div>'
+                f'<div class="contact-link-text">'
+                f'<div class="contact-link-title">{html.escape(ltitle)}</div>'
+                f'<div class="contact-link-url">{html.escape(ldisp)}</div>'
+                f'</div>'
+                f'<div class="contact-link-ext">{ext_svg}</div>'
+                f'</a>'
+            )
     else:
         rows_html.append('<div class="contact-link-empty">No professional links detected. Use Edit details to add your profiles.</div>')
 
-    return f"""
+    return _clean_html(f"""
     <div class="sec-card">
         <div class="sec-card-header">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2869,7 +2877,7 @@ def _contact_links_card_html(profile: dict) -> str:
             {''.join(rows_html)}
         </div>
     </div>
-    """
+    """)
 
 
 def _skills_card_html(profile: dict) -> str:
@@ -2879,16 +2887,16 @@ def _skills_card_html(profile: dict) -> str:
     if cat_skills:
         for cat_name, skill_items in cat_skills.items():
             tags = "".join(f'<span class="skill-tag">{html.escape(s)}</span>' for s in skill_items[:12])
-            rows_html.append(f"""
-            <div class="skills-cat-row">
-                <div class="skills-cat-name">{html.escape(cat_name)}</div>
-                <div class="skills-tags-wrap">{tags}</div>
-            </div>
-            """)
+            rows_html.append(
+                f'<div class="skills-cat-row">'
+                f'<div class="skills-cat-name">{html.escape(cat_name)}</div>'
+                f'<div class="skills-tags-wrap">{tags}</div>'
+                f'</div>'
+            )
     else:
         rows_html.append('<div class="skills-empty">No skills detected. Use Edit details to add your skills.</div>')
 
-    return f"""
+    return _clean_html(f"""
     <div class="sec-card">
         <div class="sec-card-header">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2902,7 +2910,7 @@ def _skills_card_html(profile: dict) -> str:
             {''.join(rows_html)}
         </div>
     </div>
-    """
+    """)
 
 
 def onb_card_label(current, path, base):
@@ -3167,91 +3175,92 @@ def render_welcome_screen():
     _pending_raw = st.session_state.get("pending_profile")
     _is_review = isinstance(_pending_raw, dict) and bool(_pending_raw)
 
-    col_prop, col_onboard = st.columns([0.28, 0.72] if _is_review else [0.44, 0.56], gap="large" if _is_review else "medium")
+    with st.container(border=False, key="onb_review_columns_wrap" if _is_review else "onb_welcome_columns_wrap"):
+        col_prop, col_onboard = st.columns([0.28, 0.72] if _is_review else [0.44, 0.56], gap="large" if _is_review else "medium")
 
-    with col_prop:
-        if _is_review:
-            review_step = clamp_review_step(st.session_state.get("review_step", 0))
-            st.markdown(_review_sidebar_html(review_step), unsafe_allow_html=True)
-        else:
-            st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
+        with col_prop:
+            if _is_review:
+                review_step = clamp_review_step(st.session_state.get("review_step", 0))
+                st.markdown(_review_sidebar_html(review_step), unsafe_allow_html=True)
+            else:
+                st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
-    with col_onboard:
-        if not _is_review:
-            # ponytail: Compact demo card matching the Launch Workspace card
-            # design language — dark surface, subtle border, restrained emerald
-            # accent, horizontal layout on desktop, stacked on mobile.
-            with st.container(border=False, key="onboard_demo"):
+        with col_onboard:
+            if not _is_review:
+                # ponytail: Compact demo card matching the Launch Workspace card
+                # design language — dark surface, subtle border, restrained emerald
+                # accent, horizontal layout on desktop, stacked on mobile.
+                with st.container(border=False, key="onboard_demo"):
+                    st.markdown("""
+                    <div class="demo-card-head">
+                        <div class="demo-icon">&gt;_</div>
+                        <div class="demo-badge">LIVE DEMO</div>
+                    </div>
+                    <div class="demo-title">Interactive Developer Workspace</div>
+                    <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
+                    """, unsafe_allow_html=True)
+                    # CTA — auto column, rendered by Streamlit button as 3rd grid item
+                    if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
+                        _start_demo()
+
                 st.markdown("""
-                <div class="demo-card-head">
-                    <div class="demo-icon">&gt;_</div>
-                    <div class="demo-badge">LIVE DEMO</div>
+                <div class="or-separator">
+                    <span>Or personalize with your resume</span>
                 </div>
-                <div class="demo-title">Interactive Developer Workspace</div>
-                <div class="demo-desc">Test stack-fit scoring on sample roles and preview the verified ATS resume studio.</div>
                 """, unsafe_allow_html=True)
-                # CTA — auto column, rendered by Streamlit button as 3rd grid item
-                if st.button("Explore Demo →", key="btn_welcome_demo", help="Explore the workspace with the safe example profile"):
-                    _start_demo()
 
-            st.markdown("""
-            <div class="or-separator">
-                <span>Or personalize with your resume</span>
-            </div>
-            """, unsafe_allow_html=True)
+            # ponytail: fixed wizard — Step 3 review renders INSIDE this same card
+            # (pending_profile only switches body/footer content, never the page).
+            # Guided steps: cards (1) → single form (2) → review (3). Each branch
+            # mounts only its step's widgets (no duplicates, no stale state);
+            # drafts preserve typed data across step/path switches.
+            _step = onb_go_step(st.session_state, st.session_state.get("onb_step", 1))
+            _path = st.session_state.get("onb_path", ONB_PATHS[0])
+            if _path not in ONB_PATHS:
+                _path = ONB_PATHS[0]
 
-        # ponytail: fixed wizard — Step 3 review renders INSIDE this same card
-        # (pending_profile only switches body/footer content, never the page).
-        # Guided steps: cards (1) → single form (2) → review (3). Each branch
-        # mounts only its step's widgets (no duplicates, no stale state);
-        # drafts preserve typed data across step/path switches.
-        _step = onb_go_step(st.session_state, st.session_state.get("onb_step", 1))
-        _path = st.session_state.get("onb_path", ONB_PATHS[0])
-        if _path not in ONB_PATHS:
-            _path = ONB_PATHS[0]
-
-        # ponytail: ONE stable outer card on every step (real CSS height
-        # min(720px, calc(100vh - 180px)), flex column, overflow hidden).
-        # Header + footer are flex-none outside the scroll body; ONLY the body
-        # scrolls. Every submit/validation message is routed into a body slot
-        # so the outer card never grows and the page never expands from the form.
-        with st.container(border=True, key="onboard_panel"):
-            with st.container(border=False, key="onboard_head"):
-                _sub_text = onb_step_label(3) if _is_review else (onb_step_label(1) if _step == 1 else onb_step_label(2, _path))
-                if not _is_review:
-                    st.markdown(f"""
-                    <div class="onboard-header-row">
-                        <span class="onboard-user-icon">👤</span>
-                        <span class="onboard-header-title">Launch Workspace</span>
-                    </div>
-                    <div class="onboard-header-sub">
-                        <span class="onboard-sub-text">Personalize with your resume.</span>
-                        <span class="onboard-step-badge">{_sub_text}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    review_step = clamp_review_step(st.session_state.get("review_step", 0))
-                    progress_pct = int((review_step + 1) * 25)
-                    step_headers = [
-                        ("Summary", "Confirm your details, skills, and links. You can edit them anytime."),
-                        ("Preferences", "Review your job search preferences, experience, and target roles."),
-                        ("Resume", "Inspect extracted project repositories, live demos, and technical depth."),
-                        ("Review & Confirm", "Verify your links and launch your personalized developer workspace.")
-                    ]
-                    step_title, step_sub = step_headers[review_step]
-                    st.markdown(f"""
-                    <div class="onb-main-header">
-                        <div class="onb-progress-row">
-                            <span class="onb-progress-step">Step {review_step + 1} of 4</span>
-                            <div class="onb-progress-track">
-                                <div class="onb-progress-fill" style="width: {progress_pct}%;"></div>
-                            </div>
-                            <span class="onb-progress-pct">{progress_pct}% complete</span>
+            # ponytail: ONE stable outer card on every step (real CSS height
+            # min(720px, calc(100vh - 180px)), flex column, overflow hidden).
+            # Header + footer are flex-none outside the scroll body; ONLY the body
+            # scrolls. Every submit/validation message is routed into a body slot
+            # so the outer card never grows and the page never expands from the form.
+            with st.container(border=True, key="onboard_panel"):
+                with st.container(border=False, key="onboard_head"):
+                    _sub_text = onb_step_label(3) if _is_review else (onb_step_label(1) if _step == 1 else onb_step_label(2, _path))
+                    if not _is_review:
+                        st.markdown(f"""
+                        <div class="onboard-header-row">
+                            <span class="onboard-user-icon">👤</span>
+                            <span class="onboard-header-title">Launch Workspace</span>
                         </div>
-                        <h1 class="onb-main-title">Review Your <span>{html.escape(step_title)}</span></h1>
-                        <p class="onb-main-subtitle">{html.escape(step_sub)}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                        <div class="onboard-header-sub">
+                            <span class="onboard-sub-text">Personalize with your resume.</span>
+                            <span class="onboard-step-badge">{_sub_text}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        review_step = clamp_review_step(st.session_state.get("review_step", 0))
+                        progress_pct = int((review_step + 1) * 25)
+                        step_headers = [
+                            ("Summary", "Confirm your details, skills, and links. You can edit them anytime."),
+                            ("Preferences", "Review your job search preferences, experience, and target roles."),
+                            ("Resume", "Inspect extracted project repositories, live demos, and technical depth."),
+                            ("Review & Confirm", "Verify your links and launch your personalized developer workspace.")
+                        ]
+                        step_title, step_sub = step_headers[review_step]
+                        st.markdown(_clean_html(f"""
+                        <div class="onb-main-header">
+                            <div class="onb-progress-row">
+                                <span class="onb-progress-step">Step {review_step + 1} of 4</span>
+                                <div class="onb-progress-track">
+                                    <div class="onb-progress-fill" style="width: {progress_pct}%;"></div>
+                                </div>
+                                <span class="onb-progress-pct">{progress_pct}% complete</span>
+                            </div>
+                            <h1 class="onb-main-title">Review Your <span>{html.escape(step_title)}</span></h1>
+                            <p class="onb-main-subtitle">{html.escape(step_sub)}</p>
+                        </div>
+                        """), unsafe_allow_html=True)
                 remember_me = True
                 dur_label = "1 Month"
                 dur_months = 1
@@ -3376,7 +3385,7 @@ def render_welcome_screen():
                                 with st.container(border=False, key="onb_candidate_card_wrap"):
                                     col_cinfo, col_cbtn = st.columns([0.80, 0.20], vertical_alignment="center")
                                     with col_cinfo:
-                                        st.markdown(f"""
+                                        st.markdown(_clean_html(f"""
                                         <div class="candidate-profile-flex">
                                             <div class="candidate-avatar">{html.escape(initials)}</div>
                                             <div class="candidate-info">
@@ -3384,7 +3393,7 @@ def render_welcome_screen():
                                                 <div class="candidate-meta">{meta_line}</div>
                                             </div>
                                         </div>
-                                        """, unsafe_allow_html=True)
+                                        """), unsafe_allow_html=True)
                                     with col_cbtn:
                                         if st.button("✏️ Edit details", key="btn_prof_card_edit", use_container_width=True):
                                             confirm_edit_toggle = True

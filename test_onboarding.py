@@ -504,6 +504,8 @@ class TestReviewSummaryRedesign(unittest.TestCase):
         # Candidate card container and edit button
         self.assertIn('key="onb_candidate_card_wrap"', src)
         self.assertIn('key="btn_prof_card_edit"', src)
+        # Dedicated column wrapper container
+        self.assertIn('key="onb_review_columns_wrap"', src)
         # Sidebar integration
         self.assertIn('_review_sidebar_html(review_step)', src)
         # Main header with step and progress
@@ -512,6 +514,22 @@ class TestReviewSummaryRedesign(unittest.TestCase):
         # Footer buttons on step 0
         self.assertIn('key="btn_confirm_back"', src)
         self.assertIn('key="btn_review_next"', src)
+
+    def test_html_generators_have_zero_indented_lines(self):
+        """Guard against CommonMark 4-space code block glitch in st.markdown."""
+        for html_str in [
+            A._review_sidebar_html(0),
+            A._contact_links_card_html({"github": "https://github.com/foo", "linkedin": "https://linkedin.com/in/bar"}),
+            A._skills_card_html({"skills": ["PHP", "React", "Docker"]}),
+            A._clean_html("   <div>\n        <span>nested</span>\n   </div>")
+        ]:
+            for line in html_str.splitlines():
+                if line.strip():
+                    # No line should start with 4 or more spaces or a tab
+                    self.assertFalse(
+                        line.startswith("    ") or line.startswith("\t"),
+                        f"Line has 4+ leading spaces which triggers Markdown code block: {repr(line)}"
+                    )
 
 
 if __name__ == "__main__":

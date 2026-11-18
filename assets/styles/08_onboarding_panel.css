@@ -1408,18 +1408,38 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
 
 /* 1. Desktop 2-Column Review Layout: Sidebar (~290px) + Main Content (Flex) */
 @media (min-width: 901px) {
-    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"]:first-child,
-    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:first-child {
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"],
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        gap: 24px !important;
+        width: 100% !important;
+    }
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div:first-child,
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"]:first-child,
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div:first-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:first-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"]:first-child {
         flex: 0 0 290px !important;
         max-width: 290px !important;
         width: 290px !important;
         min-width: 280px !important;
+        box-sizing: border-box !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"]:last-child,
-    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:last-child {
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div:last-child,
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div[data-testid="stLayoutWrapper"]:last-child,
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:last-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div:last-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:last-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"]:last-child {
         flex: 1 1 auto !important;
-        max-width: calc(100% - 310px) !important;
+        min-width: 0 !important;
+        max-width: calc(100% - 314px) !important;
         width: auto !important;
+        box-sizing: border-box !important;
     }
 }
 
@@ -1430,6 +1450,7 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
     border-radius: 16px;
     padding: 24px 20px;
     height: 100%;
+    min-height: min(720px, calc(100vh - 180px));
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -1822,10 +1843,14 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
 
 /* 7. Tablet & Mobile Responsive */
 @media (max-width: 900px) {
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"],
     div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) {
         flex-direction: column !important;
+        flex-wrap: wrap !important;
         gap: 1.25rem !important;
     }
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div:first-child,
+    .st-key-onb_review_columns_wrap div[data-testid="stHorizontalBlock"] > div:last-child,
     div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"],
     div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"] {
         width: 100% !important;
