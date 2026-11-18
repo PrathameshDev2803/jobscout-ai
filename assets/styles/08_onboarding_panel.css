@@ -1277,3 +1277,87 @@ div[data-testid="stColumn"] {
 @media (prefers-reduced-motion: reduce) {
     .tw-active .tw-text::after { display: none; }
 }
+
+/* ==========================================================================
+   Review Mode Layout Constraints (Prevent Full Page Scroll on 1280x720 / 1366x768)
+   ========================================================================== */
+.onb-review-summary-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-bottom: 12px;
+}
+.onb-summary-name {
+    font-weight: 750;
+    color: #f8fafc;
+    font-size: 15px;
+}
+.onb-summary-meta {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+/* Constrain review panel height so the outer window never needs page scrolling */
+.st-key-onboard_panel:has(.onb-review-mode) {
+    max-height: calc(100vh - 65px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}
+
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onboard_step_body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+/* Tab panels scroll internally: only the tab panel scrolls, never the page */
+.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] [role="tabpanel"],
+.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] div[data-baseweb="tab-panel"] {
+    max-height: calc(100vh - 290px) !important;
+    min-height: 200px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-right: 8px !important;
+    padding-top: 4px !important;
+}
+
+/* Edit mode inline form scrollable area */
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box,
+.st-key-onboard_panel:has(.onb-review-mode) .onb-edit-box {
+    max-height: calc(100vh - 270px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-right: 8px !important;
+}
+
+/* Review mode compact cards */
+.st-key-onboard_panel:has(.onb-review-mode) .confirm-card {
+    padding: 16px 18px !important;
+    margin-bottom: 10px !important;
+}
+
+/* Custom scrollbars for constrained tab panels */
+.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] [role="tabpanel"]::-webkit-scrollbar,
+.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] div[data-baseweb="tab-panel"]::-webkit-scrollbar,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box::-webkit-scrollbar {
+    width: 6px;
+}
+.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] [role="tabpanel"]::-webkit-scrollbar-thumb,
+.st-key-onboard_panel:has(.onb-review-mode) div[data-testid="stTabs"] div[data-baseweb="tab-panel"]::-webkit-scrollbar-thumb,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onb_edit_box::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+}
+
+/* In review mode, hide duplicate demo card & separator */
+div[data-testid="stColumn"]:has(.onb-review-mode) .st-key-onboard_demo,
+div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
+    display: none !important;
+}
+

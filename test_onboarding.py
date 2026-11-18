@@ -286,5 +286,67 @@ class TestManualMerge(unittest.TestCase):
         self.assertEqual(A.merge_profiles(once, manual), once)
 
 
+class TestReviewScreenLayout(unittest.TestCase):
+    """Source-level and unit tests for the tabbed review screen layout."""
+
+    def test_tabs_used_in_review_branch(self):
+        src = app_source()
+        self.assertIn("st.tabs", src)
+        self.assertIn('tab_overview, tab_exp, tab_proj, tab_links = st.tabs([', src)
+        self.assertIn('"Overview"', src)
+        self.assertIn('"Experience"', src)
+        self.assertIn('"Projects"', src)
+
+    def test_buttons_not_inside_tabs_block(self):
+        src = app_source()
+        tabs_start = src.find('tab_overview, tab_exp, tab_proj, tab_links = st.tabs')
+        self.assertNotEqual(tabs_start, -1)
+        tabs_end = src.find('body_msg = st.empty()', tabs_start)
+        self.assertNotEqual(tabs_end, -1)
+
+        tabs_block = src[tabs_start:tabs_end]
+        # Neither Edit details nor Confirm & Continue may be inside the tabs block
+        self.assertNotIn("btn_confirm_edit", tabs_block)
+        self.assertNotIn("btn_confirm_go", tabs_block)
+
+        # Both must exist outside, in the footer container after tabs
+        footer_block = src[tabs_end:]
+        self.assertIn("btn_confirm_edit", footer_block)
+        self.assertIn("btn_confirm_go", footer_block)
+
+    def test_links_tab_label_helper(self):
+        from ui.link_review import get_links_tab_label, count_link_warnings
+
+        # All assigned: no badge
+        p_full = {
+            "linkedin": "https://linkedin.com/in/janedoe",
+            "github": "https://github.com/janedoe",
+            "portfolio": "https://janedoe.dev",
+            "unreviewed_links": [],
+        }
+        self.assertEqual(count_link_warnings(p_full), 0)
+        self.assertEqual(get_links_tab_label(p_full), "Links")
+
+        # Unassigned links present: badge with count
+        p_unassigned = {
+            "linkedin": "https://linkedin.com/in/janedoe",
+            "github": "https://github.com/janedoe",
+            "portfolio": "https://janedoe.dev",
+            "unreviewed_links": [{"url": "https://example.com/one"}, {"url": "https://example.com/two"}],
+        }
+        self.assertEqual(count_link_warnings(p_unassigned), 2)
+        self.assertEqual(get_links_tab_label(p_unassigned), "Links ⚠ 2")
+
+        # Missing core slots: badge includes missing slots
+        p_missing = {
+            "linkedin": "",
+            "github": "https://github.com/janedoe",
+            "portfolio": "",
+            "unreviewed_links": [{"url": "https://example.com/one"}],
+        }
+        self.assertEqual(count_link_warnings(p_missing), 3)
+        self.assertEqual(get_links_tab_label(p_missing), "Links ⚠ 3")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

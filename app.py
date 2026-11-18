@@ -509,7 +509,7 @@ EXCLUDED_PORTFOLIO_DOMAINS = {
 
 
 from core.url_utils import sanitize_url, unwrap_text_urls, is_url_grounded, normalize_url
-from ui.link_review import render_link_review
+from ui.link_review import render_link_review, get_links_tab_label
 
 
 def classify_links(links: list, raw_text: str = "") -> dict:
@@ -3048,99 +3048,13 @@ def render_welcome_screen():
             # Step-dependent content only; header/footer stay outside.
             with st.container(border=False, key="onboard_step_body"):
                 if _is_review:
+                    st.markdown('<div class="onb-review-mode"></div>', unsafe_allow_html=True)
                     p = _pending_raw
                     loc = p.get("location", {}) if isinstance(p.get("location"), dict) else {}
-                    animated = st.session_state.get("confirm_animated", False)
                     edit_mode = st.session_state.get("confirm_edit", False)
-                    st.markdown("**We found your profile** — review it before continuing.")
-                    # --- Typewriter reveal (presentation only; extraction already complete) ---
-                    reveal = _confirm_reveal_lines(p)
-                    tw_html = ['<div class="confirm-card" id="confirm-reveal" aria-live="off" aria-label="Extracted profile summary">']
-                    for text, cls in reveal:
-                        esc = html.escape(text)
-                        tw_html.append(f'<div class="tw-line {cls}"><span class="tw-text">{esc}</span></div>')
-                    tw_html.append("</div>")
-                    st.markdown("\n".join(tw_html), unsafe_allow_html=True)
-                    if not animated and reveal:
-                        st.html(load_js("typewriter_reveal.js"), unsafe_allow_javascript=True)
-                    st.session_state["confirm_animated"] = True
 
-                    # --- Static section cards (only non-empty sections) ---
-                    contact_bits = []
-                    if p.get("phone"):
-                        contact_bits.append(f"<div class='confirm-link'><span>Phone · </span>{html.escape(str(p['phone']))}</div>")
-                    for k, label in (("linkedin", "LinkedIn"), ("github", "GitHub"), ("portfolio", "Portfolio")):
-                        if p.get(k):
-                            contact_bits.append(f"<div class='confirm-link'><span>{label} · </span>{html.escape(str(p[k]))}</div>")
-                    if contact_bits:
-                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Contact & Links</h3>{''.join(contact_bits)}</div>", unsafe_allow_html=True)
-
-                    exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
-                    if exps:
-                        parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3>"]
-                        for e in exps[:4]:
-                            er, ec, ep = html.escape(str(e.get("role") or "")), html.escape(str(e.get("company") or "")), html.escape(str(e.get("period") or ""))
-                            head = f"{er} — {ec}" if er and ec else (er or ec)
-                            parts.append(f"<div class='confirm-exp-role'>{head}</div>")
-                            if ep:
-                                parts.append(f"<div class='confirm-exp-sub'>{ep}</div>")
-                            bullets = [b for b in (e.get("bullets") or []) if str(b).strip()][:4]
-                            if bullets:
-                                parts.append("<ul class='confirm-exp-bullets'>" + "".join(f"<li>{html.escape(str(b))}</li>" for b in bullets) + "</ul>")
-                        parts.append("</div>")
-                        st.markdown("".join(parts), unsafe_allow_html=True)
-                    elif p.get("experience_unverified"):
-                        st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>⚠️ No work block detected in resume — add it via <b>Edit details</b> below. Nothing invented on your behalf.</div></div>", unsafe_allow_html=True)
-
-                    cats = p.get("skills_categorized") or {}
-                    skills = [s for s in (p.get("skills") or []) if str(s).strip()]
-                    if isinstance(cats, dict) and any(cats.values()):
-                        parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3>"]
-                        for cat, val in cats.items():
-                            items = [s.strip() for s in str(val).split(",") if s.strip()][:12]
-                            if items:
-                                parts.append(f"<div class='confirm-exp-sub'>{html.escape(str(cat))}</div>")
-                                parts.append("<div>" + "".join(f"<span class='chip'>{html.escape(s)}</span>" for s in items) + "</div>")
-                        parts.append("</div>")
-                        st.markdown("".join(parts), unsafe_allow_html=True)
-                    elif skills:
-                        chips = "".join(f"<span class='chip'>{html.escape(str(s))}</span>" for s in skills[:30])
-                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3><div>{chips}</div></div>", unsafe_allow_html=True)
-
-                    edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
-                    if edus:
-                        rows = []
-                        for e in edus[:3]:
-                            deg, inst, yr = html.escape(str(e.get("degree") or "")), html.escape(str(e.get("institution") or "")), html.escape(str(e.get("year") or ""))
-                            rows.append(f"<div class='confirm-exp-role'>{deg}</div><div class='confirm-exp-sub'>{' · '.join(x for x in (inst, yr) if x)}</div>")
-                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Education</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
-
-                    projs = [e for e in (p.get("projects") or []) if isinstance(e, dict)]
-                    if projs:
-                        rows = []
-                        for pr in projs[:3]:
-                            nm, st_ = html.escape(str(pr.get("name") or "")), html.escape(str(pr.get("stack") or ""))
-                            rows.append(f"<div class='confirm-exp-role'>{nm}</div>")
-                            if st_:
-                                rows.append(f"<div class='confirm-exp-sub'>{st_}</div>")
-                            b0 = (pr.get("bullets") or [None])[0]
-                            if b0:
-                                rows.append(f"<div class='confirm-exp-sub'>{html.escape(str(b0))}</div>")
-                            for lbl, key in (("GitHub", "repo_url"), ("Live", "live_url")):
-                                u = str(pr.get(key) or "").strip()
-                                if u:
-                                    rows.append(f"<div class='confirm-exp-sub'>{lbl} · {html.escape(u)}</div>")
-                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
-
-                    # --- Verify your links section ---
-                    p = render_link_review(p)
-
-                    # --- Edit details (inline correction; Save/Cancel handled after footer) ---
-                    if not edit_mode:
-                        if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
-                            confirm_edit_toggle = True
-                    else:
-                        with st.container(border=True):
+                    if edit_mode:
+                        with st.container(border=True, key="onb_edit_box"):
                             st.markdown("### Edit details")
                             e_name = st.text_input("Full name", value=str(p.get("name") or ""), key="cedit_name")
                             e_role = st.text_input("Professional title", value=str(p.get("base_role") or ""), key="cedit_role")
@@ -3153,9 +3067,9 @@ def render_welcome_screen():
                                 e_phone = st.text_input("Phone", value=str(p.get("phone") or ""), key="cedit_phone")
                                 e_github = st.text_input("GitHub", value=str(p.get("github") or ""), key="cedit_github")
                                 e_portfolio = st.text_input("Portfolio", value=str(p.get("portfolio") or ""), key="cedit_portfolio")
+                            skills = [s for s in (p.get("skills") or []) if str(s).strip()]
                             e_skills = st.text_area("Skills (comma separated)", value=", ".join(str(s) for s in skills), height=70, key="cedit_skills")
-                            # ponytail: fields always visible — an empty parse must still let the
-                            # user add their real job instead of inheriting a fabricated one.
+                            exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
                             e0 = exps[0] if exps else {}
                             ec1, ec2, ec3 = st.columns(3)
                             with ec1:
@@ -3165,6 +3079,7 @@ def render_welcome_screen():
                             with ec3:
                                 e_xper = st.text_input("Dates", value=str(e0.get("period") or ""), key="cedit_xper")
                             e_xbul = st.text_area("Role bullets (one per line)", value="\n".join(str(b) for b in (e0.get("bullets") or [])), height=90, key="cedit_xbul")
+                            edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
                             if edus:
                                 d0 = edus[0]
                                 ed1, ed2, ed3 = st.columns(3)
@@ -3176,13 +3091,109 @@ def render_welcome_screen():
                                     e_dyr = st.text_input("Year", value=str(d0.get("year") or ""), key="cedit_dyr")
                             else:
                                 e_ddeg = e_dinst = e_dyr = ""
-                            s1, s2 = st.columns(2)
-                            with s1:
-                                if st.button("Save changes", type="primary", key="btn_cedit_save", use_container_width=True):
-                                    cedit_save_clicked = True
-                            with s2:
-                                if st.button("Cancel", key="btn_cedit_cancel", use_container_width=True):
-                                    cedit_cancel_clicked = True
+                    else:
+                        # 1. Compact summary line at top
+                        name = (p.get("name") or "").strip() or "Candidate"
+                        role = (p.get("base_role") or "").strip()
+                        try:
+                            ey = float(p.get("experience_years") or 0)
+                        except (TypeError, ValueError):
+                            ey = 0
+                        ey_txt = f"{int(ey) if float(ey).is_integer() else ey} yrs exp" if ey > 0 else ""
+                        city = str(loc.get("city") or "").strip() if isinstance(loc, dict) else ""
+                        summary_bits = [b for b in [role, ey_txt, city] if b]
+                        summary_meta = f" <span class='onb-summary-meta'>({ ' · '.join(summary_bits) })</span>" if summary_bits else ""
+                        st.markdown(
+                            f"<div class='onb-review-summary-bar'><span class='onb-summary-name'>{html.escape(name)}</span>{summary_meta}</div>",
+                            unsafe_allow_html=True
+                        )
+
+                        # 2. Tabs: Overview, Experience, Projects, Links
+                        tab_overview, tab_exp, tab_proj, tab_links = st.tabs([
+                            "Overview", "Experience", "Projects", get_links_tab_label(p)
+                        ])
+
+                        with tab_overview:
+                            c_left, c_right = st.columns(2)
+                            with c_left:
+                                contact_bits = []
+                                if p.get("phone"):
+                                    contact_bits.append(f"<div class='confirm-link'><span>Phone · </span>{html.escape(str(p['phone']))}</div>")
+                                if p.get("email"):
+                                    contact_bits.append(f"<div class='confirm-link'><span>Email · </span>{html.escape(str(p['email']))}</div>")
+                                for k, label in (("linkedin", "LinkedIn"), ("github", "GitHub"), ("portfolio", "Portfolio")):
+                                    if p.get(k):
+                                        contact_bits.append(f"<div class='confirm-link'><span>{label} · </span>{html.escape(str(p[k]))}</div>")
+                                if contact_bits:
+                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Contact & Links</h3>{''.join(contact_bits)}</div>", unsafe_allow_html=True)
+
+                                edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
+                                if edus:
+                                    rows = []
+                                    for e in edus[:3]:
+                                        deg, inst, yr = html.escape(str(e.get("degree") or "")), html.escape(str(e.get("institution") or "")), html.escape(str(e.get("year") or ""))
+                                        rows.append(f"<div class='confirm-exp-role'>{deg}</div><div class='confirm-exp-sub'>{' · '.join(x for x in (inst, yr) if x)}</div>")
+                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Education</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+
+                            with c_right:
+                                cats = p.get("skills_categorized") or {}
+                                skills = [s for s in (p.get("skills") or []) if str(s).strip()]
+                                if isinstance(cats, dict) and any(cats.values()):
+                                    parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3>"]
+                                    for cat, val in cats.items():
+                                        items = [s.strip() for s in str(val).split(",") if s.strip()][:12]
+                                        if items:
+                                            parts.append(f"<div class='confirm-exp-sub'>{html.escape(str(cat))}</div>")
+                                            parts.append("<div>" + "".join(f"<span class='chip'>{html.escape(s)}</span>" for s in items) + "</div>")
+                                    parts.append("</div>")
+                                    st.markdown("".join(parts), unsafe_allow_html=True)
+                                elif skills:
+                                    chips = "".join(f"<span class='chip'>{html.escape(str(s))}</span>" for s in skills[:30])
+                                    st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3><div>{chips}</div></div>", unsafe_allow_html=True)
+
+                        with tab_exp:
+                            exps = [e for e in (p.get("experience") or []) if isinstance(e, dict)]
+                            if exps:
+                                parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3>"]
+                                for e in exps[:4]:
+                                    er, ec, ep = html.escape(str(e.get("role") or "")), html.escape(str(e.get("company") or "")), html.escape(str(e.get("period") or ""))
+                                    head = f"{er} — {ec}" if er and ec else (er or ec)
+                                    parts.append(f"<div class='confirm-exp-role'>{head}</div>")
+                                    if ep:
+                                        parts.append(f"<div class='confirm-exp-sub'>{ep}</div>")
+                                    bullets = [b for b in (e.get("bullets") or []) if str(b).strip()][:4]
+                                    if bullets:
+                                        parts.append("<ul class='confirm-exp-bullets'>" + "".join(f"<li>{html.escape(str(b))}</li>" for b in bullets) + "</ul>")
+                                parts.append("</div>")
+                                st.markdown("".join(parts), unsafe_allow_html=True)
+                            elif p.get("experience_unverified"):
+                                st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>⚠️ No work block detected in resume — add it via <b>Edit details</b> below. Nothing invented on your behalf.</div></div>", unsafe_allow_html=True)
+                            else:
+                                st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Experience</h3><div class='confirm-exp-sub'>No experience entries recorded.</div></div>", unsafe_allow_html=True)
+
+                        with tab_proj:
+                            projs = [e for e in (p.get("projects") or []) if isinstance(e, dict)]
+                            if projs:
+                                rows = []
+                                for pr in projs[:4]:
+                                    nm, st_ = html.escape(str(pr.get("name") or "")), html.escape(str(pr.get("stack") or ""))
+                                    rows.append(f"<div class='confirm-exp-role'>{nm}</div>")
+                                    if st_:
+                                        rows.append(f"<div class='confirm-exp-sub'>{st_}</div>")
+                                    b0 = (pr.get("bullets") or [None])[0]
+                                    if b0:
+                                        rows.append(f"<div class='confirm-exp-sub'>{html.escape(str(b0))}</div>")
+                                    for lbl, key in (("GitHub", "repo_url"), ("Live", "live_url")):
+                                        u = str(pr.get(key) or "").strip()
+                                        if u:
+                                            rows.append(f"<div class='confirm-exp-sub'>{lbl} · {html.escape(u)}</div>")
+                                st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+                            else:
+                                st.markdown("<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3><div class='confirm-exp-sub'>No projects detected. Add projects via <b>Edit details</b>.</div></div>", unsafe_allow_html=True)
+
+                        with tab_links:
+                            p = render_link_review(p)
+
                     # ponytail: message slot at the end of the scroll body — every
                     # validation/status message below renders HERE so the outer
                     # card never grows and nothing is clipped.
@@ -3415,28 +3426,42 @@ def render_welcome_screen():
             # single Back key (no source duplicates). Step 1 shows it disabled
             # (nothing to go back to); review swaps in Upload-another + Confirm.
             with st.container(border=False, key="onboard_step_foot"):
-                _f_bl, _f_br = st.columns([1, 2.4], vertical_alignment="center")
-                with _f_bl:
-                    if _is_review:
-                        if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
-                            for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated"):
-                                st.session_state.pop(k, None)
-                            _clear_onb_upload_state(clear_autofill=True)
-                            st.rerun()
+                if _is_review:
+                    if not edit_mode:
+                        _f_back, _f_edit, _f_go = st.columns([1, 1, 1.6], vertical_alignment="center")
+                        with _f_back:
+                            if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
+                                for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary"):
+                                    st.session_state.pop(k, None)
+                                _clear_onb_upload_state(clear_autofill=True)
+                                st.rerun()
+                        with _f_edit:
+                            if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
+                                confirm_edit_toggle = True
+                        with _f_go:
+                            confirm_go = st.button("Confirm & Continue →", type="primary", key="btn_confirm_go", use_container_width=True)
                     else:
+                        _f_cancel, _f_save = st.columns([1, 1.6], vertical_alignment="center")
+                        with _f_cancel:
+                            if st.button("Cancel", key="btn_cedit_cancel", use_container_width=True):
+                                cedit_cancel_clicked = True
+                        with _f_save:
+                            if st.button("Save changes", type="primary", key="btn_cedit_save", use_container_width=True):
+                                cedit_save_clicked = True
+                else:
+                    _f_bl, _f_br = st.columns([1, 2.4], vertical_alignment="center")
+                    with _f_bl:
                         if st.button("← Back", key="btn_onb_back", disabled=(_step == 1),
                                      help="Change your path — entered data is kept", use_container_width=True):
                             onb_go_step(st.session_state, 1)
                             st.rerun()
-                with _f_br:
-                    if _is_review:
-                        confirm_go = st.button("Confirm & Continue →", type="primary", key="btn_confirm_go", use_container_width=True)
-                    elif _step == 1:
-                        st.button("Select a path to continue →", key="btn_onb_idle", disabled=True, use_container_width=True)
-                    elif _path == ONB_PATHS[1]:
-                        manual_clicked = st.button("Build Profile from Answers →", key="btn_onboard_manual", use_container_width=True)
-                    else:
-                        launch_clicked = st.button("Analyze Resume & Build Workspace →", key="btn_onboard_launch", use_container_width=True)
+                    with _f_br:
+                        if _step == 1:
+                            st.button("Select a path to continue →", key="btn_onb_idle", disabled=True, use_container_width=True)
+                        elif _path == ONB_PATHS[1]:
+                            manual_clicked = st.button("Build Profile from Answers →", key="btn_onboard_manual", use_container_width=True)
+                        else:
+                            launch_clicked = st.button("Analyze Resume & Build Workspace →", key="btn_onboard_launch", use_container_width=True)
 
             # ponytail: every post-click message renders into body_msg (END of the
             # scroll body), so the fixed outer card NEVER grows and nothing clips.

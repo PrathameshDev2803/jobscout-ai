@@ -20,6 +20,28 @@ BLOCKED_DOMAINS = (
 )
 
 
+def count_link_warnings(profile: dict) -> int:
+    """Count missing core slots (linkedin, github, portfolio) and unassigned/unreviewed links."""
+    if not isinstance(profile, dict):
+        return 0
+    warnings = 0
+    for slot in ("linkedin", "github", "portfolio"):
+        if not str(profile.get(slot) or "").strip():
+            warnings += 1
+    unreviewed = profile.get("unreviewed_links") or []
+    if isinstance(unreviewed, list):
+        warnings += len([u for u in unreviewed if u])
+    return warnings
+
+
+def get_links_tab_label(profile: dict) -> str:
+    """Tab label showing warning badge when unassigned links exist or core links are missing."""
+    count = count_link_warnings(profile)
+    if count > 0:
+        return f"Links ⚠ {count}"
+    return "Links"
+
+
 class ApplyResult(tuple):
     """Result tuple of (updated_profile, errors) supporting dict-like access for convenience."""
     def __new__(cls, profile, errors):
