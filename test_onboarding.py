@@ -427,5 +427,92 @@ class TestReviewScreenWizard(unittest.TestCase):
         self.assertIn('st.session_state["pending_profile"] = copy.deepcopy(_upload_profile)', welcome_block)
 
 
+class TestReviewSummaryRedesign(unittest.TestCase):
+    """Unit and regression tests for the Step 1 Resume Summary Preview SaaS redesign."""
+
+    def test_get_name_initials(self):
+        self.assertEqual(A.get_name_initials("Prathamesh Jadhav"), "PJ")
+        self.assertEqual(A.get_name_initials("Aarav Sharma"), "AS")
+        self.assertEqual(A.get_name_initials("Jane"), "JA")
+        self.assertEqual(A.get_name_initials(""), "JS")
+        self.assertEqual(A.get_name_initials(None), "JS")
+        self.assertEqual(A.get_name_initials("John Fitzgerald Kennedy"), "JK")
+
+    def test_format_display_url(self):
+        self.assertEqual(A.format_display_url("https://github.com/PrathameshDev2803"), "github.com/PrathameshDev2803")
+        self.assertEqual(A.format_display_url("http://www.linkedin.com/in/prathamesh-jadhav/"), "linkedin.com/in/prathamesh-jadhav")
+        self.assertEqual(A.format_display_url("https://prathameshjadhav.com/"), "prathameshjadhav.com")
+        self.assertEqual(A.format_display_url(""), "")
+
+    def test_get_categorized_skills_for_preview(self):
+        profile_categorized = {
+            "skills_categorized": {
+                "Backend": "PHP, Laravel, Python",
+                "Database": "MySQL, MongoDB",
+            }
+        }
+        res = A.get_categorized_skills_for_preview(profile_categorized)
+        self.assertEqual(res.get("Backend"), ["PHP", "Laravel", "Python"])
+        self.assertEqual(res.get("Database"), ["MySQL", "MongoDB"])
+
+        profile_flat = {
+            "skills": ["PHP", "Laravel", "MySQL", "React", "Docker", "REST APIs", "CustomSkill"]
+        }
+        res_flat = A.get_categorized_skills_for_preview(profile_flat)
+        self.assertIn("PHP", res_flat.get("Backend", []))
+        self.assertIn("MySQL", res_flat.get("Database", []))
+        self.assertIn("React", res_flat.get("Frontend", []))
+        self.assertIn("Docker", res_flat.get("Tools", []))
+        self.assertIn("CustomSkill", res_flat.get("Other", []))
+
+    def test_sidebar_html(self):
+        html_s0 = A._review_sidebar_html(0)
+        self.assertIn("Launch Workspace", html_s0)
+        self.assertIn("Summary", html_s0)
+        self.assertIn("Preferences", html_s0)
+        self.assertIn("Resume", html_s0)
+        self.assertIn("Review &amp; Confirm", html_s0)
+        self.assertIn("onb-sidebar-step active", html_s0)
+
+        html_s1 = A._review_sidebar_html(1)
+        self.assertIn("onb-sidebar-step completed", html_s1)
+
+    def test_contact_links_card_html(self):
+        profile = {
+            "github": "https://github.com/PrathameshDev2803",
+            "linkedin": "https://linkedin.com/in/prathamesh-jadhav",
+            "portfolio": "https://prathameshjadhav.com",
+        }
+        html_card = A._contact_links_card_html(profile)
+        self.assertIn("Contact & Links", html_card)
+        self.assertIn("github.com/PrathameshDev2803", html_card)
+        self.assertIn("linkedin.com/in/prathamesh-jadhav", html_card)
+        self.assertIn("prathameshjadhav.com", html_card)
+
+    def test_skills_card_html(self):
+        profile = {
+            "skills": ["PHP", "Laravel", "MySQL", "React", "Git"]
+        }
+        html_card = A._skills_card_html(profile)
+        self.assertIn("Skills", html_card)
+        self.assertIn("Backend", html_card)
+        self.assertIn("PHP", html_card)
+        self.assertIn("skill-tag", html_card)
+
+    def test_step1_layout_elements_present_in_app(self):
+        src = app_source()
+        # Candidate card container and edit button
+        self.assertIn('key="onb_candidate_card_wrap"', src)
+        self.assertIn('key="btn_prof_card_edit"', src)
+        # Sidebar integration
+        self.assertIn('_review_sidebar_html(review_step)', src)
+        # Main header with step and progress
+        self.assertIn('onb-main-header', src)
+        self.assertIn('Review Your <span>{html.escape(step_title)}</span>', src)
+        # Footer buttons on step 0
+        self.assertIn('key="btn_confirm_back"', src)
+        self.assertIn('key="btn_review_next"', src)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

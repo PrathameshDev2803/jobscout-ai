@@ -9,11 +9,19 @@ Provides:
 """
 import copy
 import html
+import os
+import sys
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 import requests
 
-from core.url_utils import normalize_url, sanitize_url
+try:
+    from core.url_utils import normalize_url, sanitize_url
+except (ImportError, ModuleNotFoundError):
+    _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _BASE not in sys.path:
+        sys.path.insert(0, _BASE)
+    from core.url_utils import normalize_url, sanitize_url
 
 BLOCKED_DOMAINS = (
     "linkedin.com", "instagram.com", "facebook.com", "twitter.com", "x.com"

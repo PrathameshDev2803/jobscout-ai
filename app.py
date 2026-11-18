@@ -2704,6 +2704,207 @@ def clamp_review_step(step) -> int:
     return max(0, min(3, s))
 
 
+def get_name_initials(name: str) -> str:
+    """Compute initials for candidate avatar (e.g. 'Prathamesh Jadhav' -> 'PJ')."""
+    parts = [p.strip() for p in re.split(r"[\s\-_]+", str(name or "")) if p.strip()]
+    if not parts:
+        return "JS"
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return (parts[0][0] + parts[-1][0]).upper()
+
+
+def format_display_url(url: str) -> str:
+    """Format a URL into a clean, minimal display string without scheme/trailing slashes."""
+    u = str(url or "").strip()
+    u = re.sub(r"^https?://(www\.)?", "", u, flags=re.IGNORECASE)
+    return u.rstrip("/")
+
+
+REVIEW_TECH_CATEGORIES = {
+    "Backend": ["PHP", "Laravel", "Python", "Django", "FastAPI", "Flask", "Node.js", "Express.js", "C#", ".NET", "ASP.NET", "Java", "Spring", "Go", "Ruby", "Rails", "REST APIs", "GraphQL", "Microservices"],
+    "Database": ["MySQL", "PostgreSQL", "MongoDB", "SQL", "MS SQL", "SQLite", "Redis", "phpMyAdmin"],
+    "Frontend": ["React.js", "React", "JavaScript", "TypeScript", "Next.js", "HTML5", "HTML", "CSS3", "CSS", "Tailwind CSS", "Bootstrap", "Vue", "Angular", "Redux", "jQuery", "AJAX"],
+    "Tools": ["Git", "GitHub", "Docker", "Kubernetes", "AWS", "CI/CD", "Composer", "Postman", "Linux", "XAMPP", "Shopify", "Figma"],
+    "Web & Concepts": ["CRUD", "MVC", "OOP", "Responsive Design", "JSON", "RESTful Architecture", "Unit Testing"]
+}
+
+
+def get_categorized_skills_for_preview(profile: dict) -> dict:
+    """Return categorized skill lists preserving existing categorization logic."""
+    if not isinstance(profile, dict):
+        return {}
+    raw_cats = profile.get("skills_categorized")
+    result = {}
+    if isinstance(raw_cats, dict) and any(raw_cats.values()):
+        for cat in ("Backend", "Database", "Frontend", "Tools", "Web & Concepts"):
+            val = raw_cats.get(cat)
+            if val:
+                items = [s.strip() for s in str(val).split(",") if s.strip()]
+                if items:
+                    result[cat] = items
+        for cat, val in raw_cats.items():
+            if cat not in result and val:
+                items = [s.strip() for s in str(val).split(",") if s.strip()]
+                if items:
+                    result[cat] = items
+    if not result:
+        flat_skills = profile.get("skills") or []
+        seen = set()
+        for cat, sk_list in REVIEW_TECH_CATEGORIES.items():
+            matched = []
+            for sk in sk_list:
+                for item in flat_skills:
+                    if str(item).strip().lower() == sk.lower():
+                        if sk not in matched and sk.lower() not in seen:
+                            matched.append(sk)
+                            seen.add(sk.lower())
+            if matched:
+                result[cat] = matched
+        other = [s for s in flat_skills if str(s).strip() and str(s).strip().lower() not in seen]
+        if other:
+            result["Other"] = other[:10]
+    return result
+
+
+def _review_sidebar_html(review_step: int = 0) -> str:
+    """Render the fixed left sidebar for the SaaS onboarding review screen."""
+    steps_data = [
+        ("Summary", "Review your information"),
+        ("Preferences", "Job roles, location, & mode"),
+        ("Resume", "Upload or select your resume"),
+        ("Review & Confirm", "Finalize and launch"),
+    ]
+    step_items_html = []
+    for i, (title, desc) in enumerate(steps_data):
+        is_active = (i == review_step)
+        is_done = (i < review_step)
+        active_cls = "active" if is_active else ("completed" if is_done else "")
+        badge_content = "✓" if is_done else str(i + 1)
+        step_items_html.append(f"""
+        <div class="onb-sidebar-step {active_cls}">
+            <div class="onb-step-badge">{badge_content}</div>
+            <div class="onb-step-text">
+                <div class="onb-step-title">{html.escape(title)}</div>
+                <div class="onb-step-desc">{html.escape(desc)}</div>
+            </div>
+        </div>
+        """)
+        if i < len(steps_data) - 1:
+            conn_cls = "completed" if i < review_step else ""
+            step_items_html.append(f'<div class="onb-step-connector {conn_cls}"></div>')
+
+    return f"""
+    <div class="onb-sidebar-container">
+        <div class="onb-sidebar-logo">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            <span class="onb-logo-text">JobScout<span class="onb-logo-dot">.ai</span></span>
+        </div>
+        <div class="onb-sidebar-heading">Launch Workspace</div>
+        <div class="onb-sidebar-desc">Set up your workspace to get personalized job matches, resume tailoring, and more.</div>
+        <div class="onb-sidebar-steps">
+            {''.join(step_items_html)}
+        </div>
+    </div>
+    """
+
+
+def _contact_links_card_html(profile: dict) -> str:
+    """Render the Contact & Links card with individual platform rows, icons, and safe external links."""
+    p = profile if isinstance(profile, dict) else {}
+    links = []
+    gh = str(p.get("github") or "").strip()
+    if gh:
+        links.append(("github", "GitHub", gh, format_display_url(gh)))
+    li = str(p.get("linkedin") or "").strip()
+    if li:
+        links.append(("linkedin", "LinkedIn", li, format_display_url(li)))
+    pf = str(p.get("portfolio") or "").strip()
+    if pf:
+        links.append(("portfolio", "Portfolio", pf, format_display_url(pf)))
+    for extra in (p.get("other_links") or []):
+        if extra and str(extra).strip():
+            eu = str(extra).strip()
+            links.append(("website", "Website", eu, format_display_url(eu)))
+
+    svg_icons = {
+        "github": '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>',
+        "linkedin": '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>',
+        "portfolio": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+        "website": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>'
+    }
+    ext_svg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>'
+
+    rows_html = []
+    if links:
+        for ltype, ltitle, lurl, ldisp in links:
+            icon_svg = svg_icons.get(ltype, svg_icons["website"])
+            safe_url = sanitize_url(lurl) or lurl
+            rows_html.append(f"""
+            <a href="{html.escape(safe_url)}" target="_blank" rel="noopener noreferrer" class="contact-link-item">
+                <div class="contact-link-icon-box">{icon_svg}</div>
+                <div class="contact-link-text">
+                    <div class="contact-link-title">{html.escape(ltitle)}</div>
+                    <div class="contact-link-url">{html.escape(ldisp)}</div>
+                </div>
+                <div class="contact-link-ext">{ext_svg}</div>
+            </a>
+            """)
+    else:
+        rows_html.append('<div class="contact-link-empty">No professional links detected. Use Edit details to add your profiles.</div>')
+
+    return f"""
+    <div class="sec-card">
+        <div class="sec-card-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <span class="sec-card-title">Contact & Links</span>
+        </div>
+        <div class="sec-card-content">
+            {''.join(rows_html)}
+        </div>
+    </div>
+    """
+
+
+def _skills_card_html(profile: dict) -> str:
+    """Render the Skills card organized into category rows with compact pill-shaped tags."""
+    cat_skills = get_categorized_skills_for_preview(profile)
+    rows_html = []
+    if cat_skills:
+        for cat_name, skill_items in cat_skills.items():
+            tags = "".join(f'<span class="skill-tag">{html.escape(s)}</span>' for s in skill_items[:12])
+            rows_html.append(f"""
+            <div class="skills-cat-row">
+                <div class="skills-cat-name">{html.escape(cat_name)}</div>
+                <div class="skills-tags-wrap">{tags}</div>
+            </div>
+            """)
+    else:
+        rows_html.append('<div class="skills-empty">No skills detected. Use Edit details to add your skills.</div>')
+
+    return f"""
+    <div class="sec-card">
+        <div class="sec-card-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            <span class="sec-card-title">Skills</span>
+        </div>
+        <div class="sec-card-content">
+            {''.join(rows_html)}
+        </div>
+    </div>
+    """
+
+
 def onb_card_label(current, path, base):
     """Selected-state prefix for path cards: ✓ on the previously chosen path, else plain."""
     return ("✓ " if current == path else "") + base
@@ -2966,10 +3167,14 @@ def render_welcome_screen():
     _pending_raw = st.session_state.get("pending_profile")
     _is_review = isinstance(_pending_raw, dict) and bool(_pending_raw)
 
-    col_prop, col_onboard = st.columns([0.44, 0.56], gap="medium")
+    col_prop, col_onboard = st.columns([0.28, 0.72] if _is_review else [0.44, 0.56], gap="large" if _is_review else "medium")
 
     with col_prop:
-        st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
+        if _is_review:
+            review_step = clamp_review_step(st.session_state.get("review_step", 0))
+            st.markdown(_review_sidebar_html(review_step), unsafe_allow_html=True)
+        else:
+            st.markdown(WELCOME_PROP_HTML, unsafe_allow_html=True)
 
     with col_onboard:
         if not _is_review:
@@ -3013,16 +3218,40 @@ def render_welcome_screen():
         with st.container(border=True, key="onboard_panel"):
             with st.container(border=False, key="onboard_head"):
                 _sub_text = onb_step_label(3) if _is_review else (onb_step_label(1) if _step == 1 else onb_step_label(2, _path))
-                st.markdown(f"""
-                <div class="onboard-header-row">
-                    <span class="onboard-user-icon">👤</span>
-                    <span class="onboard-header-title">Launch Workspace</span>
-                </div>
-                <div class="onboard-header-sub">
-                    <span class="onboard-sub-text">Personalize with your resume.</span>
-                    <span class="onboard-step-badge">{_sub_text}</span>
-                </div>
-                """, unsafe_allow_html=True)
+                if not _is_review:
+                    st.markdown(f"""
+                    <div class="onboard-header-row">
+                        <span class="onboard-user-icon">👤</span>
+                        <span class="onboard-header-title">Launch Workspace</span>
+                    </div>
+                    <div class="onboard-header-sub">
+                        <span class="onboard-sub-text">Personalize with your resume.</span>
+                        <span class="onboard-step-badge">{_sub_text}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    review_step = clamp_review_step(st.session_state.get("review_step", 0))
+                    progress_pct = int((review_step + 1) * 25)
+                    step_headers = [
+                        ("Summary", "Confirm your details, skills, and links. You can edit them anytime."),
+                        ("Preferences", "Review your job search preferences, experience, and target roles."),
+                        ("Resume", "Inspect extracted project repositories, live demos, and technical depth."),
+                        ("Review & Confirm", "Verify your links and launch your personalized developer workspace.")
+                    ]
+                    step_title, step_sub = step_headers[review_step]
+                    st.markdown(f"""
+                    <div class="onb-main-header">
+                        <div class="onb-progress-row">
+                            <span class="onb-progress-step">Step {review_step + 1} of 4</span>
+                            <div class="onb-progress-track">
+                                <div class="onb-progress-fill" style="width: {progress_pct}%;"></div>
+                            </div>
+                            <span class="onb-progress-pct">{progress_pct}% complete</span>
+                        </div>
+                        <h1 class="onb-main-title">Review Your <span>{html.escape(step_title)}</span></h1>
+                        <p class="onb-main-subtitle">{html.escape(step_sub)}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
                 remember_me = True
                 dur_label = "1 Month"
                 dur_months = 1
@@ -3088,26 +3317,6 @@ def render_welcome_screen():
                     st.session_state["review_step"] = review_step
 
                     warn_count = count_link_warnings(p)
-                    step_titles = [
-                        "Summary",
-                        "Experience",
-                        "Projects",
-                        f"Verify links ⚠ {warn_count}" if warn_count > 0 else "Verify links"
-                    ]
-                    curr_step_title = step_titles[review_step]
-                    progress_pct = int((review_step + 1) * 25)
-
-                    # Top progress indicator (Step N of 4 · <step name>)
-                    st.markdown(f"""
-                    <div class="onb-wizard-header">
-                        <div class="onb-wizard-step-label">
-                            <span>Step {review_step + 1} of 4 · {html.escape(curr_step_title)}</span>
-                        </div>
-                        <div class="onb-wizard-track">
-                            <div class="onb-wizard-bar" style="width: {progress_pct}%;"></div>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
 
                     with st.container(border=False, key="onb_review_content"):
                         if edit_mode:
@@ -3150,58 +3359,42 @@ def render_welcome_screen():
                                     e_ddeg = e_dinst = e_dyr = ""
                         else:
                             if review_step == 0:
-                                # Step 0: Summary (compact header + 2-col contact, education & skills)
+                                # Step 0: Summary (Prominent candidate profile card + 2-col Contact & Links and Skills)
                                 name = (p.get("name") or "").strip() or "Candidate"
                                 role = (p.get("base_role") or "").strip()
-                                try:
-                                    ey = float(p.get("experience_years") or 0)
-                                except (TypeError, ValueError):
-                                    ey = 0
-                                ey_txt = f"{int(ey) if float(ey).is_integer() else ey} yrs exp" if ey > 0 else ""
                                 city = str(loc.get("city") or "").strip() if isinstance(loc, dict) else ""
-                                summary_bits = [b for b in [role, ey_txt, city] if b]
-                                summary_meta = f" <span class='onb-summary-meta'>({ ' · '.join(summary_bits) })</span>" if summary_bits else ""
-                                st.markdown(
-                                    f"<div class='onb-review-summary-bar'><span class='onb-summary-name'>{html.escape(name)}</span>{summary_meta}</div>",
-                                    unsafe_allow_html=True
-                                )
+                                initials = get_name_initials(name)
 
-                                c_left, c_right = st.columns(2)
-                                with c_left:
-                                    contact_bits = []
-                                    if p.get("phone"):
-                                        contact_bits.append(f"<div class='confirm-link'><span>Phone · </span>{html.escape(str(p['phone']))}</div>")
-                                    if p.get("email"):
-                                        contact_bits.append(f"<div class='confirm-link'><span>Email · </span>{html.escape(str(p['email']))}</div>")
-                                    for k, label in (("linkedin", "LinkedIn"), ("github", "GitHub"), ("portfolio", "Portfolio")):
-                                        if p.get(k):
-                                            contact_bits.append(f"<div class='confirm-link'><span>{label} · </span>{html.escape(str(p[k]))}</div>")
-                                    if contact_bits:
-                                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Contact & Links</h3>{''.join(contact_bits)}</div>", unsafe_allow_html=True)
+                                meta_parts = []
+                                if role:
+                                    meta_parts.append(html.escape(role))
+                                if city:
+                                    meta_parts.append(f"📍 {html.escape(city)}")
+                                meta_line = " • ".join(meta_parts) if meta_parts else "Software Developer"
 
-                                    edus = [e for e in (p.get("education") or []) if isinstance(e, dict)]
-                                    if edus:
-                                        rows = []
-                                        for e in edus[:3]:
-                                            deg, inst, yr = html.escape(str(e.get("degree") or "")), html.escape(str(e.get("institution") or "")), html.escape(str(e.get("year") or ""))
-                                            rows.append(f"<div class='confirm-exp-role'>{deg}</div><div class='confirm-exp-sub'>{' · '.join(x for x in (inst, yr) if x)}</div>")
-                                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Education</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
+                                # Horizontal Candidate Profile Card
+                                with st.container(border=False, key="onb_candidate_card_wrap"):
+                                    col_cinfo, col_cbtn = st.columns([0.80, 0.20], vertical_alignment="center")
+                                    with col_cinfo:
+                                        st.markdown(f"""
+                                        <div class="candidate-profile-flex">
+                                            <div class="candidate-avatar">{html.escape(initials)}</div>
+                                            <div class="candidate-info">
+                                                <div class="candidate-name">{html.escape(name)}</div>
+                                                <div class="candidate-meta">{meta_line}</div>
+                                            </div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    with col_cbtn:
+                                        if st.button("✏️ Edit details", key="btn_prof_card_edit", use_container_width=True):
+                                            confirm_edit_toggle = True
 
-                                with c_right:
-                                    cats = p.get("skills_categorized") or {}
-                                    skills = [s for s in (p.get("skills") or []) if str(s).strip()]
-                                    if isinstance(cats, dict) and any(cats.values()):
-                                        parts = ["<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3>"]
-                                        for cat, val in cats.items():
-                                            items = [s.strip() for s in str(val).split(",") if s.strip()][:12]
-                                            if items:
-                                                parts.append(f"<div class='confirm-exp-sub'>{html.escape(str(cat))}</div>")
-                                                parts.append("<div>" + "".join(f"<span class='chip'>{html.escape(s)}</span>" for s in items) + "</div>")
-                                        parts.append("</div>")
-                                        st.markdown("".join(parts), unsafe_allow_html=True)
-                                    elif skills:
-                                        chips = "".join(f"<span class='chip'>{html.escape(str(s))}</span>" for s in skills[:30])
-                                        st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Skills</h3><div>{chips}</div></div>", unsafe_allow_html=True)
+                                # Two-column Contact & Links and Skills sections
+                                c_links, c_skills = st.columns([0.48, 0.52], gap="medium")
+                                with c_links:
+                                    st.markdown(_contact_links_card_html(p), unsafe_allow_html=True)
+                                with c_skills:
+                                    st.markdown(_skills_card_html(p), unsafe_allow_html=True)
 
                             elif review_step == 1:
                                 # Step 1: Experience (roles with bullets)
@@ -3485,9 +3678,9 @@ def render_welcome_screen():
                 if _is_review:
                     if not edit_mode:
                         if review_step == 0:
-                            _f_back, _f_edit, _f_next = st.columns([1, 1, 1.2], vertical_alignment="center")
+                            _f_back, _f_space, _f_edit, _f_next = st.columns([1.3, 1.2, 0.9, 0.9], vertical_alignment="center")
                             with _f_back:
-                                if st.button("← Upload another", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
+                                if st.button("↑ Upload another resume", key="btn_confirm_back", help="Discard this extraction and pick a different resume", use_container_width=True):
                                     for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary", "review_step"):
                                         st.session_state.pop(k, None)
                                     _clear_onb_upload_state(clear_autofill=True)

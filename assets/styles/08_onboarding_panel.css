@@ -1402,3 +1402,464 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
     display: none !important;
 }
 
+/* ==========================================================================
+   SaaS Onboarding Review Redesign (Step 1 Summary Preview)
+   ========================================================================== */
+
+/* 1. Desktop 2-Column Review Layout: Sidebar (~290px) + Main Content (Flex) */
+@media (min-width: 901px) {
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"]:first-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:first-child {
+        flex: 0 0 290px !important;
+        max-width: 290px !important;
+        width: 290px !important;
+        min-width: 280px !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"]:last-child,
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"]:last-child {
+        flex: 1 1 auto !important;
+        max-width: calc(100% - 310px) !important;
+        width: auto !important;
+    }
+}
+
+/* 2. Left Sidebar Styling */
+.onb-sidebar-container {
+    background: #0B1017;
+    border: 1px solid #27313D;
+    border-radius: 16px;
+    padding: 24px 20px;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+.onb-sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+.onb-logo-text {
+    font-size: 19px;
+    font-weight: 700;
+    color: #F1F5F9;
+    letter-spacing: -0.3px;
+}
+.onb-logo-dot {
+    color: #10B981;
+}
+.onb-sidebar-heading {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #F1F5F9;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+}
+.onb-sidebar-desc {
+    font-size: 13px;
+    color: #748196;
+    line-height: 1.5;
+    margin-bottom: 26px;
+}
+.onb-sidebar-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.onb-sidebar-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+.onb-sidebar-step.active {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.25);
+}
+.onb-step-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    background: #161F2B;
+    border: 1px solid #27313D;
+    color: #748196;
+}
+.onb-sidebar-step.active .onb-step-badge {
+    background: #10B981;
+    color: #0B1017;
+    border-color: #10B981;
+}
+.onb-sidebar-step.completed .onb-step-badge {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10B981;
+    border-color: #10B981;
+}
+.onb-step-title {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: #A0AEC0;
+    line-height: 1.3;
+}
+.onb-sidebar-step.active .onb-step-title {
+    color: #F1F5F9;
+    font-weight: 700;
+}
+.onb-step-desc {
+    font-size: 12px;
+    color: #748196;
+    margin-top: 2px;
+    line-height: 1.3;
+}
+.onb-sidebar-step.active .onb-step-desc {
+    color: #10B981;
+    font-weight: 500;
+}
+.onb-step-connector {
+    width: 2px;
+    height: 16px;
+    background: #27313D;
+    margin-left: 25px;
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+.onb-step-connector.completed {
+    background: #10B981;
+}
+
+/* 3. Main Review Content Header */
+.onb-main-header {
+    margin-bottom: 18px;
+}
+.onb-progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+.onb-progress-step, .onb-progress-pct {
+    font-size: 13px;
+    font-weight: 600;
+    color: #A0AEC0;
+    white-space: nowrap;
+}
+.onb-progress-track {
+    flex: 1;
+    height: 6px;
+    background: #161F2B;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.onb-progress-fill {
+    height: 100%;
+    background: #10B981;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+.onb-main-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #F1F5F9;
+    letter-spacing: -0.5px;
+    margin: 0 0 6px 0;
+}
+.onb-main-title span {
+    color: #10B981;
+}
+.onb-main-subtitle {
+    font-size: 13.5px;
+    color: #748196;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 4. Candidate Profile Card */
+.st-key-onb_candidate_card_wrap {
+    background: #111821 !important;
+    border: 1px solid #27313D !important;
+    border-radius: 14px !important;
+    padding: 16px 20px !important;
+    margin-bottom: 16px !important;
+}
+.candidate-profile-flex {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.candidate-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: #10B981;
+    color: #0B1017;
+    font-size: 20px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+}
+.candidate-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #F1F5F9;
+    margin-bottom: 3px;
+    line-height: 1.2;
+}
+.candidate-meta {
+    font-size: 13.5px;
+    color: #A0AEC0;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.st-key-btn_prof_card_edit button {
+    background: #161F2B !important;
+    border: 1px solid #27313D !important;
+    color: #F1F5F9 !important;
+    border-radius: 10px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    min-height: 40px !important;
+    padding: 6px 14px !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-btn_prof_card_edit button:hover {
+    border-color: #10B981 !important;
+    color: #FFFFFF !important;
+    background: #1c2738 !important;
+}
+
+/* 5. Two-Column Cards: Contact & Links + Skills */
+.sec-card {
+    background: #111821;
+    border: 1px solid #27313D;
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-sizing: border-box;
+    min-height: 290px;
+    display: flex;
+    flex-direction: column;
+}
+.sec-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+.sec-card-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #F1F5F9;
+}
+.sec-card-content {
+    flex: 1;
+}
+
+/* Contact & Links items */
+.contact-link-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-decoration: none !important;
+    color: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    border: 1px solid transparent;
+    margin-bottom: 8px;
+}
+.contact-link-item:hover {
+    background: #161F2B;
+    border-color: #27313D;
+}
+.contact-link-item:hover .contact-link-ext {
+    color: #10B981;
+}
+.contact-link-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: #161F2B;
+    border: 1px solid #27313D;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #F1F5F9;
+    flex-shrink: 0;
+}
+.contact-link-text {
+    flex: 1;
+    min-width: 0;
+}
+.contact-link-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #F1F5F9;
+    line-height: 1.3;
+}
+.contact-link-url {
+    font-size: 12.5px;
+    color: #748196;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 1px;
+}
+.contact-link-ext {
+    color: #748196;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s ease;
+}
+.contact-link-empty, .skills-empty {
+    font-size: 13px;
+    color: #748196;
+    padding: 20px 8px;
+    font-style: italic;
+}
+
+/* Skills Category Rows & Pill Tags */
+.skills-cat-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 12px;
+    min-width: 0;
+}
+.skills-cat-name {
+    width: 110px;
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: #A0AEC0;
+    padding-top: 4px;
+}
+.skills-tags-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+.skill-tag {
+    background: #161F2B;
+    border: 1px solid #27313D;
+    color: #F1F5F9;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+.skill-tag:hover {
+    border-color: #10B981;
+    color: #FFFFFF;
+    background: #1c2738;
+}
+
+/* 6. Bottom Action Bar Styling */
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-onboard_step_foot {
+    border-top: 1px solid #27313D !important;
+    padding-top: 16px !important;
+    margin-top: 16px !important;
+}
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_confirm_back button,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_confirm_edit button,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_review_back button,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_cedit_cancel button {
+    background: #111821 !important;
+    border: 1px solid #27313D !important;
+    color: #F1F5F9 !important;
+    border-radius: 10px !important;
+    min-height: 44px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_confirm_back button:hover,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_confirm_edit button:hover,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_review_back button:hover,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_cedit_cancel button:hover {
+    border-color: #10B981 !important;
+    color: #FFFFFF !important;
+    background: #161F2B !important;
+}
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_review_next button,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_confirm_go button,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_cedit_save button {
+    background: #10B981 !important;
+    color: #0B1017 !important;
+    border: 1px solid #10B981 !important;
+    border-radius: 10px !important;
+    min-height: 44px !important;
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    transition: all 0.15s ease !important;
+}
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_review_next button:hover,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_confirm_go button:hover,
+.st-key-onboard_panel:has(.onb-review-mode) .st-key-btn_cedit_save button:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+    color: #FFFFFF !important;
+}
+
+/* 7. Tablet & Mobile Responsive */
+@media (max-width: 900px) {
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) {
+        flex-direction: column !important;
+        gap: 1.25rem !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(.onb-review-mode) > div[data-testid="stLayoutWrapper"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 auto !important;
+    }
+    .onb-sidebar-container {
+        height: auto !important;
+        padding: 16px 18px !important;
+    }
+    .onb-sidebar-steps {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    .onb-step-connector {
+        display: none !important;
+    }
+    .candidate-profile-flex {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+}
+@media (max-width: 600px) {
+    .onb-sidebar-steps {
+        grid-template-columns: 1fr !important;
+    }
+    .skills-cat-row {
+        flex-direction: column !important;
+        gap: 6px !important;
+    }
+    .skills-cat-name {
+        width: 100% !important;
+    }
+}
+
