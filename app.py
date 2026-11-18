@@ -508,7 +508,8 @@ EXCLUDED_PORTFOLIO_DOMAINS = {
 }
 
 
-from core.url_utils import sanitize_url, unwrap_text_urls
+from core.url_utils import sanitize_url, unwrap_text_urls, is_url_grounded, normalize_url
+from ui.link_review import render_link_review
 
 
 def classify_links(links: list, raw_text: str = "") -> dict:
@@ -1168,7 +1169,7 @@ def merge_profiles(existing, incoming):
         except (TypeError, ValueError):
             pass
 
-    for k in ["skills", "search_terms"]:
+    for k in ["skills", "search_terms", "other_links"]:
         if isinstance(incoming.get(k), list) and incoming[k]:
             merged[k] = _union_str_list(existing.get(k), incoming[k])
 
@@ -1955,6 +1956,36 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
     extracted_projects, unreviewed_links = extract_project_entries(
         text, _proj_link_pool, _owner, skip_urls=_stored_urls)
 
+    _other_candidates = classified.get("other_links", []) or []
+    other_links = []
+    _seen_other = set()
+    _assigned_norms = set()
+    for s_url in (linkedin, github, portfolio):
+        if s_url:
+            nu = normalize_url(s_url)
+            if nu:
+                _assigned_norms.add(nu)
+    for p_item in extracted_projects:
+        for p_u in [p_item.get("repo_url"), p_item.get("live_url")] + list(p_item.get("extra_live_urls") or []):
+            if p_u:
+                nu = normalize_url(p_u)
+                if nu:
+                    _assigned_norms.add(nu)
+    for u_item in unreviewed_links:
+        u_val = u_item.get("url") if isinstance(u_item, dict) else u_item
+        if u_val:
+            nu = normalize_url(u_val)
+            if nu:
+                _assigned_norms.add(nu)
+
+    for raw_u in _other_candidates:
+        clean = sanitize_url(raw_u)
+        if clean:
+            nu = normalize_url(clean)
+            if nu and nu not in _assigned_norms and nu not in _seen_other:
+                _seen_other.add(nu)
+                other_links.append(clean)
+
     tech_pool = {
         "Backend": ["PHP", "Laravel", "Python", "Django", "FastAPI", "Flask", "Node.js", "Express.js", "C#", ".NET", "ASP.NET", "Java", "Spring", "Go", "Ruby", "Rails", "REST APIs", "GraphQL", "Microservices"],
         "Database": ["MySQL", "PostgreSQL", "MongoDB", "SQL", "MS SQL", "SQLite", "Redis", "phpMyAdmin"],
@@ -2046,6 +2077,7 @@ def parse_resume_heuristics(text, name_input="", city_input="", role_input="", l
         "education": extracted_edu,
         "projects": extracted_projects,
         "unreviewed_links": unreviewed_links,
+        "other_links": other_links,
         "resume_text": text
     }
 
@@ -2116,9 +2148,11 @@ Resume:
                     # Merge social links if heuristic didn't find them
                     for k in ["linkedin", "github", "portfolio"]:
                         if not p.get(k) and ai_data.get(k):
-                            clean_val = sanitize_url(str(ai_data[k]))
-                            if clean_val:
-                                p[k] = clean_val
+                            raw_val = str(ai_data[k])
+                            if is_url_grounded(raw_val, verified_links, text, slot=k):
+                                clean_val = sanitize_url(raw_val)
+                                if clean_val:
+                                    p[k] = clean_val
             except Exception:
                 pass
 
@@ -2587,6 +2621,7 @@ def build_manual_profile(answers):
         "education": [],
         "projects": [],
         "unreviewed_links": [],
+        "other_links": [],
         "resume_text": "\n".join(text_parts),
     }
 
@@ -3097,6 +3132,9 @@ def render_welcome_screen():
                                     rows.append(f"<div class='confirm-exp-sub'>{lbl} · {html.escape(u)}</div>")
                         st.markdown(f"<div class='confirm-card'><h3 class='confirm-sec-title'>Projects</h3>{''.join(rows)}</div>", unsafe_allow_html=True)
 
+                    # --- Verify your links section ---
+                    p = render_link_review(p)
+
                     # --- Edit details (inline correction; Save/Cancel handled after footer) ---
                     if not edit_mode:
                         if st.button("Edit details", key="btn_confirm_edit", use_container_width=True):
@@ -3539,7 +3577,7 @@ def render_welcome_screen():
                     save_active_profile(p, merge=True)
                     st.session_state["onboarded"] = True
                     st.session_state["demo_mode"] = True
-                    for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated"):
+                    for k in ("pending_profile", "pending_remember", "pending_dur_months", "confirm_edit", "confirm_animated", "link_review_rows", "link_statuses", "link_status_summary"):
                         st.session_state.pop(k, None)
                     st.toast(f"Welcome, {p.get('name', 'Developer')}!", icon="🚀")
                     st.rerun()

@@ -1,0 +1,487 @@
+====================================================================================================
+                        JOBSCOUT-AI: RESUME UPLOAD, PARSING & LINK HANDLING
+                                      COMPREHENSIVE CODE AUDIT
+====================================================================================================
+
+Audit Scope: Detailed code-level investigation of resume document ingestion, text extraction,
+             hyperlink resolution, link classification, data modeling, user review interfaces,
+             ATS resume generation, and automated test coverage.
+Repository : c:\xampp\htdocs\jobscout
+Date       : 2026-11-18
+
+
+----------------------------------------------------------------------------------------------------
+TABLE OF CONTENTS
+----------------------------------------------------------------------------------------------------
+  1. UPLOAD & TEXT EXTRACTION
+  2. HYPERLINKS & URL RESOLUTION
+  3. DATA MODEL & LLM PARSING
+  4. USER REVIEW & EDITING WORKFLOWS
+  5. RESUME GENERATION & LINK EMBEDDING
+  6. TEST SUITE COVERAGE & KNOWN LIMITATIONS
+  7. CAPABILITY SUMMARY MATRIX
+
+
+====================================================================================================
+1. UPLOAD & TEXT EXTRACTION
+====================================================================================================
+
+1.1 Accepted File Formats & Limits
+-----------------------------------
+  • Accepted Extensions : PDF (.pdf), DOCX (.docx), Plain Text (.txt)
+  • UI Widget Location   : app.py:3221-3222
+                           st.file_uploader(
+                               "Upload Resume (PDF, DOCX, TXT)",
+                               type=["pdf", "txt", "docx"],
+                               key="onb_resume_file",
+                               ...
+                           )
+  • File Size Limit      : 10 MB (MAX_UPLOAD_BYTES = 10 * 1024 * 1024 defined in core/config.py:6)
+                           Enforced in app.py:672 (PDF), app.py:815 (DOCX), and app.py:896 (Dispatcher).
+  • Document Dispatcher  : extract_resume_document(file, filename=None) in app.py:879-925
+                           Inspects filename extension and safely routes bytes to the corresponding
+                           format extractor.
+
+1.2 Text Extraction Implementations
+------------------------------------
+  [A] PDF Extraction:
+      • Primary Function : extract_pdf_rich(file) in app.py:649-763
+      • Backward Wrapper : extract_pdf(file) in app.py:766-771
+      • Primary Engine   : PyMuPDF (fitz), loaded via _get_fitz() in app.py:681.
+                           Iterates document pages using page.get_text() for text stream and
+                           page.get_links() for annotation links. Page limit: 25 pages (MAX_PDF_PAGES).
+      • Fallback Engine  : pypdf (PdfReader) in app.py:701-725.
+                           Invoked automatically if PyMuPDF throws an exception. Reads pages via
+                           page.extract_text() and iterates page["/Annots"].
+      • Text Truncation  : Extracted text is capped at 15,000 characters (app.py:726).
+
+  [B] DOCX Extraction:
+      • Function         : extract_docx_text(file_bytes, filename="") in app.py:810-876
+      • Library          : python-docx (from docx import Document in app.py:833)
+      • Structure        : Iterates document.paragraphs and rows in document.tables.
+                           Cell text is deduplicated per row and joined with pipe separators.
+      • Safety Guards    : Rejects non-PK headers (app.py:818).
+                           Enforces uncompressed decompression limit of 50 MB to prevent zip-bomb
+                           vulnerabilities (MAX_DOCX_UNCOMPRESSED_BYTES in core/config.py:8, app.py:825).
+
+  [C] Plain Text (TXT) Extraction:
+      • Function         : extract_resume_document() in app.py:907-921 calling
+                           _text_document_result() in app.py:792-807.
+      • Encoding Support : Multi-encoding decode fallback across ("utf-8-sig", "utf-8", "cp1252").
+      • Binary Detection : Inspects first 2,000 bytes for null bytes (\x00) to reject disguised
+                           binary payloads (app.py:915).
+
+1.3 Optical Character Recognition (OCR) Fallback
+-------------------------------------------------
+  • Implemented?        : Yes (graceful optional fallback).
+  • Function            : ocr_pdf_pages(file_bytes, max_pages=3, dpi=300) in app.py:616-646.
+  • Trigger Condition   : Triggered inside extract_pdf_rich() (app.py:733-741) when extracted text
+                          contains fewer than 15 alphanumeric words or total length is under 60 chars.
+  • Implementation Flow :
+      1. Renders PDF pages to 300 DPI PNG pixmaps using PyMuPDF (page.get_pixmap(dpi=300)).
+      2. Converts byte stream to PIL Image (PIL.Image.open).
+      3. Passes image to Google Tesseract via pytesseract.image_to_string(img, lang="eng").
+  • Operational Bounds  : Capped at the first 3 pages (max_pages=3).
+  • Failure Handling    : If pytesseract or the system tesseract binary is not installed, the function
+                          catches the exception and returns empty string ("") without crashing, setting
+                          is_scanned=True and error=None.
+
+
+====================================================================================================
+2. HYPERLINKS & URL RESOLUTION
+====================================================================================================
+
+2.1 Interactive Hyperlink Annotations vs Plain-Text Regex
+----------------------------------------------------------
+  • Interactive Annotations:
+      - PDF: Yes.
+        * In PyMuPDF: page.get_links() extracts lk.get("uri") (app.py:692-697).
+        * In pypdf fallback: inspects page["/Annots"] and reads obj["/A"]["/URI"] (app.py:714-722).
+      - DOCX: Yes.
+        * Iterates document.part.rels.values() and retrieves getattr(rel, "target_ref", "")
+          where "hyperlink" is in rel.reltype (app.py:862-869).
+  • Plain-Text Regex Extraction:
+      - Yes. In addition to annotation layers, visible text is scanned using regex patterns:
+        app.py:743-753 (extract_pdf_rich) and app.py:774-789 (_VISIBLE_URL_PATTERNS).
+  • Multi-Column Line-Break Repair:
+      - Function: unwrap_text_urls(text: str) in core/url_utils.py:6-16.
+      - Repairs URLs severed across line breaks by PDF multi-column layout renderers:
+        Pattern 1: Hyphenated split URLs (e.g., https://.../foo-\nbar -> .../foobar)
+        Pattern 2: Trailing slash split URLs (e.g., linkedin.com/in/\nuser -> linkedin.com/in/user)
+        Pattern 3: Severed domain names (e.g., github.\ncom/user -> github.com/user)
+
+2.2 Handling of Icon-Only & Label-Only Links
+---------------------------------------------
+  • Resolution: Fully captured and preserved.
+  • Mechanism: PDF annotation layers (fitz link dictionaries and pypdf /Annots) and DOCX relationship
+               tables bind the destination URI to coordinate bounding boxes / XML IDs rather than
+               the visual glyphs.
+  • Result: Links with anchor text (e.g., "LinkedIn", "GitHub", "Live Demo") or image icons with zero
+            adjacent text are cleanly extracted without needing any URL string in the visible text.
+            Verified by Test Case TC-3 in test_pdf_links.py:86-108.
+
+2.3 Link Classification Engine
+-------------------------------
+  • Function : classify_links(links: list, raw_text: str = "") -> dict in app.py:512-613.
+  • Output Dictionary Structure:
+      {
+          "linkedin"   : str,        # Sanitized LinkedIn profile URL
+          "github"     : str,        # Candidate GitHub profile URL
+          "repos"      : list[str],  # Distinct repository URLs
+          "portfolio"  : str,        # Highest-scoring personal website
+          "other_links": list[str]   # Unclassified valid URLs
+      }
+  • Classification Rules:
+      1. LinkedIn Profile : Regex matches linkedin.com/in/([a-zA-Z0-9_\-\.]+) (app.py:534-540).
+      2. GitHub Profile vs Repos : Regex github.com/{owner}/{repo} (app.py:551-565).
+         - Filters out reserved subpages (pulls, issues, features, settings, orgs, etc.).
+         - Strips .git suffixes (app.py:558).
+         - If no profile URL was explicitly linked but all extracted repositories share one owner,
+           the profile URL is automatically derived as https://github.com/{owner} (app.py:568-573).
+         - If repositories span multiple different owners/organizations, derivation is aborted.
+      3. Portfolio Detection : Domain-scoring heuristic with false-positive filtering (app.py:574-612).
+         - Allowed dev domains: .github.io, .vercel.app, .netlify.app, .pages.dev, etc. (+10 points).
+         - Developer TLDs: .dev, .me, .tech, .site, .bio, .space (+8 points).
+         - Text proximity: Proximity to words like "portfolio", "personal site" (+15 points).
+         - Blocked domains: EXCLUDED_PORTFOLIO_DOMAINS in app.py:488-506 (leetcode.com, hackerrank.com,
+           coursera.org, udemy.com, react.dev, etc.) and educational/gov domains (.edu, .ac.in, .gov).
+      4. URL Sanitization : sanitize_url(raw_url) in core/url_utils.py:20-73.
+         - Rejects dangerous schemes (javascript:, data:, file:, vbscript:, blob:, mailto:).
+         - Drops control characters (\r, \n, \t, \0, `, <, >).
+         - Strips tracking query parameters (utm_*, trk, ref, source, fbclid, gclid).
+         - Strips trailing punctuation, brackets, quotes.
+         - Auto-prepends https:// when missing; rejects URLs exceeding 250 characters.
+
+2.4 Project Link Association Architecture
+------------------------------------------
+  • Function : extract_project_entries(text, urls, profile_owner="", skip_urls=()) in app.py:1661-1873.
+  • Storage  : Links are attached directly to individual project objects, NOT stored as a loose list.
+  • Per-Project Schema:
+      {
+          "name"            : str,        # Project title (e.g. "Expense Tracker")
+          "stack"           : str,        # Tech stack (e.g. "PHP & MySQL")
+          "bullets"         : list[str],  # Accomplishment bullets
+          "repo_url"        : str,        # Source code repository URL
+          "live_url"        : str,        # Primary deployment URL
+          "extra_live_urls" : list[str]   # Additional live/demo deployments
+      }
+  • Association Precedence (Precision-First):
+      1. Labeled URLs (e.g., "GitHub: https://...", "Live: https://...") attach directly to the current entry.
+      2. Bare URLs on the same line as a project header attach to that entry.
+      3. Bare URLs adjacent to the header attach if repo owner matches profile or no bullets exist yet.
+      4. Ambiguous Links Queue: If a URL appears without a clear project section, has conflicting owners,
+         or represents a duplicate repository on an existing project, it is placed in unreviewed_links
+         with an explanatory reason dict: {"url": str, "reason": str} (app.py:1806, 1823, 1849, 1869).
+      5. Slot Exclusion: skip_urls prevents already-stored profile links (LinkedIn, GitHub profile,
+         portfolio) from leaking into the unreviewed queue.
+
+
+====================================================================================================
+3. DATA MODEL & LLM PARSING
+====================================================================================================
+
+3.1 Extracted Profile Data Model
+---------------------------------
+  • Format : Standard Python dictionary (JSON-serializable).
+  • Defined: Produced by parse_resume_heuristics() in app.py:2021-2048 and augmented by
+             parse_resume_to_profile() in app.py:2051-2131.
+  • Full Schema Specification:
+      {
+          "name"                : str,
+          "email"               : str,
+          "phone"               : str,
+          "linkedin"            : str,
+          "github"              : str,
+          "portfolio"           : str,
+          "base_role"           : str,
+          "search_terms"        : list[str],
+          "skills"              : list[str],
+          "skills_categorized"  : dict[str, str],
+          "location"            : {
+              "city"              : str,
+              "state"             : str,
+              "country"           : str,
+              "preferred_regions" : str
+          },
+          "work_preferences"    : {
+              "remote" : bool,
+              "hybrid" : bool,
+              "onsite" : bool
+          },
+          "experience_years"    : float,
+          "experience"          : list[{
+              "role"    : str,
+              "company" : str,
+              "period"  : str,
+              "bullets" : list[str]
+          }],
+          "experience_unverified": bool,
+          "education"           : list[{
+              "degree"      : str,
+              "institution" : str,
+              "year"        : str,
+              "field"       : str
+          }],
+          "projects"            : list[{
+              "name"            : str,
+              "stack"           : str,
+              "bullets"         : list[str],
+              "repo_url"        : str,
+              "live_url"        : str,
+              "extra_live_urls" : list[str]
+          }],
+          "unreviewed_links"    : list[{
+              "url"    : str,
+              "reason" : str
+          }],
+          "resume_text"         : str
+      }
+
+3.2 Dual-Engine Parsing Architecture
+-------------------------------------
+  • Engine 1: Deterministic Heuristic Parser (parse_resume_heuristics in app.py:1885-2048)
+      - Instant regex matching across categorized skill pools (5 categories, 70+ technologies).
+      - Regex pattern matching for phone, email, experience years, and target cities.
+      - Structural section parsers: extract_experience_entries(), extract_education_entries(),
+        and extract_project_entries().
+  • Engine 2: Gemini LLM Enhancement (parse_resume_to_profile in app.py:2051-2131)
+      - Executed ONLY IF an api_key is present and resume_text length exceeds 50 characters.
+      - Uses call_gemini_api() with candidate model rotation across:
+        ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash"].
+      - API endpoint: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
+      - Timeout: 6 seconds (app.py:940).
+  • Prompt Source (app.py:2064-2079):
+      --------------------------------------------------------------------------------------
+      You are an ATS technical recruiter. Analyze the following resume text and candidate profile links.
+      Return STRICT JSON with keys:
+      "skills": ["string"],
+      "base_role": "string",
+      "search_terms": ["string"],
+      "experience_years": 1.0,
+      "linkedin": "string or empty",
+      "github": "string or empty",
+      "portfolio": "string or empty"
+
+      Verified candidate links extracted from PDF annotations/text:
+      {json.dumps(verified_links[:15])}
+
+      Resume:
+      {text[:4000]}
+      --------------------------------------------------------------------------------------
+
+3.3 LLM URL Visibility & Hallucination Analysis
+------------------------------------------------
+  • Does the LLM see URLs?
+    Yes. The LLM prompt explicitly includes the first 15 verified candidate links as JSON
+    under "Verified candidate links extracted from PDF annotations/text" plus the raw text.
+  • Does the LLM output URLs?
+    Yes. The LLM returns keys for "linkedin", "github", and "portfolio".
+  • Could the LLM invent or alter URLs?
+    YES. In app.py:2115-2119:
+        for k in ["linkedin", "github", "portfolio"]:
+            if not p.get(k) and ai_data.get(k):
+                clean_val = sanitize_url(str(ai_data[k]))
+                if clean_val:
+                    p[k] = clean_val
+    Vulnerability finding: While extracted skills are strictly checked against resume text
+    (if s.lower() in low_text in app.py:2096), social URLs returned by Gemini have NO ground-truth
+    check against verified_links or resume_text. If the heuristic parser failed to find a link,
+    any syntactically valid URL invented by the LLM will be accepted into the profile.
+
+
+====================================================================================================
+4. USER REVIEW & EDITING WORKFLOWS
+====================================================================================================
+
+4.1 Review & Edit Interfaces
+-----------------------------
+  • Review UI Function : render_welcome_screen() in app.py:2881-3544.
+                         Triggered during onboarding when pending_profile is populated
+                         (_is_review branch at app.py:3013-3149).
+  • Visual Presentation:
+      - Typewriter reveal of candidate role, experience summary, and skills (app.py:3020-3029).
+      - "Contact & Links" card: Displays Phone, LinkedIn, GitHub, Portfolio (app.py:3032-3040).
+      - "Experience" card: Displays up to 4 roles with period and bullets (app.py:3041-3056).
+      - "Skills" card: Displays categorized skill chips (app.py:3058-3072).
+      - "Education" card: Displays degrees, institutions, and years (app.py:3073-3080).
+      - "Projects" card: Displays project name, stack, bullet, and GitHub/Live links (app.py:3081-3096).
+
+4.2 Field-by-Field Editable Scope
+----------------------------------
+  • When user clicks "Edit details" (btn_confirm_edit in app.py:3100), an inline form renders:
+      - Full Name            : Fully editable (cedit_name)
+      - Professional Title   : Fully editable (cedit_role)
+      - City, Email, Phone   : Fully editable (cedit_city, cedit_email, cedit_phone)
+      - LinkedIn, GitHub     : Fully editable (cedit_linkedin, cedit_github)
+      - Portfolio Website    : Fully editable (cedit_portfolio)
+      - Skills               : Fully editable comma-separated textarea (cedit_skills)
+      - Work Experience      : PARTIAL. Only the FIRST experience entry (e0 = exps[0]) can be edited
+                               (job title, company, dates, bullets). Subsequent roles are NOT editable.
+      - Education            : PARTIAL. Only the FIRST education entry (d0 = edus[0]) can be edited,
+                               and only if education was detected; cannot add if initially empty.
+      - Projects             : NOT EDITABLE. Projects and their attached repo/live URLs are displayed
+                               statically; no form fields exist to edit or add projects.
+      - Unreviewed Links     : NOT EDITABLE. unreviewed_links are not exposed anywhere in the UI.
+  • Workspace Settings Menu (app.py:6237-6265):
+      - Only exposes Full Name, Base Role, Experience Years, City/State/Country, and Search Terms.
+      - Social links, projects, education, and experience cannot be edited in Settings at all.
+
+4.3 Handling of Missing Fields
+-------------------------------
+  • Missing Links (LinkedIn, GitHub, Portfolio):
+      - In static review cards, missing links are silently omitted (app.py:3035-3037).
+      - The app NEVER prompts, blocks, or requires the user to supply missing links.
+      - In "Edit details", input boxes for missing links simply remain empty.
+  • Name Requirement:
+      - The only mandatory field required to proceed is the user's name. If blank, launch is blocked
+        with an error banner: "We need at least your name — add it via Edit details" (app.py:3531-3533).
+
+
+====================================================================================================
+5. RESUME GENERATION & LINK EMBEDDING
+====================================================================================================
+
+5.1 PDF & DOCX Generation Implementation
+-----------------------------------------
+  • PDF Generator  : build_tailored_resume_pdf(profile, tailored_data, template="Modern Clean")
+                     in app.py:3979-4220. Uses fpdf2 (from fpdf import FPDF).
+                     Supports 6 design templates (Classic ATS, Modern Clean, Executive Slate,
+                     Tech Emerald, Minimal Dev, Compact Dev).
+  • DOCX Generator : NOT IMPLEMENTED.
+                     The codebase has no function or module for generating or exporting DOCX resumes.
+                     (DOCX support exists exclusively for incoming text extraction).
+
+5.2 Link Rendering in Generated PDF Resumes
+--------------------------------------------
+  [A] Contact Header Links (LinkedIn, GitHub, Portfolio):
+      • Formatted in app.py:4037-4053.
+      • Protocol prefixes (https://, http://) and trailing slashes are stripped.
+      • Formatted into a pipe-separated string: e.g. "Mumbai, Maharashtra   |   9326671284   |   ..."
+      • Printed as PLAIN TEXT ONLY via pdf.cell(0, 4.5, sanitize_pdf_text(contact_line), align="C").
+      • Result: Header contact links are NOT clickable hyperlinks in the PDF document.
+      • Truncation limit: contact_parts is capped at 4 items (contact_parts[:4] in app.py:4048).
+        If location, phone, email, and GitHub are present, LinkedIn and portfolio are DROPPED.
+
+  [B] Project Links (Repository & Live Demos):
+      • Formatted in app.py:4155-4187.
+      • Rendered as CLICKABLE HYPERLINKS.
+      • The project title text itself is made a clickable hyperlink to repo_url:
+        pdf.cell(t_w, 4.8, t_txt, link=(repo_link or 0)) (app.py:4179).
+      • Visible underlined anchor labels are rendered beside the project title in accent color:
+        - " View on GitHub" linked to repo_link (app.py:4162, 4183)
+        - " View Live" linked to live_link (app.py:4164, 4183)
+      • Extreme-length guard: If title + links exceed 124pt, the title is safely truncated with
+        ellipses to prevent overlapping the right-aligned stack label (app.py:4171-4177).
+      • Raw URL strings are not printed; clean anchor text is rendered.
+
+  [C] Unreviewed / Other Links:
+      • Dropped completely from generated resumes.
+
+
+====================================================================================================
+6. TEST SUITE COVERAGE & KNOWN LIMITATIONS
+====================================================================================================
+
+6.1 Test Suite Inventory
+-------------------------
+  • test_pdf_links.py (7 automated integration test cases):
+      1. TC-1: Visible Plain Text — Tests plain URLs missing https://, profile extraction, and is_scanned=False.
+      2. TC-2: Hyperlink Annotation — Tests hidden URI extraction under anchor text "GitHub" and "LinkedIn",
+               plus UTM tracking parameter removal.
+      3. TC-3: Icon-only Link — Tests link annotations on clickable rectangles without text underneath.
+      4. TC-4: Line-Wrapped URL — Tests URL reconstruction across column line breaks via unwrap_text_urls.
+      5. TC-5: Portfolio vs False Positives — Tests domain filtering (rejects LeetCode, Coursera, React docs;
+               accepts Vercel and .dev domains).
+      6. TC-6: Scanned PDF Upload — Tests detection of blank/image noise PDFs via < 15 word count heuristic.
+      7. TC-7: Malicious Link Injection — Tests filtering of javascript:, file:, data:, and > 250 char URLs.
+
+  • test_project_links.py (19 automated regression tests across 4 classes):
+      1. TestGithubClassification (8 tests):
+         - test_profile_only: Single profile URL preserved.
+         - test_repo_retained_and_distinguished: Repository URL kept separate from profile.
+         - test_multiple_repos_single_owner: Profile derived from single-owner repos.
+         - test_multi_owner_no_derivation: Derivation blocked across multi-owner repos.
+         - test_explicit_profile_wins: Explicit profile overrides repo derivation.
+         - test_reserved_subpage_ignored: Subpages (/pulls, /features) rejected.
+         - test_git_suffix_normalized: .git suffix stripped.
+         - test_repos_excluded_from_portfolio: Repos blocked from portfolio slot.
+      2. TestProjectExtraction (8 tests):
+         - test_labeled_association: Labeled URLs ("GitHub: ...", "Live: ...") bound to named projects.
+         - test_sameline_bare_url: Bare URL on project title line bound correctly.
+         - test_ambiguous_goes_unreviewed: Ambiguous URLs routed to unreviewed_links with reason.
+         - test_mixed_clickable_visible_dedup: Deduplication of clickable annotation and visible text.
+         - test_multiple_live_urls_no_collapse: Multiple live deployments saved to extra_live_urls.
+         - test_no_section_no_bogus_entries: URLs without project headings routed to unreviewed.
+         - test_no_network_fetch: Asserts extraction performs zero outbound network calls.
+         - test_gemini_merge_keeps_projects: Asserts AI profile merge never drops projects.
+      3. TestProjectMergePreservation (4 tests):
+         - Asserts existing repo/live URLs survive empty incoming updates and merge idempotently.
+      4. TestUnreviewedDedup (4 tests):
+         - Asserts stored profile slots (LinkedIn/GitHub/Portfolio) never leak into unreviewed queue.
+
+  • eval_resume_accuracy.py (Local synthetic evaluation suite):
+      - Evaluates 9 end-to-end PDF fixtures (F1 standard, F2 multi-project, F3 invisible links,
+        F4 no headings, F5 two-column, F6 thin exp, F7 scanned OCR, F8/F9 education variations).
+
+6.2 Known Limitations & Technical Debt
+---------------------------------------
+  1. OCR System Dependency:
+     ocr_pdf_pages requires system-level Tesseract and python pytesseract. When unavailable in
+     local/cloud container environments, scanned PDFs cannot extract text (flagged as UNSUPPORTED
+     in eval_resume_accuracy.py:366). Limited to first 3 pages.
+  2. Document Ingestion Limits:
+     PDF processing is capped at 25 pages (MAX_PDF_PAGES in core/config.py:7). Extracted raw text
+     is hard-truncated to 15,000 characters (app.py:726). Extracted link pool is capped at 25 (app.py:802).
+  3. LLM Hallucination Risk:
+     Social links (LinkedIn, GitHub, Portfolio) returned by Gemini are sanitized for syntax but not
+     cross-verified against resume text or extracted annotations (app.py:2115-2119).
+  4. UI Editing Incompleteness:
+     The onboarding review dialog (app.py:3103-3145) only allows editing the first experience entry
+     and first education entry. Projects, project URLs, and unreviewed_links cannot be reviewed or edited.
+  5. PDF Header Clickability:
+     Generated resume contact headers render links as plain text without clickable PDF annotations,
+     and truncate contact items to 4, potentially dropping LinkedIn or portfolio links (app.py:4048).
+  6. Missing DOCX Resume Export:
+     Resume generation is strictly limited to PDF; DOCX generation is not implemented.
+
+
+====================================================================================================
+7. CAPABILITY SUMMARY MATRIX
+====================================================================================================
+
++-------------------------------------------------------------+---------------+------------------------+
+| Capability Description                                      | Implemented?  | Code Reference         |
++-------------------------------------------------------------+---------------+------------------------+
+| PDF Text Extraction (PyMuPDF + pypdf fallback)              | Yes           | app.py:649-725         |
+| PDF Hyperlink Extraction (page.get_links() & /Annots)       | Yes           | app.py:692, 714        |
+| DOCX Text Extraction (python-docx paragraphs & tables)      | Yes           | app.py:810-860         |
+| DOCX Hyperlink Relationship Extraction (part.rels)          | Yes           | app.py:862-869         |
+| Plain Text Regex URL Extraction & Sanitization              | Yes           | app.py:743, 774        |
+| Multi-Column PDF Line-Unwrapping (unwrap_text_urls)         | Yes           | core/url_utils.py:6    |
+| URL Scheme & Injection Defense (sanitize_url)               | Yes           | core/url_utils.py:20   |
+| Scanned PDF OCR Fallback (Tesseract, max 3 pages)           | Partial [1]   | app.py:616, 734        |
+| Icon-only & Anchor-only Link Extraction                     | Yes           | app.py:692; TC-3       |
+| Link Classification (LinkedIn, GitHub, Portfolio, Other)    | Yes           | app.py:512-613         |
+| GitHub Repo vs Profile Disambiguation                       | Yes           | app.py:548-573         |
+| Per-Project Link Association (repo_url, live_url)           | Yes           | app.py:1661-1873       |
+| Ambiguous Project Link Queue (unreviewed_links)             | Partial [2]   | app.py:1695, 1849      |
+| Deterministic Heuristic Parsing                             | Yes           | app.py:1885-2048       |
+| Gemini LLM Resume Enhancement & Model Rotation              | Yes           | app.py:2051, 940       |
+| LLM URL Hallucination Guard                                 | Partial [3]   | app.py:2115-2119       |
+| User Review & Inline Editing                                | Partial [4]   | app.py:3013-3145       |
+| ATS Resume Generation - PDF (fpdf2)                         | Yes           | app.py:3979-4220       |
+| ATS Resume Generation - DOCX                                | No            | Not implemented        |
+| Clickable Project Links in Generated PDF                    | Yes           | app.py:4179-4183       |
+| Clickable Contact Header Links in Generated PDF             | No [5]        | app.py:4050-4053       |
++-------------------------------------------------------------+---------------+------------------------+
+
+Notes on Partial / No Implementations:
+[1] OCR requires host-installed tesseract binary and pytesseract; limited to 3 pages.
+[2] unreviewed_links are captured in data model but not exposed in the Streamlit UI.
+[3] Social URLs from LLM are sanitized for syntax but not grounded against resume text or link pool.
+[4] Review dialog only permits editing the first experience/education entries; projects are read-only.
+[5] Contact header links are rendered as plain text only (not clickable) and capped at 4 items.
+
+====================================================================================================
+                                         END OF REPORT
+====================================================================================================
