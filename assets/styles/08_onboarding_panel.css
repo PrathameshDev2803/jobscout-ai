@@ -1623,44 +1623,58 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
 .st-key-onb_candidate_card_wrap {
     background: #111821 !important;
     border: 1px solid #27313D !important;
-    border-radius: 16px !important;
-    min-height: 125px !important;
-    padding: 0 30px !important;
+    border-radius: 11px !important;
+    height: 66px !important;
+    min-height: 66px !important;
+    max-height: 66px !important;
+    padding: 0 16px !important;
     margin-bottom: 20px !important;
     display: flex !important;
     align-items: center !important;
     box-sizing: border-box !important;
+    width: 100% !important;
 }
 .st-key-onb_candidate_card_wrap > div[data-testid="stHorizontalBlock"] {
     align-items: center !important;
     width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+}
+.st-key-onb_candidate_card_wrap div[data-testid="stColumn"] {
+    display: flex !important;
+    align-items: center !important;
+    min-height: 0 !important;
 }
 .candidate-profile-flex {
     display: flex;
     align-items: center;
     gap: 0;
     width: 100%;
+    min-width: 0;
 }
 .candidate-avatar {
-    width: 80px !important;
-    height: 80px !important;
-    flex: 0 0 80px !important;
-    border-radius: 16px !important;
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    min-height: 42px !important;
+    max-height: 42px !important;
+    flex: 0 0 42px !important;
+    border-radius: 9px !important;
     background: #10B981 !important;
     color: #0B1017 !important;
-    font-size: 27px !important;
-    font-weight: 800 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    flex-shrink: 0 !important;
-    letter-spacing: 0.5px !important;
+    letter-spacing: 0.3px !important;
 }
 .candidate-divider {
     width: 1px !important;
-    height: 60px !important;
+    height: 42px !important;
     background: #27313D !important;
-    margin: 0 24px !important;
+    margin: 0 18px !important;
     flex-shrink: 0 !important;
 }
 .candidate-info {
@@ -1671,23 +1685,27 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
     flex: 1;
 }
 .candidate-name {
-    font-size: 27px !important;
+    font-size: 14px !important;
     font-weight: 600 !important;
     color: #F1F5F9 !important;
     line-height: 1.2 !important;
-    margin-bottom: 6px !important;
+    margin: 0 0 3px 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 .candidate-meta {
-    font-size: 14px !important;
+    font-size: 10px !important;
     color: #A0AEC0 !important;
     font-weight: 500 !important;
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
+    gap: 4px !important;
     white-space: nowrap !important;
     flex-wrap: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    line-height: 1.2 !important;
 }
 .st-key-btn_prof_card_edit {
     display: flex !important;
@@ -1699,19 +1717,36 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
     background: #111821 !important;
     border: 1px solid #27313D !important;
     color: #F1F5F9 !important;
-    border-radius: 10px !important;
-    font-size: 13.5px !important;
+    border-radius: 7px !important;
+    font-size: 10px !important;
     font-weight: 500 !important;
-    min-height: 38px !important;
-    height: 38px !important;
-    padding: 6px 14px !important;
-    width: 155px !important;
-    min-width: 155px !important;
-    max-width: 155px !important;
+    min-height: 26px !important;
+    height: 26px !important;
+    max-height: 26px !important;
+    padding: 0 6px !important;
+    width: 82px !important;
+    min-width: 82px !important;
+    max-width: 82px !important;
     float: right !important;
     margin-left: auto !important;
     white-space: nowrap !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+    line-height: 1 !important;
     transition: all 0.15s ease !important;
+}
+.st-key-btn_prof_card_edit button p {
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+}
+.st-key-btn_prof_card_edit button span[data-testid="stIconMaterial"] {
+    font-size: 11px !important;
+    line-height: 1 !important;
 }
 .st-key-btn_prof_card_edit button:hover {
     border-color: #10B981 !important;
@@ -1930,38 +1965,49 @@ div[data-testid="stColumn"]:has(.onb-review-mode) .or-separator {
         gap: 0 !important;
     }
     .st-key-onb_candidate_card_wrap {
-        padding: 16px 20px !important;
-        min-height: auto !important;
+        padding: 0 12px !important;
+        height: auto !important;
+        min-height: 60px !important;
+        max-height: none !important;
     }
     .candidate-avatar {
-        width: 60px !important;
-        height: 60px !important;
-        flex: 0 0 60px !important;
-        font-size: 22px !important;
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        max-width: 36px !important;
+        min-height: 36px !important;
+        max-height: 36px !important;
+        flex: 0 0 36px !important;
+        font-size: 14px !important;
     }
     .candidate-divider {
-        height: 44px !important;
-        margin: 0 16px !important;
+        height: 36px !important;
+        margin: 0 12px !important;
     }
     .candidate-name {
-        font-size: 22px !important;
+        font-size: 13px !important;
     }
 }
 @media (max-width: 600px) {
     .onb-sidebar-steps {
         grid-template-columns: 1fr !important;
     }
+    .st-key-onb_candidate_card_wrap {
+        height: auto !important;
+        max-height: none !important;
+        padding: 10px 12px !important;
+    }
     .candidate-profile-flex {
         flex-direction: column !important;
         align-items: flex-start !important;
-        gap: 12px !important;
+        gap: 8px !important;
     }
     .candidate-divider {
         display: none !important;
     }
     .st-key-btn_prof_card_edit {
         justify-content: flex-start !important;
-        margin-top: 10px !important;
+        margin-top: 6px !important;
     }
     .st-key-btn_prof_card_edit button {
         float: none !important;

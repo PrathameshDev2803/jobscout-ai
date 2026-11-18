@@ -523,10 +523,13 @@ class TestReviewSummaryRedesign(unittest.TestCase):
         css = load_css()
         self.assertIn('.st-key-onb_review_columns_wrap .st-key-onboard_panel', css)
         self.assertIn('background: transparent !important;', css)
-        # Verify typography and component dimensions matching reference
+        # Verify typography and component dimensions matching compact reference
         self.assertIn('font-size: 40px !important;', css)
-        self.assertIn('width: 80px !important;', css)
-        self.assertIn('width: 155px !important;', css)
+        self.assertIn('height: 66px !important;', css)
+        self.assertIn('width: 42px !important;', css)
+        self.assertIn('height: 42px !important;', css)
+        self.assertIn('width: 82px !important;', css)
+        self.assertIn('height: 26px !important;', css)
         self.assertIn('padding: 0 48px !important;', css)
 
     def test_html_generators_have_zero_indented_lines(self):

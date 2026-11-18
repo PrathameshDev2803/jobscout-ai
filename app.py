@@ -3378,9 +3378,9 @@ def render_welcome_screen():
                                 if role:
                                     meta_parts.append(html.escape(role))
                                 if city:
-                                    loc_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A0AEC0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-2px; margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>'
+                                    loc_svg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#A0AEC0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:-1px; margin-right:3px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>'
                                     meta_parts.append(f"{loc_svg}{html.escape(city)}")
-                                meta_line = " • ".join(meta_parts) if meta_parts else "Software Developer"
+                                meta_line = "  ·  ".join(meta_parts) if meta_parts else "Software Developer"
 
                                 # Horizontal Candidate Profile Card
                                 with st.container(border=False, key="onb_candidate_card_wrap"):
@@ -3397,7 +3397,7 @@ def render_welcome_screen():
                                         </div>
                                         """), unsafe_allow_html=True)
                                     with col_cbtn:
-                                        if st.button("✏️ Edit details", key="btn_prof_card_edit", use_container_width=True):
+                                        if st.button("Edit details", icon=":material/edit:", key="btn_prof_card_edit"):
                                             confirm_edit_toggle = True
 
                                 # Two-column Contact & Links and Skills sections
