@@ -509,7 +509,22 @@ EXCLUDED_PORTFOLIO_DOMAINS = {
 
 
 from core.url_utils import sanitize_url, unwrap_text_urls, is_url_grounded, normalize_url
-from ui.link_review import render_link_review, get_links_tab_label
+try:
+    from ui.link_review import render_link_review, get_links_tab_label
+except ImportError:
+    try:
+        import importlib
+        import ui.link_review
+        importlib.reload(ui.link_review)
+        from ui.link_review import render_link_review, get_links_tab_label
+    except Exception:
+        try:
+            from ui.link_review import render_link_review
+        except Exception:
+            def render_link_review(profile: dict) -> dict:
+                return profile
+        def get_links_tab_label(profile: dict) -> str:
+            return "Links"
 
 
 def classify_links(links: list, raw_text: str = "") -> dict:
